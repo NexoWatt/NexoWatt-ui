@@ -3596,10 +3596,11 @@ class NexoWattVis extends utils.Adapter {
   /**
    * Normalisiert die AppCenter-Konfiguration der EOS-Betriebsstrategien.
    *
-   * RC54 persistiert modulare MUSS-/SOLL-/KANN-Regelbausteine und die
-   * Simulationswerte. Die Normalisierung bleibt konsequent fail-closed:
-   * Jede Regel wird auf simulationOnly=true / executionEnabled=false gesetzt,
-   * Steuerübernahme und Hardware-Schreibpfade sind unabhängig vom Payload aus.
+   * RC56 persistiert modulare MUSS-/SOLL-/KANN-Regelbausteine, Simulation
+   * und die explizit freigegebene Live-Kopplung an bestehende Fachmodule.
+   * Die Normalisierung bleibt fail-closed: Live-Anforderungen sind nur aktiv,
+   * wenn App, globaler Inbetriebnahmemodus und Ressourcenfreigabe vollständig
+   * bestätigt sind. Benutzerdefinierte Schreibpfade bleiben in RC56 read-only.
    */
   nwNormalizeOperatingStrategies(configIn, appEnabled = false) {
     const source = this._nwIsPlainObject(configIn) ? this._nwDeepClone(configIn) : {};
@@ -3698,6 +3699,10 @@ class NexoWattVis extends utils.Adapter {
         maxPowerW: clampNumber(raw.maxPowerW, 0, 0, 1000000000),
         efficiencyPct: clampNumber(raw.efficiencyPct, 92, 1, 100),
         autoOnly: resourceType === 'chargingPoint' ? true : raw.autoOnly === true,
+        controlMode: 'observe',
+        commissioningConfirmed: false,
+        autoSource: resourceType === 'chargingPoint' && asString(raw.autoSource) === 'strategy' ? 'strategy' : 'standard',
+        fallback: asString(raw.fallback) === 'pause' ? 'pause' : 'standardAuto',
         observeOnly: true,
         writeEnabled: false,
         mappings: normalizeMappings(raw.mappings),
@@ -3742,8 +3747,14 @@ class NexoWattVis extends utils.Adapter {
         priority: clampInt(raw.priority, 50, 1, 100),
         roleOverride,
         autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint' ? true : raw.autoOnly === true,
-        observeOnly: true,
-        writeEnabled: false,
+        controlMode: asString(raw.controlMode) === 'active' ? 'active' : 'observe',
+        commissioningConfirmed: raw.commissioningConfirmed === true,
+        autoSource: asString(raw.autoSource) === 'strategy' ? 'strategy' : 'standard',
+        fallback: asString(raw.fallback) === 'pause' ? 'pause' : 'standardAuto',
+        staleTimeoutSec: clampInt(raw.staleTimeoutSec, sourceId.startsWith('evcs:') ? 30 : 60, 1, 86400),
+        observeOnly: asString(raw.controlMode) !== 'active',
+        writeEnabled: raw.writeEnabled === true && raw.commissioningConfirmed === true,
+        mappings: normalizeMappings(raw.mappings),
       };
     };
 
@@ -3887,28 +3898,82 @@ class NexoWattVis extends utils.Adapter {
     const profiles = makeIdsUnique(profilesRaw.map(normalizeProfile), 'profile');
     const normalizedProfiles = profiles.length ? profiles : defaultProfiles();
     const profileIds = new Set(normalizedProfiles.map((profile) => profile.id));
+    const requestedMode = asString(source.mode) === 'active' ? 'active' : 'observe';
+    const commissioningConfirmed = source.commissioningConfirmed === true;
+    const autoRaw = asRecord(source.autoControl);
+    const autoControl = {
+      enabled: autoRaw.enabled !== false,
+      stage: ['shadow', 'commissioning', 'active'].includes(asString(autoRaw.stage)) ? asString(autoRaw.stage) : 'shadow',
+      requestTtlSeconds: clampInt(autoRaw.requestTtlSeconds, 15, 3, 60),
+      fallback: asString(autoRaw.fallback) === 'pause' ? 'pause' : 'standardAuto',
+    };
+    const enabled = appEnabled === true;
+    const mode = enabled ? requestedMode : 'observe';
+    const controlTakeoverEnabled = mode === 'active' && commissioningConfirmed && source.controlTakeoverEnabled === true;
+    const writeExecutionEnabled = mode === 'active' && commissioningConfirmed && source.writeExecutionEnabled === true;
+    const liveControl = enabled
+      && mode === 'active'
+      && commissioningConfirmed
+      && controlTakeoverEnabled
+      && writeExecutionEnabled
+      && autoControl.enabled !== false
+      && autoControl.stage === 'active';
+
     const links = [];
     const linkIds = new Set();
     for (const entry of asArray(source.resourceLinks).slice(0, 500)) {
       const normalized = normalizeLink(entry);
       if (!normalized || linkIds.has(normalized.sourceId)) continue;
       linkIds.add(normalized.sourceId);
-      links.push(normalized);
+      const nativeLiveSupported = /^(evcs:|thermal:|heatingRod:|storage:|storagefarm:)/.test(normalized.sourceId);
+      const linkLive = liveControl
+        && nativeLiveSupported
+        && normalized.enabled === true
+        && normalized.controlMode === 'active'
+        && normalized.commissioningConfirmed === true;
+      links.push({
+        ...normalized,
+        // Die gewünschte Ressourcenfreigabe bleibt auch im Shadow-/
+        // Inbetriebnahmebetrieb erhalten. writeEnabled wird ausschließlich
+        // serverseitig aus dem vollständigen Live-Vertrag abgeleitet.
+        controlMode: normalized.controlMode,
+        observeOnly: !linkLive,
+        writeEnabled: linkLive,
+      });
     }
     const requestedActive = asString(source.activeProfileId, 'winter');
     const activeProfileId = profileIds.has(requestedActive) ? requestedActive : normalizedProfiles[0].id;
-    const rules = makeIdsUnique(asArray(source.rules).slice(0, 200).map((entry, index) => normalizeRule(entry, index, profileIds)), 'rule');
+    const rules = makeIdsUnique(asArray(source.rules).slice(0, 200).map((entry, index) => normalizeRule(entry, index, profileIds)), 'rule')
+      .map((entry) => ({
+        ...entry,
+        simulationOnly: !liveControl,
+        executionEnabled: liveControl && entry.enabled !== false,
+      }));
     const metadata = asRecord(source.metadata);
+    const systemRaw = asRecord(source.systemMappings);
+    const systemMappings = {
+      outsideTemperatureReadId: asString(systemRaw.outsideTemperatureReadId),
+      pvForecastReadId: asString(systemRaw.pvForecastReadId),
+      pvSurplusReadId: asString(systemRaw.pvSurplusReadId),
+      gridPowerReadId: asString(systemRaw.gridPowerReadId),
+      electricityPriceReadId: asString(systemRaw.electricityPriceReadId),
+      cheapTariffReadId: asString(systemRaw.cheapTariffReadId),
+    };
     return {
-      schemaVersion: 2,
-      enabled: appEnabled === true,
-      mode: 'observe',
-      controlTakeoverEnabled: false,
-      writeExecutionEnabled: false,
+      schemaVersion: 3,
+      enabled,
+      mode,
+      commissioningConfirmed,
+      controlTakeoverEnabled,
+      writeExecutionEnabled,
+      autoControl,
       autoImportExisting: source.autoImportExisting !== false,
       activeProfileId,
+      systemMappings,
       controlContract,
       resourceLinks: links,
+      // Freie Datenpunkt-Schreibpfade bleiben bis zur generischen, rückmelde-
+      // überwachten Aktorfreigabe bewusst im Beobachtungsmodus.
       customResources: makeIdsUnique(asArray(source.customResources).slice(0, 500).map(normalizeCustomResource), 'custom'),
       profiles: normalizedProfiles,
       rules,
@@ -3917,6 +3982,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
+        liveControlVersion: '0.8.180',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -4369,9 +4435,9 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
-    // Betriebsstrategien: App-Zustand und Lizenz bestimmen ausschließlich, ob die
-    // Konfiguration als aktiv markiert wird. Regelbausteine und Trockenlaufwerte werden
-    // in RC54 gespeichert; Steuerübernahme/Writebacks bleiben bei manipulierten Payloads gesperrt.
+    // Betriebsstrategien: App-Zustand und Lizenz bestimmen die Verfügbarkeit.
+    // Live-Anforderungen bleiben bei unvollständiger globaler oder ressourcenbezogener
+    // Freigabe fail-closed; beliebige Custom-DP-Schreibpfade bleiben gesperrt.
     try {
       const appState = out.emsApps && out.emsApps.apps ? out.emsApps.apps.operatingStrategies : null;
       const appActive = this._nwLicenseAllowsAppId('operatingStrategies') && !!(appState && appState.installed && appState.enabled);
@@ -9782,6 +9848,7 @@ class NexoWattVis extends utils.Adapter {
       for (let i = 1; i <= evcsCount; i++) {
         const base = `chargingManagement.wallboxes.lp${i}`;
         await prime(`${base}.userMode`);
+        await prime(`${base}.userAutoSource`);
         await prime(`${base}.userPhaseMode`);
         await prime(`${base}.effectiveMode`);
         await prime(`${base}.phaseMode`);
@@ -11760,6 +11827,7 @@ async onReady() {
     for (let i = 1; i <= evcsCount; i++) {
       const base = `chargingManagement.wallboxes.lp${i}`;
       await primeKey(`${base}.userMode`);
+      await primeKey(`${base}.userAutoSource`);
       await primeKey(`${base}.userStationEnabled`);
       await primeKey(`${base}.stationEnabled`);
       await primeKey(`${base}.stationEnableControlAvailable`);
@@ -20554,6 +20622,7 @@ const _nwDisplayBuildPayload = (station) => {
       else if (charging || powerW > 100 || statusClass === 'charging') status = 'charging';
       else if (plugged || statusClass === 'plugged') status = 'plugged';
       const userMode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userMode`, 'auto') || 'auto').toLowerCase();
+      const userAutoSource = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userAutoSource`, 'standard') || 'standard').toLowerCase() === 'strategy' ? 'strategy' : 'standard';
       const mode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.effectiveMode`, userMode) || 'auto').toLowerCase();
       const userEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userEnabled`, true), true);
       const chargerType = String(wb.chargerType || station.type || 'dc').toUpperCase() === 'AC' ? 'AC' : 'DC';
@@ -20617,6 +20686,7 @@ const _nwDisplayBuildPayload = (station) => {
         targetKw: Math.round((targetW / 1000) * 10) / 10,
         mode,
         userMode,
+        userAutoSource,
         userEnabled,
         pvAvailable,
         solarSharePercent: station.showSolarShare ? solarSharePct : null,
@@ -20637,6 +20707,7 @@ const _nwDisplayBuildPayload = (station) => {
         controls: {
           userEnabled,
           userMode,
+          userAutoSource,
           effectiveMode: mode,
           phaseSwitchSupported,
           userPhaseMode,
@@ -20648,6 +20719,10 @@ const _nwDisplayBuildPayload = (station) => {
           goalEnabled,
           goalTargetSocPct,
           goalFinishTs,
+          strategyActive: _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyActive`, false), false),
+          strategyStatus: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyStatus`, '') || ''),
+          strategyReason: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyReason`, '') || ''),
+          strategyRequestedPowerW: Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyRequestedPowerW`, 0), 0)),
         },
         allowStartStop: station.allowStartStop !== false && !station.maintenanceMode && _nwDisplayNormalizeControlProfile(station.controlProfile || station.controlBridge) !== 'readonly',
         controlBridge: String(station.controlBridge || 'charging-management'),
@@ -23744,19 +23819,19 @@ settingsConfig: {
           // - chargingManagement.wallboxes.lp1.userMode
           // - chargingManagement.wallboxes.lp1.userEnabled
           // - chargingManagement.wallboxes.lp1.userStationEnabled
-          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|autoSource|userAutoSource|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
           if (mIdx) {
             const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
             safe = `lp${idx}`;
             prop = String(mIdx[2] || '').toLowerCase();
           } else {
-            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|autoSource|userAutoSource|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
             if (mLp) {
               const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
               safe = `lp${idx}`;
               prop = String(mLp[2] || '').toLowerCase();
             } else {
-              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|autoSource|userAutoSource|userEnabled|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
               if (m2) {
                 safe = String(m2[1] || '').trim();
                 prop = String(m2[2] || '').toLowerCase();
@@ -23823,6 +23898,25 @@ settingsConfig: {
             }
           }
 
+
+          // Auto-Quelle: Die Betriebsstrategie darf ausschließlich innerhalb
+          // des Ladebetriebsmodus Auto übernehmen. Der Default bleibt die
+          // bestehende Standard-Automatik; ein Wechsel verändert keine anderen Modi.
+          if (prop === 'autosource' || prop === 'userautosource') {
+            const raw = String(value === null || value === undefined ? 'standard' : value).trim().toLowerCase();
+            const v = ['strategy', 'operatingstrategies', 'operating-strategies', 'eos-strategy', 'betriebsstrategie'].includes(raw)
+              ? 'strategy'
+              : 'standard';
+            const id = `chargingManagement.wallboxes.${safe}.userAutoSource`;
+            try {
+              await this.setStateAsync(id, v, false);
+              try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
+              return res.json({ ok: true, value: v });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
 
           // AC-Phasenmodus: fixed-1p | fixed-3p | auto-pv
           // Dieser Wert ist bewusst ein User-Override und wird von der TS-EVCS-Allocation/Write-Plan-Kette ausgewertet.
@@ -26499,7 +26593,7 @@ return res.json(out);
         // Bedienzustände der Ladepunkte werden sofort im stateCache sichtbar und
         // lösen einen debouncten zentralen EMS-Tick aus. Das gilt auch für externe
         // ioBroker-Schreibzugriffe, nicht nur für die NexoWatt-Weboberfläche.
-        if (/^chargingManagement\.wallboxes\.[a-z0-9_]+\.(userMode|userEnabled|userStationEnabled|userPhaseMode|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i.test(key)) {
+        if (/^chargingManagement\.wallboxes\.[a-z0-9_]+\.(userMode|userAutoSource|userEnabled|userStationEnabled|userPhaseMode|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i.test(key)) {
           this._nwRequestImmediateEmsTick(`state:${key}`);
         }
       }

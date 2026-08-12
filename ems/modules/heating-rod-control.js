@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:a75c2a0bc85704679f7030e0fb59a73f5535c7545d93ab71e949a46e9a9f2986
+ * Quell-Hash: sha256:b239f95312388b77cc0518d504d8576e3b7dcc3ac67abf3ac196555c8fe7c353
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,6 +61,7 @@ const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { recordAcceptedPowerTarget, recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
+const { resolveHeatingRodStrategyOverlay } = require('../services/operating-strategy-runtime');
 const {
     liveSafetyEnvelope,
     evaluateFlexibleLoadRequest,
@@ -472,6 +473,7 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             out.push({
+                configIndex: i,
                 slot,
                 id: `c${slot}`,
                 name,
@@ -715,6 +717,13 @@ class HeatingRodControlModule extends BaseModule {
             await mk(`heatingRod.devices.${d.id}.userMode`, 'User mode', 'string', 'text');
             await mk(`heatingRod.devices.${d.id}.effectiveEnabled`, 'Effective enabled', 'boolean', 'indicator');
             await mk(`heatingRod.devices.${d.id}.effectiveMode`, 'Effective mode', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.strategyEligible`, 'Betriebsstrategie zulässig', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.strategyActive`, 'Betriebsstrategie aktiv', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.strategyFallbackActive`, 'Betriebsstrategie Rückfall aktiv', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.strategyAction`, 'Betriebsstrategie Aktion', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.strategyMaxPowerW`, 'Betriebsstrategie Leistungsgrenze', 'number', 'value.power', 'W');
+            await mk(`heatingRod.devices.${d.id}.strategyReason`, 'Betriebsstrategie Grund', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.strategyExpiresAt`, 'Betriebsstrategie gültig bis', 'number', 'value.time');
             await mk(`heatingRod.devices.${d.id}.boostActive`, 'Boost active', 'boolean', 'indicator');
             await mk(`heatingRod.devices.${d.id}.boostUntil`, 'Boost until (ts)', 'number', 'value.time');
             await mk(`heatingRod.devices.${d.id}.override`, 'Override', 'string', 'text');
@@ -1882,6 +1891,21 @@ class HeatingRodControlModule extends BaseModule {
 
     _maxStageForPara14aBudget(d, budgetW, observedStage = 0, measuredW = null) {
         const availableW = Math.max(0, num(budgetW, 0));
+        const maxStage = Math.max(0, Math.min(d.wiredStages || d.stageCount || 0, d.stageCount || 0));
+        let allowedStage = 0;
+        for (let stage = 1; stage <= maxStage; stage++) {
+            const stageW = this._sumStagePowerModel(d, stage, observedStage, measuredW);
+            if (stageW <= (availableW + 25)) allowedStage = stage;
+            else break;
+        }
+        return allowedStage;
+    }
+
+    _maxStageForStrategyPower(d, maxPowerW, observedStage = 0, measuredW = null) {
+        if (!Number.isFinite(Number(maxPowerW))) {
+            return Math.max(0, Math.min(d.wiredStages || d.stageCount || 0, d.stageCount || 0));
+        }
+        const availableW = Math.max(0, Number(maxPowerW));
         const maxStage = Math.max(0, Math.min(d.wiredStages || d.stageCount || 0, d.stageCount || 0));
         let allowedStage = 0;
         for (let stage = 1; stage <= maxStage; stage++) {
@@ -4716,6 +4740,18 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.userMode`, String(userMode));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.effectiveEnabled`, !!effectiveEnabled);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.effectiveMode`, String(effectiveMode));
+            const strategyAliases = [
+                `heatingRod:${Math.max(1, Number(d.configIndex || 0) + 1)}`,
+                `heatingRod:${String(d.id || '')}`,
+            ];
+            const strategyOverlay = resolveHeatingRodStrategyOverlay(this.adapter, strategyAliases, { now, effectiveMode });
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyEligible`, strategyOverlay.eligible === true);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyActive`, strategyOverlay.active === true);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyFallbackActive`, strategyOverlay.fallbackPause === true);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyAction`, String(strategyOverlay.action || 'standard'));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyMaxPowerW`, Number.isFinite(Number(strategyOverlay.maxPowerW)) ? Math.max(0, Math.round(Number(strategyOverlay.maxPowerW))) : null);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyReason`, String(strategyOverlay.reason || ''));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.strategyExpiresAt`, Math.max(0, Math.round(Number(strategyOverlay.request && strategyOverlay.request.expiresAt) || 0)));
 
             if (d.consumerType !== 'heatingRod') {
                 this._para14aHeldStages.delete(String(d.id));
@@ -5091,6 +5127,12 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             this._para14aHeldStages.delete(String(d.id));
+            const strategyAction = String(strategyOverlay.action || 'standard').toLowerCase();
+            const strategyPause = strategyOverlay.fallbackPause === true
+                || (strategyOverlay.active && ['pause', 'off', 'disable', 'block', 'stop'].includes(strategyAction));
+            const strategyStageCap = strategyPause
+                ? 0
+                : this._maxStageForStrategyPower(d, strategyOverlay.maxPowerW, observedStage, measuredW);
             let desiredStage = 0;
             let zeroDecision = null;
             let budgetDecision = null;
@@ -5112,16 +5154,21 @@ class HeatingRodControlModule extends BaseModule {
                 desiredStage = Math.max(0, Math.min(num(budgetDecision.targetStage, desiredStage), d.stageCount));
             }
 
+            // Betriebsstrategien dürfen den vorhandenen PV-/0-Einspeise-Regler
+            // ausschließlich begrenzen oder pausieren. Sie erhöhen niemals eine
+            // bereits vom Fachmodul berechnete Stufe.
+            desiredStage = Math.min(desiredStage, strategyStageCap);
+
             // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
             // oder neu zuschalten. Bei aktivem 0-Einspeise-Sondermodus werden kurze Transienten
             // nicht sofort gekillt, sondern erst nach den konfigurierten Schutzzeiten.
-            let forceNonPvDown = !!((budgetDecision && budgetDecision.reduceNow) || (budgetProtection && budgetProtection.reduceNow));
+            let forceNonPvDown = !!(strategyPause || (budgetDecision && budgetDecision.reduceNow) || (budgetProtection && budgetProtection.reduceNow));
             if (zeroExportStrategyActive) forceNonPvDown = !!(forceNonPvDown || (zeroDecision && zeroDecision.reduceNow));
             if (forceNonPvDown) {
                 // Reduce to the next lower *physical* actuator set. This is important for
                 // installations that accidentally map several virtual stages to the same KNX/relay
                 // datapoint: targetStage 3 -> 2 would otherwise still keep the same actuator ON.
-                const hardOff = !!((budgetProtection && budgetProtection.hardOff) || (zeroDecision && zeroDecision.hardOff));
+                const hardOff = !!(strategyPause || (budgetProtection && budgetProtection.hardOff) || (zeroDecision && zeroDecision.hardOff));
                 const lowerPhysicalStage = hardOff
                     ? 0
                     : this._previousPhysicalStageBelow(d, Math.max(observedStage, desiredStage));
@@ -5157,6 +5204,9 @@ class HeatingRodControlModule extends BaseModule {
             if (tsProductiveDecision && tsProductiveDecision.active) {
                 targetStage = Math.max(0, Math.min(Number(tsProductiveDecision.targetStage) || 0, d.stageCount, d.wiredStages));
             }
+            // Der TS-Normalpfad darf die vom Strategieplaner gesetzte Obergrenze
+            // nicht wieder anheben.
+            targetStage = Math.min(targetStage, strategyStageCap);
             const para14aMaxStage = para14aActive && d.enabled === true
                 ? this._maxStageForPara14aBudget(d, para14aRemainingW, observedStage, measuredW)
                 : targetStage;
@@ -5212,7 +5262,7 @@ class HeatingRodControlModule extends BaseModule {
                         : ''),
             });
             const offWouldTouchLoad = targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0 || observedStage > 0);
-            const mayWriteOff = !!(ownNow.autoOwned || forceStorageProtectOff || forceNonPvDown || para14aLimitedAuto);
+            const mayWriteOff = !!(ownNow.autoOwned || strategyPause || forceStorageProtectOff || forceNonPvDown || para14aLimitedAuto);
             if (targetStage <= 0 && offWouldTouchLoad && !mayWriteOff) {
                 const usedW = consumeHeatingRodW(
                     await this._observeManualExternal(d, observedStage, measuredW, feedback, 'manual_external_off_protected'),
@@ -5221,7 +5271,7 @@ class HeatingRodControlModule extends BaseModule {
                 appliedTotalW += usedW;
                 continue;
             }
-            const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || para14aLimitedAuto || (targetStage <= 0 && mayWriteOff && offWouldTouchLoad));
+            const forcePvWrite = !!(strategyPause || forceStorageProtectOff || forceNonPvDown || para14aLimitedAuto || (targetStage <= 0 && mayWriteOff && offWouldTouchLoad));
             const res = await this._applyStageState(
                 d,
                 targetStage,
@@ -5267,9 +5317,12 @@ class HeatingRodControlModule extends BaseModule {
             const gateSuffix = budgetProtection && budgetProtection.reason && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : '';
             const budgetSuffix = budgetDecision && budgetDecision.reason && budgetDecision.reason !== 'budget_follow' ? `_budget_${String(budgetDecision.reason)}` : '';
             const pvMinSuffix = pvMinBlocksStepUp ? `_pv_min_hold_${pvNowForAutomationW}of${minPvAutomationW}W` : '';
+            const strategySuffix = strategyOverlay.active || strategyOverlay.fallbackPause
+                ? `_strategy_${strategyPause ? 'pause' : `cap_${strategyStageCap}`}`
+                : '';
             const autoStatusBase = forceStorageProtectOff
-                ? `storage_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}`
-                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}`);
+                ? `storage_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}${strategySuffix}`
+                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}${strategySuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}${strategySuffix}`);
             const autoStatus = para14aLimitedAuto ? `para14a_limited_${autoStatusBase}` : autoStatusBase;
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, autoStatus);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');

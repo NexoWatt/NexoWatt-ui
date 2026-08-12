@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0c0844e8b157b17d70db93592e0bdebd94e7e9908bf62bea77b627f3700c4a05
+ * Original-Hash: b0e80b473e2afbdc8ae88330acc14505900f8e55624793127d5a74b4309f1de8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:fd2808267abfb52de7598b4384ec1c327b0888cc7885a996e54da5a304b7394f
+ * Quell-Hash: sha256:52de3d7fa960862012538b3fee3b23a50000b0534c435f91eb2d84dc304210c9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -66,6 +66,10 @@ const {
     invalidateSafetyEnvelope,
     liveSafetyEnvelope,
 } = require('../services/safety-envelope');
+const {
+    normalizeStrategyAutoSource,
+    resolveChargingStrategyOverlay,
+} = require('../services/operating-strategy-runtime');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -4405,6 +4409,32 @@ class ChargingManagementModule extends BaseModule {
             // ignore
         }
 
+        // Auto bleibt der einzige Ladebetriebsmodus, in dem eine Betriebsstrategie
+        // die Zielplanung übernehmen darf. Standard bleibt der migrationssichere
+        // Default; alle anderen Ladebetriebsarten ignorieren diese Auswahl.
+        await mk(
+            'userAutoSource',
+            'Auto-Quelle (standard|strategy)',
+            'string',
+            'text',
+            true,
+            {
+                def: 'standard',
+                states: {
+                    standard: 'NexoWatt Standard-Automatik',
+                    strategy: 'EOS Betriebsstrategie',
+                },
+            },
+        );
+        try {
+            const st = await this.adapter.getStateAsync(`${ch}.userAutoSource`);
+            if (!st || st.val === null || st.val === undefined || String(st.val).trim() === '') {
+                await this.adapter.setStateAsync(`${ch}.userAutoSource`, 'standard', true);
+            }
+        } catch {
+            // ignore
+        }
+
         // Runtime, per-wallbox AC phase mode override (writable for VIS/LIVE UI)
         // Values: fixed-1p | fixed-3p | auto-pv
         await mk(
@@ -4536,6 +4566,15 @@ class ChargingManagementModule extends BaseModule {
         }
 
         await mk('effectiveMode', 'Effective mode', 'string', 'text');
+        await mk('strategyEligible', 'Betriebsstrategie darf in Auto teilnehmen', 'boolean', 'indicator');
+        await mk('strategyActive', 'Betriebsstrategie-Anforderung aktiv', 'boolean', 'indicator');
+        await mk('strategyFallbackActive', 'Betriebsstrategie-Rückfall aktiv', 'boolean', 'indicator');
+        await mk('strategyAction', 'Betriebsstrategie Aktion', 'string', 'text');
+        await mk('strategyRequestedPowerW', 'Betriebsstrategie Zielleistung (W)', 'number', 'value.power');
+        await mk('strategyTargetSocPct', 'Betriebsstrategie Ziel-SoC (%)', 'number', 'value.percent');
+        await mk('strategyStatus', 'Betriebsstrategie Status', 'string', 'text');
+        await mk('strategyReason', 'Betriebsstrategie Grund', 'string', 'text');
+        await mk('strategyExpiresAt', 'Betriebsstrategie gültig bis', 'number', 'value.time');
         await mk('goalTariffOverride', 'Ziel: Tarif-Sperre übersteuert', 'boolean', 'indicator');
         await mk('goalTariffOverrideReason', 'Ziel: Tarif-Override Grund', 'string', 'text');
         await mk('priority', 'Priority', 'number', 'value');
@@ -5175,6 +5214,26 @@ class ChargingManagementModule extends BaseModule {
             } catch {
                 userMode = normalizeWallboxModeOverride(wb.userModeDefault || wb.userMode || 'auto');
             }
+
+            let userAutoSource = 'standard';
+            try {
+                const st = await this._getStateCached(`${ch}.userAutoSource`);
+                const cur = st ? st.val : null;
+                const configuredDefault = normalizeStrategyAutoSource(wb.userAutoSource || wb.autoSource || 'standard');
+                if (cur === null || cur === undefined || String(cur).trim() === '') {
+                    userAutoSource = configuredDefault;
+                    await this._queueState(`${ch}.userAutoSource`, configuredDefault, true);
+                } else {
+                    userAutoSource = normalizeStrategyAutoSource(cur);
+                }
+            } catch {
+                userAutoSource = normalizeStrategyAutoSource(wb.userAutoSource || wb.autoSource || 'standard');
+            }
+            const strategyOverlay = resolveChargingStrategyOverlay(
+                this.adapter,
+                [`evcs:lp${wbIndex + 1}`, `evcs:${safe}`],
+                { now, userMode, autoSource: userAutoSource },
+            );
 
             const cfgEnabled = wb.enabled !== false;
 
@@ -6402,6 +6461,8 @@ class ChargingManagementModule extends BaseModule {
                 pvMinRunUntilMs,
                 pvStartCooldownUntilMs,
                 userMode,
+                userAutoSource,
+                strategyOverlay,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
                 vehiclePlugged,
                 vehicleDemandConfirmed,
@@ -6989,8 +7050,22 @@ class ChargingManagementModule extends BaseModule {
                 // Bei Negativpreis wird daraus temporär ein normaler netzfreigegebener Modus.
                 eff = tariffGridImportPreferred ? 'normal' : 'minpv';
             } else {
-                // auto: follow global defaults
+                // auto: follow global defaults. Nur wenn der Ladepunkt ausdrücklich
+                // "Auto → EOS Betriebsstrategie" gewählt hat und eine frische,
+                // freigegebene Strategieanforderung vorliegt, darf deren Energiequelle
+                // den Auto-Untermodus bestimmen. Alle harten Limits bleiben nachgelagert.
                 eff = (forcePvForW || pvSurplusOnlyCfg) ? 'pv' : 'normal';
+                const strategy = w.strategyOverlay && typeof w.strategyOverlay === 'object' ? w.strategyOverlay : null;
+                if (strategy && strategy.active === true) {
+                    const policy = String(strategy.energySourcePolicy || 'pv-preferred').trim().toLowerCase();
+                    // Die Strategie darf die vom Nutzer gewählte Energiequelle nicht
+                    // heimlich erweitern. "PV-only" bleibt deshalb auch bei Negativpreis
+                    // PV-only. "cheap-grid" gibt Netzbezug nur in einem tatsächlich
+                    // günstigen/negativen Tarifzeitfenster frei.
+                    if (policy === 'pv-only') eff = 'pv';
+                    else if (policy === 'grid-allowed') eff = 'normal';
+                    else if (policy === 'cheap-grid') eff = tariffGridImportPreferred ? 'normal' : 'pv';
+                }
             }
 
             w.effectiveMode = eff;
@@ -7007,7 +7082,22 @@ class ChargingManagementModule extends BaseModule {
 
             // Expose effective mode + boost runtime details for VIS/debugging
             try {
+                const strategy = w.strategyOverlay && typeof w.strategyOverlay === 'object' ? w.strategyOverlay : {};
+                const strategyRequest = strategy.request && typeof strategy.request === 'object' ? strategy.request : {};
+                const strategyFallbackActive = strategy.fallbackPause === true || (strategy.eligible === true && strategy.active !== true && strategy.action === 'standard');
+                const strategyStatus = strategy.active === true
+                    ? 'active'
+                    : (strategy.fallbackPause === true ? 'fallback-pause' : (strategy.eligible === true ? 'fallback-standard' : 'not-eligible'));
                 await this._queueState(`${w.ch}.effectiveMode`, eff, true);
+                await this._queueState(`${w.ch}.strategyEligible`, strategy.eligible === true, true);
+                await this._queueState(`${w.ch}.strategyActive`, strategy.active === true, true);
+                await this._queueState(`${w.ch}.strategyFallbackActive`, strategyFallbackActive, true);
+                await this._queueState(`${w.ch}.strategyAction`, String(strategy.action || 'standard'), true);
+                await this._queueState(`${w.ch}.strategyRequestedPowerW`, Math.max(0, Number(strategy.targetPowerW) || 0), true);
+                await this._queueState(`${w.ch}.strategyTargetSocPct`, Number.isFinite(Number(strategy.targetSocPct)) ? Number(strategy.targetSocPct) : 0, true);
+                await this._queueState(`${w.ch}.strategyStatus`, strategyStatus, true);
+                await this._queueState(`${w.ch}.strategyReason`, String(strategy.reason || ''), true);
+                await this._queueState(`${w.ch}.strategyExpiresAt`, Math.max(0, Number(strategyRequest.expiresAt) || 0), true);
                 await this._queueState(`${w.ch}.goalTariffOverride`, !!goalTariffOverrideActive, true);
                 await this._queueState(`${w.ch}.goalTariffOverrideReason`, String(goalTariffOverrideReason || ''), true);
                 await this._queueState(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
@@ -9452,7 +9542,10 @@ if (components.length) {
 
             // Zeit-Ziel Laden: Wenn aktiv, die Leistung auf den errechneten Durchschnitt begrenzen
             // (so können mehrere Fahrzeuge im Depot parallel "bis Uhrzeit X" geplant werden).
-            if (w.goalActive && w.goalDesiredW > 0 && effMode !== 'boost') {
+            const strategyOwnsAutoTarget = !!(w.strategyOverlay
+                && (w.strategyOverlay.active === true || w.strategyOverlay.fallbackPause === true));
+            if (w.goalActive && w.goalDesiredW > 0 && effMode !== 'boost'
+                && !strategyOwnsAutoTarget) {
                 let desired = Math.min(w.maxPW, Math.max(0, w.goalDesiredW));
 
                 // Smart‑Ziel: wenn der Preis gerade klar "günstig" ist, darf das Ziel-Laden etwas früher vorladen,
@@ -9476,9 +9569,41 @@ if (components.length) {
                 }
             }
 
+            // Betriebsstrategie ist ausschließlich ein zusätzlicher Auto-Cap bzw.
+            // eine explizite Auto-Pause. Sie kann niemals Boost, Manuell, PV oder
+            // Min+PV überschreiben und niemals ein durch Budget/Station/§14a kleineres
+            // Ergebnis nach oben anheben. Das Lademanagement bleibt Single Writer.
+            if (normalizeWallboxModeOverride(w.userMode) === 'auto'
+                && normalizeStrategyAutoSource(w.userAutoSource) === 'strategy') {
+                const strategy = w.strategyOverlay && typeof w.strategyOverlay === 'object' ? w.strategyOverlay : {};
+                const action = String(strategy.action || 'standard').trim().toLowerCase();
+                const strategyPause = strategy.fallbackPause === true
+                    || ['pause', 'off', 'block', 'disable', 'stop'].includes(action);
+                if (strategyPause) {
+                    targetW = 0;
+                    targetA = 0;
+                    reason = ReasonCodes.NO_SETPOINT;
+                } else if (strategy.active === true) {
+                    const requestedCapW = Number(strategy.targetPowerW);
+                    const maxCapW = Number(strategy.maxPowerW);
+                    let capW = Number.isFinite(requestedCapW) ? Math.max(0, requestedCapW) : null;
+                    if (Number.isFinite(maxCapW) && maxCapW >= 0) capW = capW === null ? Math.max(0, maxCapW) : Math.min(capW, Math.max(0, maxCapW));
+                    if (capW !== null) {
+                        if (capW > 0 && w.minPW > 0 && capW + 1 < w.minPW) {
+                            targetW = 0;
+                            targetA = 0;
+                            reason = ReasonCodes.BELOW_MIN;
+                        } else if (targetW > capW + 1) {
+                            targetW = capW;
+                        }
+                    }
+                }
+            }
+
                         // Zeit‑Ziel Laden: Wenn nach dem Einstecken auf eine frische SoC‑Aktualisierung gewartet wird,
             // pausieren wir die Ladung temporär (verhindert Start mit stalen/falschen Zielwerten).
-            if (shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)) {
+            if (!strategyOwnsAutoTarget
+                && shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)) {
                 targetW = 0;
                 targetA = 0;
                 reason = ReasonCodes.NO_SETPOINT;
@@ -10061,6 +10186,13 @@ if (components.length) {
                 name: w.name,
                 effectiveMode: effMode,
                 userMode: w.userMode,
+                userAutoSource: w.userAutoSource,
+                strategyEligible: !!(w.strategyOverlay && w.strategyOverlay.eligible),
+                strategyActive: !!(w.strategyOverlay && w.strategyOverlay.active),
+                strategyFallbackPause: !!(w.strategyOverlay && w.strategyOverlay.fallbackPause),
+                strategyAction: String(w.strategyOverlay && w.strategyOverlay.action || 'standard'),
+                strategyRequestedPowerW: Math.max(0, Number(w.strategyOverlay && w.strategyOverlay.targetPowerW) || 0),
+                strategyReason: String(w.strategyOverlay && w.strategyOverlay.reason || ''),
                 charging: !!w.charging,
                 chargingSinceMs: w.chargingSinceMs || 0,
                 actualPowerW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerW, 0))), actualPowerRawW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerRawW, finiteChargingAuditNumber(w.actualPowerW, 0)))), meterStale: w.meterStale === true, telemetryProfile: String(w.telemetryProfile || ''),

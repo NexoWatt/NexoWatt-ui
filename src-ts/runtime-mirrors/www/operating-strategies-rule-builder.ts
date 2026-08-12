@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c7f4af03a2d3b51d6eb31b72dbad790378d3c11f2e78cc6865ba35ca11edb389
+ * Original-Hash: 2e565e3f5f0c0a28d438378e936709a301cbea2c0623720133fd59d87b861589
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/operating-strategies-rule-builder.ts
- * Quell-Hash: sha256:bd4e9912e4c96f986de8ecfc8f3e8f6d7340169c078120ef75b626a2ad772a0b
+ * Quell-Hash: sha256:dc97e01f5b46c6d6ba7a019217520c5e11e2e77f192b8f5d6bda90aef8674533
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1739,7 +1739,7 @@
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-    function ruleCardHtml(rule, index, profiles, resources) {
+    function ruleCardHtml(rule, index, profiles, resources, liveEnabled = false) {
         const validation = validateRule(rule, resources, text(profiles[0]?.id));
         const stateBadge = validation.valid
             ? '<span class="nw-os-rule-badge nw-os-rule-badge--ready">Konfiguration plausibel</span>'
@@ -1751,7 +1751,7 @@
           <div>
             <div class="nw-os-rule__title">${esc(rule.name)}</div>
             <div class="nw-os-rule__subtitle">${esc(ruleTypeLabel(rule.ruleType))} · ${esc(resourceName(resources, rule.targetResourceId))}</div>
-            <div class="nw-os-rule-badges"><span class="nw-os-rule-badge nw-os-rule-badge--${requirementTone(rule.requirement)}">${requirementLabel(rule.requirement)}</span>${stateBadge}${warningBadge}<span class="nw-os-rule-badge nw-os-rule-badge--locked">Nur Simulation</span></div>
+            <div class="nw-os-rule-badges"><span class="nw-os-rule-badge nw-os-rule-badge--${requirementTone(rule.requirement)}">${requirementLabel(rule.requirement)}</span>${stateBadge}${warningBadge}<span class="nw-os-rule-badge nw-os-rule-badge--${liveEnabled ? 'ready' : 'locked'}">${liveEnabled ? 'Live-Anforderung möglich' : 'Nur Simulation'}</span></div>
           </div>
           <button type="button" class="nw-btn nw-btn--small" data-os-delete-rule="${index}">Regel löschen</button>
         </div>
@@ -1968,6 +1968,14 @@
         const profiles = list(config.profiles);
         const profileIds = profiles.map((profile) => text(profile.id));
         const rules = normalizeRules(config.rules, profileIds);
+        const autoControl = record(config.autoControl);
+        const liveEnabled = config.enabled === true
+            && text(config.mode) === 'active'
+            && config.commissioningConfirmed === true
+            && config.controlTakeoverEnabled === true
+            && config.writeExecutionEnabled === true
+            && autoControl.enabled !== false
+            && text(autoControl.stage) === 'active';
         const simulation = ensureSimulationStates(config.simulation, resources);
         if (!simulation.activeProfileId)
             simulation.activeProfileId = text(config.activeProfileId, profileIds[0] || '');
@@ -1975,18 +1983,18 @@
         return `${styles()}
       <div class="nw-os-section">
         <div class="nw-os-section__header">
-          <div><div class="nw-os-section__title">Regelbausteine und Prioritätskaskade</div><div class="nw-os-section__subtitle">MUSS schützt Sicherheit und Pflichtziele, SOLL optimiert den Betrieb, KANN nutzt verbleibenden Überschuss. Alle Bausteine werden in RC54 ausschließlich gespeichert und simuliert.</div></div>
+          <div><div class="nw-os-section__title">Regelbausteine und Prioritätskaskade</div><div class="nw-os-section__subtitle">MUSS schützt Sicherheit und Pflichtziele, SOLL optimiert den Betrieb, KANN nutzt verbleibenden Überschuss. ${liveEnabled ? 'Freigegebene Regeln liefern kurzlebige Anforderungen an die vorhandenen EOS-Fachmodule.' : 'Im aktuellen Betriebszustand werden die Bausteine nur simuliert.'}</div></div>
           <div class="nw-os-rule-toolbar"><label class="nw-field"><span>Neuer Baustein</span><select id="osNewRuleType"><option value="thermalPause">Thermische Pause</option><option value="targetSoc" selected>SoC-Ziel</option><option value="targetEnergy">Energieziel</option><option value="switchState">Ein-/Aus-Anforderung</option><option value="targetPower">Leistungsziel</option></select></label><button id="osAddRule" type="button" class="nw-btn nw-btn--primary">Regel hinzufügen</button><button id="osAddCustomerExample" type="button" class="nw-btn">Kundenbeispiel vorbereiten</button></div>
         </div>
-        <div class="nw-os-lock-note">Regeln besitzen immer <strong>simulationOnly = true</strong> und <strong>executionEnabled = false</strong>. Auch erkannte Schreibdatenpunkte werden durch diesen Baukasten nicht beschrieben.</div>
-        <div id="osRules">${rules.length ? rules.map((rule, index) => ruleCardHtml(rule, index, profiles, resources)).join('') : '<div class="nw-os-rule-empty">Noch keine Regel angelegt.</div>'}</div>
+        <div class="nw-os-lock-note">${liveEnabled ? '<strong>Live-Anforderungen sind freigegeben.</strong> Die Strategy Engine schreibt trotzdem keinen Geräte-Datenpunkt direkt; Lade-, Speicher-, Thermik- und Heizstabmodule bleiben Single Writer.' : '<strong>Beobachtungs-/Simulationsbetrieb.</strong> Es werden keine aktiven Anforderungen an Geräte erzeugt.'}</div>
+        <div id="osRules">${rules.length ? rules.map((rule, index) => ruleCardHtml(rule, index, profiles, resources, liveEnabled)).join('') : '<div class="nw-os-rule-empty">Noch keine Regel angelegt.</div>'}</div>
         <div class="nw-os-section-label">Berechnete Prioritätskaskade</div>
         <div class="nw-os-cascade">${cascadeHtml(rules, resources)}</div>
       </div>
 
       <div class="nw-os-section">
         <div class="nw-os-section__header">
-          <div><div class="nw-os-section__title">Trockenlauf / Simulation</div><div class="nw-os-section__subtitle">Manuelle Testwerte zeigen, welche Anforderungen die spätere Strategy Engine erzeugen würde. Die bestehende Anlagenregelung bleibt vollständig unangetastet.</div></div>
+          <div><div class="nw-os-section__title">Trockenlauf / Simulation</div><div class="nw-os-section__subtitle">Manuelle Testwerte prüfen dieselbe Prioritätslogik unabhängig vom Live-Betrieb. Die Simulation selbst schreibt niemals Gerätewerte.</div></div>
           <div class="nw-os-rule-toolbar"><button id="osLoadDemoScenario" type="button" class="nw-btn">Beispielwerte laden</button><button id="osRunSimulation" type="button" class="nw-btn nw-btn--primary">Simulation berechnen</button></div>
         </div>
         <div id="osSimulationResult">${simulationResultHtml(lastSimulationResult)}</div>

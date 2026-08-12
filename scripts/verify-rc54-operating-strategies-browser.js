@@ -332,7 +332,7 @@ window.fetch=async function(url, options){
         hardwareWrites:window.__rc54HardwareWrites
       };
     })()`);
-    assert.equal(collected.schemaVersion, 2);
+    assert.equal(collected.schemaVersion, 3);
     assert.equal(collected.enabled, true);
     assert.equal(collected.mode, 'observe');
     assert.equal(collected.takeover, false);

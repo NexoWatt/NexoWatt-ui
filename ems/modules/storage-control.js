@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:aa9c9822b2402354687e76be79605ae025a9084a0d443df955f4b57f277af74e
+ * Quell-Hash: sha256:fa2f70b0bb3aa93dc1fa2f6fb8c35669b4f896d5113a2d706b5b7da4e7bef7be
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -44,6 +44,7 @@
 
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+const { resolveStorageStrategyOverlay } = require('../services/operating-strategy-runtime');
 const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
 const { decideStorageZeroWrite } = require('../services/storage-zero-write-policy');
 const { estimateAsyncStorageFeedback } = require('../services/storage-async-feedback-anchor');
@@ -2692,7 +2693,19 @@ if (typeof soc === 'number') {
         const feneconAcMode = false;
 
         const selfDischargeEnabled = storageOperatingPolicy.self.enabled === true;
-        const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10), 0, 100);
+        const strategyStorageAliases = storageAuthorityEarly.selectedTopology === 'farm'
+            ? farmRowsEarly
+                .map((row, index) => (row && row.enabled === true ? `storagefarm:${index + 1}` : ''))
+                .filter(Boolean)
+            : ['storage:primary'];
+        const strategyStorageOverlay = resolveStorageStrategyOverlay(this.adapter, strategyStorageAliases, { now });
+        let selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10), 0, 100);
+        if (strategyStorageOverlay.active && Number.isFinite(Number(strategyStorageOverlay.minSocPct))) {
+            // Betriebsstrategien dürfen die vorhandene Entladeuntergrenze nur
+            // anheben. Sie können niemals eine strengere Speicher-/MultiUse-
+            // Reserve oder Herstellergrenze absenken.
+            selfMinSoc = Math.max(selfMinSoc, clamp(Number(strategyStorageOverlay.minSocPct), 0, 100));
+        }
         const selfMaxSoc = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), selfMinSoc, 100);
 
         // Alte Gateway-EV-Prioritaets-/PV-Block-Caps werden durch den neuen Modus
@@ -2731,6 +2744,13 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
         await this._setIfChanged('speicher.regelung.selfMinSocPct', selfMinSoc);
         await this._setIfChanged('speicher.regelung.selfMaxSocPct', selfMaxSoc);
+        await this._setIfChanged('speicher.regelung.strategyActive', strategyStorageOverlay.active === true);
+        await this._setIfChanged('speicher.regelung.strategyMinSocPct', strategyStorageOverlay.active ? selfMinSoc : null);
+        await this._setIfChanged('speicher.regelung.strategyTargetSocPct', strategyStorageOverlay.active && Number.isFinite(Number(strategyStorageOverlay.targetSocPct)) ? Number(strategyStorageOverlay.targetSocPct) : null);
+        await this._setIfChanged('speicher.regelung.strategyAbsoluteMinSocPct', strategyStorageOverlay.active && Number.isFinite(Number(strategyStorageOverlay.absoluteMinSocPct)) ? Number(strategyStorageOverlay.absoluteMinSocPct) : null);
+        await this._setIfChanged('speicher.regelung.strategyPhase', String(strategyStorageOverlay.phase || ''));
+        await this._setIfChanged('speicher.regelung.strategyReason', String(strategyStorageOverlay.reason || ''));
+        await this._setIfChanged('speicher.regelung.strategyExpiresAt', Math.max(0, Math.round(Number(strategyStorageOverlay.request && strategyStorageOverlay.request.expiresAt) || 0)));
         await this._setIfChanged('speicher.regelung.selfSocPolicySource', String(storageOperatingPolicy.source || 'standalone-default'));
         await this._setIfChanged('speicher.regelung.selfSocPolicyJson', JSON.stringify(storageOperatingPolicy));
         await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
@@ -9866,6 +9886,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.lskLadenAktiviert', 'LSK-Laden aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.selfMinSocPct', 'Eigenverbrauch Min-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.strategyActive', 'Betriebsstrategie aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.strategyMinSocPct', 'Betriebsstrategie wirksamer Min-SoC (%)', 'number', 'value', null);
+        await mk('speicher.regelung.strategyTargetSocPct', 'Betriebsstrategie Ziel-SoC (%)', 'number', 'value', null);
+        await mk('speicher.regelung.strategyAbsoluteMinSocPct', 'Betriebsstrategie absolute Untergrenze (%)', 'number', 'value', null);
+        await mk('speicher.regelung.strategyPhase', 'Betriebsstrategie Speicherphase', 'string', 'text', '');
+        await mk('speicher.regelung.strategyReason', 'Betriebsstrategie Speichergrund', 'string', 'text', '');
+        await mk('speicher.regelung.strategyExpiresAt', 'Betriebsstrategie gültig bis', 'number', 'value.time', 0);
         await mk('speicher.regelung.selfSocPolicySource', 'Eigenverbrauch SoC-Policy Quelle', 'string', 'text', '');
         await mk('speicher.regelung.selfSocPolicyJson', 'Eigenverbrauch SoC-Policy Diagnose (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);

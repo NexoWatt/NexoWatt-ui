@@ -1,27 +1,17 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.179",
+  "version": "0.8.180",
   "files": [
     {
-      "path": "LICENSE",
-      "size": 2602,
-      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
-    },
-    {
-      "path": "README.md",
-      "size": 2428,
-      "sha256": "5506b7ab564fc77fcd4336774fd29edc6fb52baf172a8590a2695366af12f1f5"
+      "path": "admin/admin_logo_.ico",
+      "size": 4286,
+      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/admin.png",
       "size": 1466889,
       "sha256": "e1620f78bd502b3837db2b3e351d68ab88198f16e06052618d62d6e33d1ae402"
-    },
-    {
-      "path": "admin/admin_logo_.ico",
-      "size": 4286,
-      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/appcenter.html",
@@ -51,7 +41,7 @@
     {
       "path": "admin/react/index.html",
       "size": 4431,
-      "sha256": "3e34e6c4ec9d9b93bc5f5033ecbb84df43161731b61ee37823d71b42f9d1758a"
+      "sha256": "cf20106cbc5120a216d5db9ad83885cd450d6d95efc3ad7725546456d45a22c7"
     },
     {
       "path": "admin/simulation.html",
@@ -159,6 +149,11 @@
       "sha256": "5a26b827f9788510a9e17bc4f48ca1274921394a3b48114fac5f7e0935f6233d"
     },
     {
+      "path": "docs/RC56_OPERATING_STRATEGIES_FIELDTEST_DE.md",
+      "size": 10232,
+      "sha256": "cae2ea8d0cabb33e5ba4ed236dbe9c4bf14215238df2ba900f3e7677da044e30"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 16219,
       "sha256": "c763ed4d358d0476fd0324ffb625bac8fd9d7b600c37925b106aa90ef4499aad"
@@ -205,8 +200,8 @@
     },
     {
       "path": "ems/module-manager.js",
-      "size": 46242,
-      "sha256": "e0634fb1440d7be86e18b154cacd8989da5b9f9fcacd13f3c55bd1918b47666f"
+      "size": 47378,
+      "sha256": "a2b846d08d8bc25a81f6c138438d6b8d734b0cb9da72216211655083741c77e5"
     },
     {
       "path": "ems/modules/ai-advisor.js",
@@ -230,8 +225,8 @@
     },
     {
       "path": "ems/modules/charging-management.js",
-      "size": 616471,
-      "sha256": "0c0844e8b157b17d70db93592e0bdebd94e7e9908bf62bea77b627f3700c4a05"
+      "size": 625193,
+      "sha256": "b0e80b473e2afbdc8ae88330acc14505900f8e55624793127d5a74b4309f1de8"
     },
     {
       "path": "ems/modules/core-limits.js",
@@ -265,8 +260,8 @@
     },
     {
       "path": "ems/modules/heating-rod-control.js",
-      "size": 338111,
-      "sha256": "0ea877fcbf75148ad53ed91dcfdeadb41d962ade53ecc64e25ef92e0d7c55dd1"
+      "size": 342429,
+      "sha256": "3be5f7de3733f094f66ef9409f497907539974ad9621855485b4c80e521d2dd7"
     },
     {
       "path": "ems/modules/mesh-microgrid.js",
@@ -299,6 +294,11 @@
       "sha256": "23c10cfbd06250dde288bb6add50f8dedd37bc48069e41eaaab7175eab485268"
     },
     {
+      "path": "ems/modules/operating-strategies.js",
+      "size": 71300,
+      "sha256": "3db41c3dfd7e5404f6d69a816ede3373ef12b27ffe7ed1f26ef2be3dd0e222e8"
+    },
+    {
       "path": "ems/modules/para14a.js",
       "size": 97008,
       "sha256": "131f4966ecce469a723eb39a86d3f561bcc518adbd00c20e9606ce3127a0b27c"
@@ -325,8 +325,8 @@
     },
     {
       "path": "ems/modules/storage-control.js",
-      "size": 598813,
-      "sha256": "366c2b1e21e8487ad60ecee903c9ea9c6bb96799a33383e2a67485de08436fc1"
+      "size": 601684,
+      "sha256": "0dbe2ce5a7ca4f4baa6b5133c45f9ffe18e54c60c7ba86fe865e95b431dff77c"
     },
     {
       "path": "ems/modules/storage-mapping.js",
@@ -350,18 +350,13 @@
     },
     {
       "path": "ems/modules/thermal-control.js",
-      "size": 105260,
-      "sha256": "477494b628d878c9d4e7aad06bf6b6cc8bbf890f336434ca0366609f80b0f8cb"
+      "size": 109454,
+      "sha256": "9805004109762539679f5519d47ea0b5cbb1d67eae2a183b92df47f301c62091"
     },
     {
       "path": "ems/modules/threshold-control.js",
       "size": 47981,
       "sha256": "a8c09f6bdc1776e4dde743e44d6a67b57ab7ddb13fc2871bd2ab824ca9a4f338"
-    },
-    {
-      "path": "ems/netoperator/README.md",
-      "size": 2616,
-      "sha256": "c5abf6c7099d8644c5ce9e64431e245d7f4fca7ce6c9f10d72642b16e294cc50"
     },
     {
       "path": "ems/netoperator/acceptance-tests.json",
@@ -412,6 +407,11 @@
       "path": "ems/netoperator/drivers/wago-power-plant-control.json",
       "size": 5664,
       "sha256": "c5285daa0b59a5a82929373289ff4a447d1bfa144d754bea628dbec92f6cf7c6"
+    },
+    {
+      "path": "ems/netoperator/README.md",
+      "size": 2616,
+      "sha256": "c5abf6c7099d8644c5ce9e64431e245d7f4fca7ce6c9f10d72642b16e294cc50"
     },
     {
       "path": "ems/nexologic-engine.js",
@@ -509,6 +509,11 @@
       "sha256": "3dfa4309a20333453ee1cbc56b04f984bd03009304471c88b7d042049785e288"
     },
     {
+      "path": "ems/services/operating-strategy-runtime.js",
+      "size": 16719,
+      "sha256": "e04660eda562dfdb75b5c657d0714a8d8a1b7081a115e9428458aca6ac16937e"
+    },
+    {
       "path": "ems/services/para14a-eebus-api.js",
       "size": 49921,
       "sha256": "8ab2b073c3088323cd797afbb1808fec99a9531b0bd3533d168acaa7a8591d6a"
@@ -561,12 +566,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "be10a7caf26130b24b42b70f5c56e11369e19b264dcd2b23e90c69ef4432ebe8"
+      "sha256": "af83fdd093f81cd33f66a0963da7f21aa578fed75b3539b934663f2b522be79d"
     },
     {
       "path": "io-package.json",
-      "size": 23726,
-      "sha256": "52b3b105f5171789f768d04cd3e798dcaddcca906a206fa979cc681cb4235ee9"
+      "size": 24030,
+      "sha256": "21d1ca39348fd721e28faa1b9f56a2f894cbddb706a91b565332f46db7c2e12c"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -799,9 +804,19 @@
       "sha256": "463661dd3c3e8a08c0abbb8526960562de4a961c14b28720f5f4a12c12b00299"
     },
     {
+      "path": "LICENSE",
+      "size": 2602,
+      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
+    },
+    {
       "path": "main.js",
-      "size": 1696129,
-      "sha256": "5d39b84240e17e97fc7891a4e7062c57201d5b92442e7505be2442b528820aa1"
+      "size": 1701733,
+      "sha256": "14cce69bb1cb5e29e4e540f78f5324376871ec8aa0ce17a09d1718779f717227"
+    },
+    {
+      "path": "README.md",
+      "size": 2428,
+      "sha256": "5506b7ab564fc77fcd4336774fd29edc6fb52baf172a8590a2695366af12f1f5"
     },
     {
       "path": "www/admin-guard.js",
@@ -940,8 +955,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 948859,
-      "sha256": "4ec7235e8be627b1a6c28c32a62e4f5cdf44dc957da394c8db4670c770456e69"
+      "size": 948704,
+      "sha256": "72305c92ddfb9bcb65a163e39bbd4309cd75532665446ccf442caa7a7377ab44"
     },
     {
       "path": "www/energy-ledger.html",
@@ -985,8 +1000,8 @@
     },
     {
       "path": "www/evcs.js",
-      "size": 94768,
-      "sha256": "68a53b873537ff38f18bfd9a15cc4ec8a549605a8fd8507123110f022e44fca3"
+      "size": 99320,
+      "sha256": "1f8a1d61ef7eb8d4caf6f641d62e41b440f08d64418a79b5e88a5beb61e66ee2"
     },
     {
       "path": "www/history.html",
@@ -1066,7 +1081,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "e2bb59e68434db987446e3f3f6b78aad30ee8af03673f5b973604daa99aa7ea8"
+      "sha256": "fb0e3f3cb291f573196a2fee4dd41e4396d2abdfcd731a4b2829a7f8c173cfda"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1082,16 +1097,6 @@
       "path": "www/netoperator-appcenter.js",
       "size": 14726,
       "sha256": "1c37d43ce711df512274a05a5d2a8819dc096600041db7c4f64bdbabcddabd86"
-    },
-    {
-      "path": "www/operating-strategies-appcenter.js",
-      "size": 67549,
-      "sha256": "1ea23c60578009926b9571053ee173e08fb3115720cc6e5ada54d5d22d6e7e77"
-    },
-    {
-      "path": "www/operating-strategies-rule-builder.js",
-      "size": 103811,
-      "sha256": "c7f4af03a2d3b51d6eb31b72dbad790378d3c11f2e78cc6865ba35ca11edb389"
     },
     {
       "path": "www/netoperator.html",
@@ -1111,12 +1116,22 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "c4ecf32c0d901c0e37e724f015a8576393c27ff6251eeec8568f60b4b07f669f"
+      "sha256": "1e994a67a5453c3ba12960e16ac987d72188c4606581d07b1511045b14160e89"
     },
     {
       "path": "www/nw-shell.js",
       "size": 7582,
       "sha256": "6afef487b2a2caf5d78aa34662e901d6580d1113dbed19918b63328a902eacc2"
+    },
+    {
+      "path": "www/operating-strategies-appcenter.js",
+      "size": 93113,
+      "sha256": "980eca392cb79118f2ad8beca4d68e7d09e3f5bb774bb0d01ad5c6268c1e1f28"
+    },
+    {
+      "path": "www/operating-strategies-rule-builder.js",
+      "size": 104553,
+      "sha256": "2e565e3f5f0c0a28d438378e936709a301cbea2c0623720133fd59d87b861589"
     },
     {
       "path": "www/para14a-report.html",

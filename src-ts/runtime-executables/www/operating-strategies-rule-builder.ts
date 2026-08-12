@@ -1056,7 +1056,7 @@
     return `<label class="nw-field"><span>Leistungsziel</span><input type="number" step="1" min="0" max="1000000000" value="${esc(rule.target.value)}" data-os-rule-index="${index}" data-os-rule-target-field="value"><small>W</small></label>`;
   }
 
-  function ruleCardHtml(rule: AnyRecord, index: number, profiles: AnyRecord[], resources: AnyRecord[]): string {
+  function ruleCardHtml(rule: AnyRecord, index: number, profiles: AnyRecord[], resources: AnyRecord[], liveEnabled = false): string {
     const validation = validateRule(rule, resources, text(profiles[0]?.id));
     const stateBadge = validation.valid
       ? '<span class="nw-os-rule-badge nw-os-rule-badge--ready">Konfiguration plausibel</span>'
@@ -1068,7 +1068,7 @@
           <div>
             <div class="nw-os-rule__title">${esc(rule.name)}</div>
             <div class="nw-os-rule__subtitle">${esc(ruleTypeLabel(rule.ruleType))} · ${esc(resourceName(resources, rule.targetResourceId))}</div>
-            <div class="nw-os-rule-badges"><span class="nw-os-rule-badge nw-os-rule-badge--${requirementTone(rule.requirement)}">${requirementLabel(rule.requirement)}</span>${stateBadge}${warningBadge}<span class="nw-os-rule-badge nw-os-rule-badge--locked">Nur Simulation</span></div>
+            <div class="nw-os-rule-badges"><span class="nw-os-rule-badge nw-os-rule-badge--${requirementTone(rule.requirement)}">${requirementLabel(rule.requirement)}</span>${stateBadge}${warningBadge}<span class="nw-os-rule-badge nw-os-rule-badge--${liveEnabled ? 'ready' : 'locked'}">${liveEnabled ? 'Live-Anforderung möglich' : 'Nur Simulation'}</span></div>
           </div>
           <button type="button" class="nw-btn nw-btn--small" data-os-delete-rule="${index}">Regel löschen</button>
         </div>
@@ -1212,24 +1212,32 @@
     const profiles = list(config.profiles);
     const profileIds = profiles.map((profile) => text(profile.id));
     const rules = normalizeRules(config.rules, profileIds);
+    const autoControl = record(config.autoControl);
+    const liveEnabled = config.enabled === true
+      && text(config.mode) === 'active'
+      && config.commissioningConfirmed === true
+      && config.controlTakeoverEnabled === true
+      && config.writeExecutionEnabled === true
+      && autoControl.enabled !== false
+      && text(autoControl.stage) === 'active';
     const simulation = ensureSimulationStates(config.simulation, resources);
     if (!simulation.activeProfileId) simulation.activeProfileId = text(config.activeProfileId, profileIds[0] || '');
     const profileSelect = profiles.map((profile) => `<option value="${esc(profile.id)}"${simulation.activeProfileId === profile.id ? ' selected' : ''}>${esc(profile.name)}</option>`).join('');
     return `${styles()}
       <div class="nw-os-section">
         <div class="nw-os-section__header">
-          <div><div class="nw-os-section__title">Regelbausteine und Prioritätskaskade</div><div class="nw-os-section__subtitle">MUSS schützt Sicherheit und Pflichtziele, SOLL optimiert den Betrieb, KANN nutzt verbleibenden Überschuss. Alle Bausteine werden in RC54 ausschließlich gespeichert und simuliert.</div></div>
+          <div><div class="nw-os-section__title">Regelbausteine und Prioritätskaskade</div><div class="nw-os-section__subtitle">MUSS schützt Sicherheit und Pflichtziele, SOLL optimiert den Betrieb, KANN nutzt verbleibenden Überschuss. ${liveEnabled ? 'Freigegebene Regeln liefern kurzlebige Anforderungen an die vorhandenen EOS-Fachmodule.' : 'Im aktuellen Betriebszustand werden die Bausteine nur simuliert.'}</div></div>
           <div class="nw-os-rule-toolbar"><label class="nw-field"><span>Neuer Baustein</span><select id="osNewRuleType"><option value="thermalPause">Thermische Pause</option><option value="targetSoc" selected>SoC-Ziel</option><option value="targetEnergy">Energieziel</option><option value="switchState">Ein-/Aus-Anforderung</option><option value="targetPower">Leistungsziel</option></select></label><button id="osAddRule" type="button" class="nw-btn nw-btn--primary">Regel hinzufügen</button><button id="osAddCustomerExample" type="button" class="nw-btn">Kundenbeispiel vorbereiten</button></div>
         </div>
-        <div class="nw-os-lock-note">Regeln besitzen immer <strong>simulationOnly = true</strong> und <strong>executionEnabled = false</strong>. Auch erkannte Schreibdatenpunkte werden durch diesen Baukasten nicht beschrieben.</div>
-        <div id="osRules">${rules.length ? rules.map((rule, index) => ruleCardHtml(rule, index, profiles, resources)).join('') : '<div class="nw-os-rule-empty">Noch keine Regel angelegt.</div>'}</div>
+        <div class="nw-os-lock-note">${liveEnabled ? '<strong>Live-Anforderungen sind freigegeben.</strong> Die Strategy Engine schreibt trotzdem keinen Geräte-Datenpunkt direkt; Lade-, Speicher-, Thermik- und Heizstabmodule bleiben Single Writer.' : '<strong>Beobachtungs-/Simulationsbetrieb.</strong> Es werden keine aktiven Anforderungen an Geräte erzeugt.'}</div>
+        <div id="osRules">${rules.length ? rules.map((rule, index) => ruleCardHtml(rule, index, profiles, resources, liveEnabled)).join('') : '<div class="nw-os-rule-empty">Noch keine Regel angelegt.</div>'}</div>
         <div class="nw-os-section-label">Berechnete Prioritätskaskade</div>
         <div class="nw-os-cascade">${cascadeHtml(rules, resources)}</div>
       </div>
 
       <div class="nw-os-section">
         <div class="nw-os-section__header">
-          <div><div class="nw-os-section__title">Trockenlauf / Simulation</div><div class="nw-os-section__subtitle">Manuelle Testwerte zeigen, welche Anforderungen die spätere Strategy Engine erzeugen würde. Die bestehende Anlagenregelung bleibt vollständig unangetastet.</div></div>
+          <div><div class="nw-os-section__title">Trockenlauf / Simulation</div><div class="nw-os-section__subtitle">Manuelle Testwerte prüfen dieselbe Prioritätslogik unabhängig vom Live-Betrieb. Die Simulation selbst schreibt niemals Gerätewerte.</div></div>
           <div class="nw-os-rule-toolbar"><button id="osLoadDemoScenario" type="button" class="nw-btn">Beispielwerte laden</button><button id="osRunSimulation" type="button" class="nw-btn nw-btn--primary">Simulation berechnen</button></div>
         </div>
         <div id="osSimulationResult">${simulationResultHtml(lastSimulationResult)}</div>

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a0ba98105987e0392849c406eb08decb4ebd5661d9f6a7020d908acd923deaf3
+ * Original-Hash: 21993fee2a7e4acaa28c63f892902bc58716efa50d9557dde20038eac9e3448c
  */
 
 /**
@@ -35,7 +35,9 @@
  * RC54: Modularer Regelbaukasten und schreibfreier Trockenlauf.
  *
  * Prüft Schema v2, Muss-/Soll-/Kann-Kaskade, Zeitpläne, Nachtreserve,
- * thermische Fail-Safes und die weiterhin vollständig gesperrte Ausführung.
+ * thermische Fail-Safes und die migrationssicheren RC54-Defaults.
+ * Ab RC56 darf ausschließlich der zentrale Planer von freigegebenen Fachmodulen
+ * konsumiert werden; direkte Hardware-Schreibpfade bleiben weiterhin verboten.
  */
 
 const assert = require('node:assert/strict');
@@ -113,7 +115,7 @@ assert.ok(builder && typeof builder.simulate === 'function');
 assert.ok(app && typeof app.normalizeConfig === 'function');
 
 const defaults = app.normalizeConfig({});
-assert.equal(defaults.schemaVersion, 2);
+assert.equal(defaults.schemaVersion, 3);
 assert.equal(defaults.mode, 'observe');
 assert.equal(defaults.controlTakeoverEnabled, false);
 assert.equal(defaults.writeExecutionEnabled, false);
@@ -223,33 +225,46 @@ const notOptedIn = builder.validateRule({ ...config.rules[0], targetResourceId: 
 assert.equal(notOptedIn.valid, false);
 assert.ok(notOptedIn.errors.some((entry) => /nicht ausdrücklich/.test(entry)));
 
-// 4. Backend persistiert Schema v2, aber erzwingt denselben fail-closed Vertrag.
+// 4. Backend hält die RC54-Defaults fail-closed, unterstützt ab RC56 aber den
+//    vollständigen, ausdrücklich bestätigten Live-Vertrag.
 assert.match(mainTs, /nwNormalizeOperatingStrategies\(configIn, appEnabled = false\)/);
-assert.match(mainTs, /schemaVersion:\s*2/);
+assert.match(mainTs, /schemaVersion:\s*3/);
 assert.match(mainTs, /mode:\s*'observe'/);
 assert.match(mainTs, /controlTakeoverEnabled:\s*false/);
 assert.match(mainTs, /writeExecutionEnabled:\s*false/);
 assert.match(mainTs, /simulationOnly:\s*true/);
 assert.match(mainTs, /executionEnabled:\s*false/);
 assert.match(mainTs, /ruleBuilderVersion:\s*'0\.8\.178'/);
+assert.match(mainTs, /autoControl\.stage === 'active'/);
+assert.match(mainTs, /commissioningConfirmed/);
 assert.match(mainTs, /storageResourceId/);
 assert.match(mainTs, /minRunDurationMin/);
 
-// 5. Kein produktiver Regler konsumiert operatingStrategies in RC54.
-for (const directory of ['ems/modules', 'ems/consumers']) {
-  const absolute = path.join(root, directory);
-  if (!fs.existsSync(absolute)) continue;
-  const stack = [absolute];
-  while (stack.length) {
-    const current = stack.pop();
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const target = path.join(current, entry.name);
-      if (entry.isDirectory()) stack.push(target);
-      else if (/\.(?:js|ts)$/.test(entry.name)) {
-        assert.equal(/operatingStrategies|strategyEngine/.test(fs.readFileSync(target, 'utf8')), false, `Produktiver Regler konsumiert RC54-Konfiguration: ${path.relative(root, target)}`);
-      }
-    }
-  }
-}
+// 5. RC56-Migrationsvertrag: genau ein schreibfreier Planer erzeugt kurzlebige
+//    Anforderungen; ausschließlich die bestehenden Fachmodule konsumieren sie.
+const plannerTs = read('src-ts/runtime-executables/ems/modules/operating-strategies.ts');
+const runtimeTs = read('src-ts/runtime-executables/ems/services/operating-strategy-runtime.ts');
+const managerTs = read('src-ts/runtime-executables/ems/module-manager.ts');
+const chargingTs = read('src-ts/runtime-executables/ems/modules/charging-management.ts');
+const storageTs = read('src-ts/runtime-executables/ems/modules/storage-control.ts');
+const thermalTs = read('src-ts/runtime-executables/ems/modules/thermal-control.ts');
+const heatingTs = read('src-ts/runtime-executables/ems/modules/heating-rod-control.ts');
 
-console.log('[rc54-operating-strategies-rules-simulation] OK: modulare Regeln, Zeitplan, Nachtreserve, thermische Fail-Safes und Prioritätskaskade simuliert; Hardware-Schreibpfade bleiben 0.');
+assert.match(plannerTs, /hardwareWrites['"]?\s*[:,]\s*0/);
+assert.equal(/\b(?:writeNumber|writeBoolean|setForeignState(?:Async)?|setState(?:Async)?)\s*\(/.test(plannerTs), false, 'Strategieplaner darf keinen Hardware-Datenpunkt beschreiben');
+assert.match(runtimeTs, /isOperatingStrategiesLiveConfig/);
+assert.match(runtimeTs, /isRuntimeRequestFresh/);
+assert.match(runtimeTs, /resolveChargingStrategyOverlay/);
+assert.match(runtimeTs, /resolveStorageStrategyOverlay/);
+assert.match(runtimeTs, /resolveThermalStrategyOverlay/);
+assert.match(runtimeTs, /resolveHeatingRodStrategyOverlay/);
+
+const strategyPos = managerTs.indexOf("key: 'operatingStrategies'");
+const chargingPos = managerTs.indexOf("key: 'chargingManagement'");
+assert.ok(strategyPos >= 0 && chargingPos > strategyPos, 'Strategieplaner muss vor dem Lademanagement laufen');
+assert.match(chargingTs, /resolveChargingStrategyOverlay/);
+assert.match(storageTs, /resolveStorageStrategyOverlay/);
+assert.match(thermalTs, /resolveThermalStrategyOverlay/);
+assert.match(heatingTs, /resolveHeatingRodStrategyOverlay/);
+
+console.log('[rc54-operating-strategies-rules-simulation] OK: RC54-Regelbaukasten bleibt simulationsfähig; RC56 koppelt ihn ausschließlich über kurzlebige Anforderungen an bestehende Single-Writer-Fachmodule.');

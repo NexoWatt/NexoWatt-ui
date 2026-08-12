@@ -58,6 +58,7 @@ const { ChargingManagementModule } = require('./modules/charging-management');
 const { MultiUseModule } = require('./modules/multi-use');
 const { Para14aModule } = require('./modules/para14a');
 const { CoreLimitsModule } = require('./modules/core-limits');
+const { OperatingStrategiesModule } = require('./modules/operating-strategies');
 const { ThermalControlModule } = require('./modules/thermal-control');
 const { HeatingRodControlModule } = require('./modules/heating-rod-control');
 const { NexoLogicBudgetModule } = require('./modules/nexologic-budget');
@@ -499,6 +500,22 @@ class ModuleManager {
             enabledFn: () => true,
         });
 
+        // Betriebsstrategien: reiner Planer ohne Hardware-Writer. Das Modul läuft
+        // nach den zentralen Limits und vor den Fachaktoren, damit Lade-, Speicher-,
+        // Thermik- und Heizstabmodule im selben Tick nur eine frische, zeitlich
+        // begrenzte Strategieanforderung lesen. Die Fachmodule bleiben Single Writer.
+        this.modules.push({
+            key: 'operatingStrategies',
+            instance: new OperatingStrategiesModule(this.adapter, this.dp),
+            enabledFn: () => {
+                if (!this._licenseAllowsApp('operatingStrategies')) return false;
+                const config = this.adapter && this.adapter.config ? this.adapter.config : {};
+                const app = config.emsApps && config.emsApps.apps ? config.emsApps.apps.operatingStrategies : null;
+                return !!(app && app.installed === true && app.enabled === true
+                    && config.operatingStrategies && config.operatingStrategies.enabled === true);
+            },
+        });
+
         // Charging management
         this.modules.push({
             key: 'chargingManagement',
@@ -708,7 +725,7 @@ class ModuleManager {
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'netOperatorInterface', 'nvpCoordinator', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
+        const alwaysInit = new Set(['operatingStrategies', 'chargingManagement', 'netOperatorInterface', 'nvpCoordinator', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

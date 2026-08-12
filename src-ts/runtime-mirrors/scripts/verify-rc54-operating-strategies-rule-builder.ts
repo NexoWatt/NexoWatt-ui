@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 73bd795efcf727ce7dc07cac456692a378773ba0ae92297b6515aeb6ed340abf
+ * Original-Hash: b7729b8e14452a3e1e59fe41f2de968d32a304fd7ca00ad4d8cf96055cb97887
  */
 
 /**
@@ -141,7 +141,7 @@ const config = app.normalizeConfig({
   activeProfileId: 'winter',
   rules: generated,
 });
-assert.equal(config.schemaVersion, 2);
+assert.equal(config.schemaVersion, 3);
 assert.equal(config.mode, 'observe');
 assert.equal(config.controlTakeoverEnabled, false);
 assert.equal(config.writeExecutionEnabled, false);
@@ -247,7 +247,7 @@ const backendOut = backend.nwNormalizeOperatingStrategies({
   }],
   simulation: { activeProfileId: 'unknown', nowLocal: 'bad', resourceStates: { 'evcs:lp1': { socPct: 200, runDurationMin: -5, online: false } } },
 }, true);
-assert.equal(backendOut.schemaVersion, 2);
+assert.equal(backendOut.schemaVersion, 3);
 assert.equal(backendOut.enabled, true);
 assert.equal(backendOut.mode, 'observe');
 assert.equal(backendOut.controlTakeoverEnabled, false);

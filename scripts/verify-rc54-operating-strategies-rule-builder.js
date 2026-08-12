@@ -100,7 +100,7 @@ const config = app.normalizeConfig({
   activeProfileId: 'winter',
   rules: generated,
 });
-assert.equal(config.schemaVersion, 2);
+assert.equal(config.schemaVersion, 3);
 assert.equal(config.mode, 'observe');
 assert.equal(config.controlTakeoverEnabled, false);
 assert.equal(config.writeExecutionEnabled, false);
@@ -206,7 +206,7 @@ const backendOut = backend.nwNormalizeOperatingStrategies({
   }],
   simulation: { activeProfileId: 'unknown', nowLocal: 'bad', resourceStates: { 'evcs:lp1': { socPct: 200, runDurationMin: -5, online: false } } },
 }, true);
-assert.equal(backendOut.schemaVersion, 2);
+assert.equal(backendOut.schemaVersion, 3);
 assert.equal(backendOut.enabled, true);
 assert.equal(backendOut.mode, 'observe');
 assert.equal(backendOut.controlTakeoverEnabled, false);

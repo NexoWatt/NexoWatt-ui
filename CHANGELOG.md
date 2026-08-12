@@ -1,3 +1,14 @@
+## 0.8.180 - 2026-08-12
+
+- Die App „Betriebsstrategien“ zeigt nur noch native EOS-Ressourcen an, deren zugehörige App und Fachregelung aktiv sind, deren einzelnes Gerät ausdrücklich aktiviert ist und für die eine sinnvolle Mess- oder Stellzuordnung existiert. Leere Thermik-, Heizstab-, Ladepunkt- und Energiefluss-Platzhalter werden ausgeblendet.
+- Ressourcen-, Profil- und Regelkarten kompakt und standardmäßig eingeklappt dargestellt; Detailzuordnungen, Strategierolle, Priorität, Inbetriebnahme und Rückfallverhalten bleiben gezielt aufklappbar.
+- Einen schreibfreien Strategy-Planner vor den vorhandenen Fachmodulen registriert. Er erzeugt ausschließlich kurzlebige, ressourcenbezogene Anforderungen und besitzt keinen eigenen Hardware-Writer.
+- Ladepunkte können nur bei Benutzerbetriebsart Auto, Auto-Quelle „EOS Betriebsstrategie“, ausdrücklicher Ressourcenteilnahme und bestätigter Inbetriebnahme beeinflusst werden. Manuell, Boost, PV-Überschuss, Min+PV und Zeit-Ziel bleiben unverändert; bei abgelaufener oder ungültiger Anforderung greift der konfigurierte Rückfall auf Standard-Auto oder Pause.
+- Speicherstrategien erhöhen ausschließlich die vorhandene SoC-Untergrenze beziehungsweise Nachtreserve; sie senken keine Schutzgrenze und erzwingen keine direkte Netzladung.
+- Thermische Geräte und Heizstäbe werden ausschließlich im vorhandenen PV-Auto-Modus beeinflusst. Mindestlauf-/Stillstandszeiten, Temperatur-, Alarm-, Aktualitäts-, §14a-, Netz- und Gerätebegrenzungen bleiben übergeordnet; die Strategie kann vorhandene Freigaben nur begrenzen oder sicher freigeben.
+- Benutzerdefinierte Ressourcen mit frei eingetragenen Schreibdatenpunkten bleiben für diesen Feldtest im Beobachtungsbetrieb. Produktive Befehle laufen nur über bereits vorhandene und geprüfte EOS-Fachmodule nach dem Single-Writer-Prinzip.
+- Fail-closed-Tests für Modus-, Freigabe-, Messwertalter-, TTL-, Fallback- und Konfliktfälle sowie Filterung inaktiver Geräte ergänzt.
+
 ## 0.8.179 - 2026-08-12
 
 - Fail-closed Steuervertrag für `Auto → EOS Betriebsstrategie` vorbereitet. Eine Ressource darf nur nach ausdrücklicher Teilnahme, passendem Auto-Modus und bestätigter Inbetriebnahme berücksichtigt werden.

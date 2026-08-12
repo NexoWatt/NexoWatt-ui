@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 68a53b873537ff38f18bfd9a15cc4ec8a549605a8fd8507123110f022e44fca3
+ * Original-Hash: 1f8a1d61ef7eb8d4caf6f641d62e41b440f08d64418a79b5e88a5beb61e66ee2
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:9906c74cfd3b34d3116107c2abf6c70e5b55fd869e39f1920a0a6dfaf77af96b
+ * Quell-Hash: sha256:d688479b2c6c080b530760e799c69434f0fd8a0bf0c853e6361fd4f7e5175f0a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1011,6 +1011,13 @@ function buildEvcsModalBodyHtml(i) {
 
   const emsUserMode = d(`${cm}.userMode`);
   const emsEffectiveMode = d(`${cm}.effectiveMode`);
+  const emsUserAutoSource = String(d(`${cm}.userAutoSource`) || 'standard').trim().toLowerCase() === 'strategy' ? 'strategy' : 'standard';
+  const emsStrategyEligible = _evcsBoolOrNull(d(`${cm}.strategyEligible`)) === true;
+  const emsStrategyActive = _evcsBoolOrNull(d(`${cm}.strategyActive`)) === true;
+  const emsStrategyFallbackActive = _evcsBoolOrNull(d(`${cm}.strategyFallbackActive`)) === true;
+  const emsStrategyStatus = String(d(`${cm}.strategyStatus`) || '').trim();
+  const emsStrategyReason = String(d(`${cm}.strategyReason`) || '').trim();
+  const emsStrategyRequestedPowerW = Number(d(`${cm}.strategyRequestedPowerW`) ?? 0);
   const emsChargerType = d(`${cm}.chargerType`);
   const emsTargetW = d(`${cm}.targetPowerW`);
   const emsStationKey = d(`${cm}.stationKey`);
@@ -1157,6 +1164,20 @@ function buildEvcsModalBodyHtml(i) {
 
   const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
   const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
+  const userModeLower = String(emsUserMode || 'auto').trim().toLowerCase();
+  const showAutoSourceUi = hasEms && userModeLower === 'auto';
+  const strategyRequestedText = Number.isFinite(emsStrategyRequestedPowerW) && emsStrategyRequestedPowerW > 0
+    ? ` · Wunsch ${fmtW(emsStrategyRequestedPowerW)}`
+    : '';
+  const strategyStateText = emsUserAutoSource !== 'strategy'
+    ? 'Standard-Automatik aktiv. Die Betriebsstrategien-App beobachtet diesen Ladepunkt nur.'
+    : (emsStrategyActive
+      ? `Betriebsstrategie aktiv${strategyRequestedText}${emsStrategyReason ? ` · ${emsStrategyReason}` : ''}`
+      : (emsStrategyFallbackActive
+        ? `Betriebsstrategie nicht verfügbar – sicherer Rückfall aktiv${emsStrategyReason ? ` · ${emsStrategyReason}` : ''}`
+        : (emsStrategyEligible
+          ? `Betriebsstrategie ausgewählt, wartet auf eine gültige Anforderung${emsStrategyReason ? ` · ${emsStrategyReason}` : ''}`
+          : `Betriebsstrategie ausgewählt, aber noch nicht freigegeben${emsStrategyReason ? ` · ${emsStrategyReason}` : ''}`)));
   // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Die Phasenwahl wird
   // auf der EVCS-Seite angezeigt, sobald der Installer den Phasen-Schalt-Haupt-DP
   // zugeordnet hat. Runtime-State phaseSwitchSupported ist nur zusätzlicher Fallback,
@@ -1267,6 +1288,22 @@ function buildEvcsModalBodyHtml(i) {
             ${hint ? `<div class="nw-hint nw-hint-${hint.level}">${esc(hint.text)}</div>` : ''}
           </div>
         </div>
+
+        ${showAutoSourceUi ? `
+          <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+              <span>Auto-Steuerung</span>
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" role="group" aria-label="Auto-Steuerquelle">
+                  <button type="button" class="${emsUserAutoSource === 'standard' ? 'active' : ''}" data-ems-auto-source-btn="${i}" data-auto-source="standard" ${regBtnAttr}>Standard</button>
+                  <button type="button" class="${emsUserAutoSource === 'strategy' ? 'active' : ''}" data-ems-auto-source-btn="${i}" data-auto-source="strategy" ${regBtnAttr}>Betriebsstrategie</button>
+                </div>
+                <div class="muted" style="font-size:12px; opacity:.88; text-align:right; max-width:390px;">${esc(strategyStateText)}</div>
+                ${emsStrategyStatus ? `<div class="muted" style="font-size:11px; opacity:.68; text-align:right;">Status: ${esc(emsStrategyStatus)}</div>` : ''}
+              </div>
+            </div>
+          </div>
+        ` : ''}
 
         ${showPhaseUi ? `
           <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
@@ -1961,6 +1998,27 @@ function bindControls() {
       });
     } catch (_e) {}
   }
+/**
+ * Code-Teil: _syncAutoSourceButtonsUi
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  function _syncAutoSourceButtonsUi(idx, source) {
+    try {
+      const normalized = String(source || 'standard').trim().toLowerCase() === 'strategy' ? 'strategy' : 'standard';
+      const buttons = Array.from(document.querySelectorAll(`button[data-ems-auto-source-btn="${idx}"]`));
+      buttons.forEach((button) => {
+        const candidate = String(button.getAttribute('data-auto-source') || 'standard').trim().toLowerCase() === 'strategy' ? 'strategy' : 'standard';
+        button.classList.toggle('active', candidate === normalized);
+      });
+    } catch (_e) {}
+  }
   /**
    * Code-Teil: handleModeButton
    * Zweck: Verarbeitet Events oder API-/Benutzeraktionen.
@@ -1997,6 +2055,30 @@ function bindControls() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.userMode`, value: mode })
+        });
+      } catch (_e) {}
+
+      return;
+    }
+
+    if (btn.matches('button[data-ems-auto-source-btn]')) {
+      const idx = Number(btn.getAttribute('data-ems-auto-source-btn'));
+      if (!Number.isFinite(idx) || idx <= 0) return;
+      const source = String(btn.getAttribute('data-auto-source') || 'standard').trim().toLowerCase() === 'strategy' ? 'strategy' : 'standard';
+      const k = `chargingManagement.wallboxes.lp${idx}.userAutoSource`;
+
+      try {
+        _setPendingWrite(k, source, 2500);
+        state[k] = { value: source, ts: Date.now() };
+        _syncAutoSourceButtonsUi(idx, source);
+        scheduleRender();
+      } catch (_e) {}
+
+      try {
+        await fetch('/api/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.autoSource`, value: source })
         });
       } catch (_e) {}
 
@@ -2055,7 +2137,7 @@ function bindControls() {
   document.addEventListener('pointerdown', (e) => {
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-auto-source-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
     if (!btn) return;
     _ignoreClickUntil = Date.now() + 450;
     try { e.preventDefault(); } catch (_e) {}
@@ -2068,7 +2150,7 @@ function bindControls() {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-auto-source-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
     if (!btn) return;
     try { e.preventDefault(); } catch (_e) {}
     _touchModalInteraction(600);
@@ -2080,7 +2162,7 @@ function bindControls() {
     if (Date.now() < _ignoreClickUntil) return;
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-auto-source-btn],button[data-ems-phase-mode-btn],button[data-ems-storage-assist-btn]');
     if (!btn) return;
     _touchModalInteraction(600);
     handleModeButton(btn);

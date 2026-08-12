@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 477494b628d878c9d4e7aad06bf6b6cc8bbf890f336434ca0366609f80b0f8cb
+ * Original-Hash: 9805004109762539679f5519d47ea0b5cbb1d67eae2a183b92df47f301c62091
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:2402ac36aa4b962ae79f402ba421a57d489558fb93208e7810c5a8ca9448f0ad
+ * Quell-Hash: sha256:86e0666873ea2fb9c4119e02425dcbe302b8891608960c7219e8f17cc45a0dea
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -74,6 +74,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveThermalStrategyOverlay } = require('../services/operating-strategy-runtime');
 const { applySetpoint } = require('../consumers');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
@@ -427,6 +428,7 @@ class ThermalControlModule extends BaseModule {
             const faultLockSec = clamp(num(r.faultLockSec, 60), 1, 24 * 60 * 60);
 
             out.push({
+                configIndex: i,
                 slot,
                 id: `c${slot}`,
                 name,
@@ -658,6 +660,14 @@ const mk = async (id, name, type, role, unit = undefined) => {
             await mk(`thermal.devices.${d.id}.userMode`, 'User mode', 'string', 'text');
             await mk(`thermal.devices.${d.id}.effectiveEnabled`, 'Effective enabled', 'boolean', 'indicator');
             await mk(`thermal.devices.${d.id}.effectiveMode`, 'Effective mode', 'string', 'text');
+            await mk(`thermal.devices.${d.id}.strategyEligible`, 'Betriebsstrategie zulässig', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.strategyActive`, 'Betriebsstrategie aktiv', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.strategyFallbackActive`, 'Betriebsstrategie Rückfall aktiv', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.strategyAction`, 'Betriebsstrategie Aktion', 'string', 'text');
+            await mk(`thermal.devices.${d.id}.strategyRequestedPowerW`, 'Betriebsstrategie Leistungsgrenze', 'number', 'value.power', 'W');
+            await mk(`thermal.devices.${d.id}.strategyReason`, 'Betriebsstrategie Grund', 'string', 'text');
+            await mk(`thermal.devices.${d.id}.strategyFallback`, 'Betriebsstrategie Rückfall', 'string', 'text');
+            await mk(`thermal.devices.${d.id}.strategyExpiresAt`, 'Betriebsstrategie gültig bis', 'number', 'value.time');
             await mk(`thermal.devices.${d.id}.type`, 'Type', 'string', 'text');
             await mk(`thermal.devices.${d.id}.profile`, 'Profile', 'string', 'text');
 
@@ -1677,11 +1687,24 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
             const effectiveEnabled = !!d.enabled && !!userEnabled;
             const effectiveMode = (userMode !== 'inherit') ? userMode : String(d.mode || 'pvAuto');
+            const strategyAliases = [
+                `thermal:${Math.max(1, Number(d.configIndex || 0) + 1)}`,
+                `thermal:${String(d.id || '')}`,
+            ];
+            const strategyOverlay = resolveThermalStrategyOverlay(this.adapter, strategyAliases, { now, effectiveMode });
 
             await this._setStateIfChanged(`thermal.devices.${d.id}.userEnabled`, !!userEnabled);
             await this._setStateIfChanged(`thermal.devices.${d.id}.userMode`, String(userMode));
             await this._setStateIfChanged(`thermal.devices.${d.id}.effectiveEnabled`, !!effectiveEnabled);
             await this._setStateIfChanged(`thermal.devices.${d.id}.effectiveMode`, String(effectiveMode));
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyEligible`, strategyOverlay.eligible === true);
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyActive`, strategyOverlay.active === true);
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyFallbackActive`, strategyOverlay.fallbackPause === true);
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyAction`, String(strategyOverlay.action || 'standard'));
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyRequestedPowerW`, Number.isFinite(Number(strategyOverlay.requestedPowerW)) ? Math.max(0, Math.round(Number(strategyOverlay.requestedPowerW))) : null);
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyReason`, String(strategyOverlay.reason || ''));
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyFallback`, String(strategyOverlay.fallback || 'standardAuto'));
+            await this._setStateIfChanged(`thermal.devices.${d.id}.strategyExpiresAt`, Math.max(0, Math.round(Number(strategyOverlay.request && strategyOverlay.request.expiresAt) || 0)));
 
             await this._setStateIfChanged(`thermal.devices.${d.id}.type`, String(d.type));
             await this._setStateIfChanged(`thermal.devices.${d.id}.profile`, String(d.profile));
@@ -1996,10 +2019,24 @@ const mk = async (id, name, type, role, unit = undefined) => {
             const stopW = Math.max(0, num(d.stopSurplusW, 0));
 
             const autoAvailableW = availableForAutomationW();
-            const desiredOn = this._computeBandDesiredOn(d.id, autoAvailableW, startW, stopW);
-            const requestedOn = this._hysteresisOnOff(d.id, desiredOn, d.minOnSec, d.minOffSec);
+            const nativeDesiredOn = this._computeBandDesiredOn(d.id, autoAvailableW, startW, stopW);
+            const strategyAction = String(strategyOverlay.action || 'standard').toLowerCase();
+            const strategyPause = strategyOverlay.fallbackPause === true
+                || (strategyOverlay.active && ['pause', 'off', 'disable', 'block'].includes(strategyAction));
+            const strategyRelease = strategyOverlay.active && ['release', 'on', 'enable'].includes(strategyAction);
+            const strategyDesiredOn = strategyPause ? false : (strategyRelease ? true : nativeDesiredOn);
+            // Die finale Entscheidung läuft weiterhin durch die vorhandenen Geräte-Schutzzeiten.
+            // Auch eine Strategie darf Mindestlauf- und Mindeststillstandszeit nicht umgehen.
+            const requestedOn = this._hysteresisOnOff(d.id, strategyDesiredOn, d.minOnSec, d.minOffSec);
+
             const estimatedLoadW = this._estimatedThermalPowerW(d, measuredW);
-            const binaryOn = requestedOn && (!para14aActive || estimatedLoadW <= (autoAvailableW + 25));
+            const strategySafetyRelease = strategyRelease && strategyOverlay.safetyRelease === true;
+            const strategyGridRelease = strategyRelease && strategyOverlay.allowGridImport === true;
+            const strategyReleaseBudget = strategySafetyRelease || strategyGridRelease;
+            const binaryBudgetW = strategyReleaseBudget
+                ? (para14aActive ? Math.max(0, para14aRemainingW) : Math.max(autoAvailableW, estimatedLoadW))
+                : autoAvailableW;
+            const binaryOn = requestedOn && (!para14aActive || estimatedLoadW <= (binaryBudgetW + 25));
             const para14aBinaryLimited = para14aActive && requestedOn && !binaryOn;
 
             if (actType === 'setpoint') {
@@ -2066,8 +2103,14 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     usedW = 0;
                 }
             } else {
-                const requestedPowerW = requestedOn ? Math.max(0, num(d.maxPowerW, 0)) : 0;
-                const desiredW = requestedOn ? Math.min(autoAvailableW, requestedPowerW) : 0;
+                let requestedPowerW = requestedOn ? Math.max(0, num(d.maxPowerW, 0)) : 0;
+                if (strategyOverlay.active && Number.isFinite(Number(strategyOverlay.requestedPowerW))) {
+                    requestedPowerW = Math.min(requestedPowerW, Math.max(0, Number(strategyOverlay.requestedPowerW)));
+                }
+                const powerBudgetW = strategyReleaseBudget
+                    ? (para14aActive ? Math.max(0, para14aRemainingW) : requestedPowerW)
+                    : autoAvailableW;
+                const desiredW = requestedOn ? Math.min(powerBudgetW, requestedPowerW) : 0;
                 const para14aPowerLimited = para14aActive && requestedOn && desiredW + 1 < requestedPowerW;
 
                 const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };

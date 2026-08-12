@@ -3,9 +3,9 @@
  * NexoWatt EOS Betriebsstrategien – AppCenter, Ressourcen und Regelbaukasten.
  *
  * Diese Browserkomponente verwaltet ausschließlich die Konfiguration für das
- * modulare Ressourcen-/Strategiemodell. RC54 ergänzt Regelbaukasten und Trockenlauf, bleibt aber strikt im Beobachtungsmodus:
- * Es werden keine Hardware-Sollwerte geschrieben und keine bestehenden Lade-,
- * Speicher- oder Verbraucherregler übernommen.
+ * modulare Ressourcen-/Strategiemodell. RC56 ergänzt eine explizit freizugebende
+ * Live-Kopplung an die vorhandenen Single-Writer-Regler. Ohne globale und
+ * ressourcenbezogene Freigabe bleibt die App weiterhin im Beobachtungsmodus.
  */
 (function () {
   'use strict';
@@ -14,6 +14,7 @@
 
   const FOUNDATION_VERSION = '0.8.177';
   const RULE_BUILDER_VERSION = '0.8.178';
+  const LIVE_CONTROL_VERSION = '0.8.180';
   const APP_ID = 'operatingStrategies';
   const ROOT_ID = 'nwOperatingStrategiesRoot';
 
@@ -120,13 +121,28 @@
   function defaultConfig(): AnyRecord {
     const builder = ruleBuilder();
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       enabled: false,
       mode: 'observe',
       controlTakeoverEnabled: false,
       writeExecutionEnabled: false,
+      commissioningConfirmed: false,
+      autoControl: {
+        enabled: true,
+        stage: 'shadow',
+        requestTtlSeconds: 15,
+        fallback: 'standardAuto',
+      },
       autoImportExisting: true,
       activeProfileId: 'winter',
+      systemMappings: {
+        outsideTemperatureReadId: '',
+        pvForecastReadId: '',
+        pvSurplusReadId: '',
+        gridPowerReadId: '',
+        electricityPriceReadId: '',
+        cheapTariffReadId: '',
+      },
       controlContract: defaultControlContract(),
       resourceLinks: [],
       customResources: [],
@@ -136,6 +152,7 @@
       metadata: {
         foundationVersion: FOUNDATION_VERSION,
         ruleBuilderVersion: RULE_BUILDER_VERSION,
+        liveControlVersion: LIVE_CONTROL_VERSION,
         lastEditedAt: '',
       },
     };
@@ -164,6 +181,18 @@
     return out;
   }
 
+  function normalizeSystemMappings(input: any): AnyRecord {
+    const source = record(input);
+    return {
+      outsideTemperatureReadId: text(source.outsideTemperatureReadId),
+      pvForecastReadId: text(source.pvForecastReadId),
+      pvSurplusReadId: text(source.pvSurplusReadId),
+      gridPowerReadId: text(source.gridPowerReadId),
+      electricityPriceReadId: text(source.electricityPriceReadId),
+      cheapTariffReadId: text(source.cheapTariffReadId),
+    };
+  }
+
   function normalizeCustomResource(input: any, index: number): AnyRecord {
     const source = record(input);
     const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'sensor', 'virtualGroup'];
@@ -189,8 +218,12 @@
       efficiencyPct: number(source.efficiencyPct, 92, 1, 100),
       resourceSubtype: text(source.resourceSubtype),
       autoOnly: resourceType === 'chargingPoint' ? true : bool(source.autoOnly, false),
-      observeOnly: true,
-      writeEnabled: false,
+      controlMode: text(source.controlMode) === 'active' ? 'active' : 'observe',
+      commissioningConfirmed: source.commissioningConfirmed === true,
+      autoSource: text(source.autoSource) === 'strategy' ? 'strategy' : 'standard',
+      fallback: text(source.fallback) === 'pause' ? 'pause' : 'standardAuto',
+      observeOnly: text(source.controlMode) !== 'active',
+      writeEnabled: source.writeEnabled === true && source.commissioningConfirmed === true,
       mappings: normalizeMappings(source.mappings),
     };
   }
@@ -234,8 +267,14 @@
       priority: integer(source.priority, 50, 1, 100),
       roleOverride,
       autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint' ? true : bool(source.autoOnly, false),
-      observeOnly: true,
-      writeEnabled: false,
+      controlMode: text(source.controlMode) === 'active' ? 'active' : 'observe',
+      commissioningConfirmed: source.commissioningConfirmed === true,
+      autoSource: text(source.autoSource) === 'strategy' ? 'strategy' : 'standard',
+      fallback: text(source.fallback) === 'pause' ? 'pause' : 'standardAuto',
+      staleTimeoutSec: integer(source.staleTimeoutSec, 60, 1, 86400),
+      observeOnly: text(source.controlMode) !== 'active',
+      writeEnabled: source.writeEnabled === true && source.commissioningConfirmed === true,
+      mappings: normalizeMappings(source.mappings),
     };
   }
 
@@ -262,104 +301,166 @@
     const simulation = typeof builder.normalizeSimulation === 'function'
       ? builder.normalizeSimulation(source.simulation, activeProfileId)
       : { activeProfileId, resourceStates: {} };
+    const normalizedMode = text(source.mode) === 'active' ? 'active' : 'observe';
+    const normalizedCommissioning = source.commissioningConfirmed === true;
+    const normalizedTakeover = normalizedMode === 'active' && normalizedCommissioning && source.controlTakeoverEnabled === true;
+    const normalizedExecution = normalizedMode === 'active' && normalizedCommissioning && source.writeExecutionEnabled === true;
+    const normalizedAuto = {
+      enabled: record(source.autoControl).enabled !== false,
+      stage: ['shadow', 'commissioning', 'active'].includes(text(record(source.autoControl).stage)) ? text(record(source.autoControl).stage) : 'shadow',
+      requestTtlSeconds: integer(record(source.autoControl).requestTtlSeconds, 15, 3, 60),
+      fallback: text(record(source.autoControl).fallback) === 'pause' ? 'pause' : 'standardAuto',
+    };
+    const normalizedLive = source.enabled === true
+      && normalizedMode === 'active'
+      && normalizedCommissioning
+      && normalizedTakeover
+      && normalizedExecution
+      && normalizedAuto.enabled !== false
+      && normalizedAuto.stage === 'active';
     return {
       ...base,
       ...clone(source),
-      schemaVersion: 2,
+      schemaVersion: 3,
       enabled: source.enabled === true,
-      mode: 'observe',
-      controlTakeoverEnabled: false,
-      writeExecutionEnabled: false,
+      mode: normalizedMode,
+      commissioningConfirmed: normalizedCommissioning,
+      controlTakeoverEnabled: normalizedTakeover,
+      writeExecutionEnabled: normalizedExecution,
+      autoControl: normalizedAuto,
       autoImportExisting: source.autoImportExisting !== false,
       activeProfileId,
+      systemMappings: normalizeSystemMappings(source.systemMappings),
       controlContract: defaultControlContract(),
       resourceLinks: dedupedLinks,
       customResources: withUniqueIds(list(source.customResources).map(normalizeCustomResource), 'custom'),
       profiles: normalizedProfiles,
-      // RC54 speichert Regelbausteine ausschließlich für Planung und Trockenlauf.
-      // Jeder Baustein bleibt fail-closed auf simulationOnly=true / executionEnabled=false.
-      rules: normalizedRules,
+      // Regeln werden im Beobachtungsmodus nur simuliert. Im ausdrücklich bestätigten
+      // Live-Betrieb erzeugen aktivierte Regeln zeitlich begrenzte Anforderungen.
+      rules: normalizedRules.map((entry: AnyRecord) => ({
+        ...entry,
+        simulationOnly: !normalizedLive,
+        executionEnabled: entry.enabled !== false && normalizedLive,
+      })),
       simulation,
       metadata: {
         ...record(source.metadata),
         foundationVersion: FOUNDATION_VERSION,
         ruleBuilderVersion: RULE_BUILDER_VERSION,
+        liveControlVersion: LIVE_CONTROL_VERSION,
         lastEditedAt: text(record(source.metadata).lastEditedAt),
       },
     };
-  }
-
-  function objectDpCount(value: any): number {
-    if (!value || typeof value !== 'object') return 0;
-    let count = 0;
-    Object.entries(value).forEach(([key, entry]) => {
-      if (/id$/i.test(key) && text(entry)) count += 1;
-      else if (entry && typeof entry === 'object') count += objectDpCount(entry);
-    });
-    return count;
   }
 
   function truthyDp(value: any): boolean {
     return !!text(value);
   }
 
+  function mappedCount(values: any[]): number {
+    const ids = new Set<string>();
+    values.forEach((value) => {
+      const id = text(value);
+      if (id) ids.add(id);
+    });
+    return ids.size;
+  }
+
+  function eosAppActive(config: AnyRecord, appId: string, enableFlag = ''): boolean {
+    const app = record(record(record(config.emsApps).apps)[appId]);
+    if (app.installed !== true || app.enabled !== true) return false;
+    if (enableFlag && config[enableFlag] !== true) return false;
+    return true;
+  }
+
+  function flowSlotFor(config: AnyRecord, slot: number): AnyRecord {
+    return record(list(record(record(config.vis).flowSlots).consumers)[Math.max(0, slot - 1)]);
+  }
+
+  function flowControlMappings(ctrlInput: AnyRecord, includeStages = false): { reads: any[]; writes: any[] } {
+    const ctrl = record(ctrlInput);
+    const reads: any[] = [
+      ctrl.switchReadId,
+      ctrl.setpointReadId,
+      ctrl.sgReadyAReadId,
+      ctrl.sgReadyBReadId,
+      ctrl.sgReady1ReadId,
+      ctrl.sgReady2ReadId,
+    ];
+    const writes: any[] = [
+      ctrl.switchWriteId,
+      ctrl.setpointWriteId,
+      ctrl.sgReadyAWriteId,
+      ctrl.sgReadyBWriteId,
+      ctrl.sgReady1WriteId,
+      ctrl.sgReady2WriteId,
+    ];
+    if (includeStages) {
+      for (let stage = 1; stage <= 12; stage += 1) {
+        reads.push(ctrl[`stage${stage}ReadId`], ctrl[`heatingStage${stage}ReadId`]);
+        writes.push(ctrl[`stage${stage}WriteId`], ctrl[`heatingStage${stage}WriteId`]);
+      }
+    }
+    return { reads, writes };
+  }
+
   function deriveStorageFarmResources(config: AnyRecord): AnyRecord[] {
-    const app = record(record(record(config.emsApps).apps).storagefarm);
+    if (!eosAppActive(config, 'storagefarm', 'enableStorageFarm')) return [];
     const farm = record(config.storageFarm);
-    const storages = list(farm.storages);
-    if (app.installed !== true && storages.length === 0) return [];
-    return storages.map((storage, index) => {
-      const readCandidates = [
-        storage.socId, storage.signedPowerId, storage.chargePowerId,
-        storage.dischargePowerId, storage.gridPowerId, storage.pvPowerId,
-      ];
-      const writeCandidates = [
-        storage.feneconGridSetpointId, storage.setSignedPowerId, storage.setChargePowerId,
-        storage.setDischargePowerId, storage.maxChargePowerId, storage.maxDischargePowerId,
-        storage.chargeEnableId, storage.dischargeEnableId, storage.runWriteId,
-      ];
+    return list(farm.storages).map((storage, index) => {
+      const readCandidates = [storage.socId, storage.signedPowerId, storage.chargePowerId, storage.dischargePowerId, storage.gridPowerId, storage.pvPowerId];
+      const writeCandidates = [storage.feneconGridSetpointId, storage.setSignedPowerId, storage.setChargePowerId, storage.setDischargePowerId, storage.maxChargePowerId, storage.maxDischargePowerId, storage.chargeEnableId, storage.dischargeEnableId, storage.runWriteId];
       const reads = readCandidates.filter(truthyDp).length;
       const writes = writeCandidates.filter(truthyDp).length;
+      // Keine leeren Farm-Slots anzeigen: Nur ausdrücklich aktive und tatsächlich
+      // zugeordnete Speicher sind eine nutzbare EOS-Ressource.
+      if (storage.enabled !== true || (reads + writes) === 0) return null;
       return {
         sourceId: `storagefarm:${index + 1}`,
         name: text(storage.name, `Speicher ${index + 1}`),
-        resourceType: 'storage',
-        resourceSubtype: 'battery',
-        controlType: writes ? 'setpoint' : 'monitor',
+        resourceType: 'storage', resourceSubtype: 'battery', controlType: writes ? 'setpoint' : 'monitor',
         usableCapacityKWh: number(storage.usableCapacityKWh ?? storage.capacityKWh, 0, 0, 1000000),
         efficiencyPct: number(storage.efficiencyPct, 92, 1, 100),
-        sourceLabel: `EOS Speicherfarm · Speicher ${index + 1}`,
-        sourceTab: 'storagefarm',
-        reads,
-        writes,
-        capabilities: [
-          reads ? `${reads} Lesebindung${reads === 1 ? '' : 'en'}` : 'Messwerte unvollständig',
-          writes ? 'Stellpfad vorhanden – bestehende Speicherfarm bleibt zuständig' : 'Kein Stellpfad erkannt',
-          'Nachtenergie-Reserve vorgesehen',
-        ],
+        sourceLabel: `EOS Speicherfarm · Speicher ${index + 1}`, sourceTab: 'storagefarm', reads, writes,
+        nativeMappings: normalizeMappings({
+          socReadId: storage.socId,
+          powerReadId: storage.signedPowerId || storage.chargePowerId || storage.dischargePowerId,
+          onlineReadId: storage.availableId,
+          alarmReadId: storage.faultId,
+          capacityReadId: storage.capacityReadId,
+        }),
+        capabilities: [reads ? `${reads} Lesebindung${reads === 1 ? '' : 'en'}` : 'Messwerte unvollständig', writes ? 'Stellpfad über Speicherfarm' : 'Kein Stellpfad erkannt', 'Nachtenergie-Reserve verfügbar'],
       };
-    });
+    }).filter(Boolean) as AnyRecord[];
   }
 
   function deriveStorageResource(config: AnyRecord): AnyRecord[] {
-    const storageApp = record(record(record(config.emsApps).apps).storage);
+    if (!eosAppActive(config, 'storage', 'enableStorageControl')) return [];
     const storage = record(config.storage);
+    if (storage.enabled === false) return [];
     const storageDps = record(storage.datapoints);
     const dps = record(config.datapoints);
-    const installed = storageApp.installed === true;
     const readCandidates = [
-      storageDps.socObjectId, storageDps.powerObjectId, storageDps.chargePowerObjectId,
-      storageDps.dischargePowerObjectId, dps.storageSoc, dps.storagePower,
-      dps.storageChargePower, dps.storageDischargePower,
+      storageDps.socObjectId,
+      storageDps.powerObjectId,
+      storageDps.chargePowerObjectId,
+      storageDps.dischargePowerObjectId,
+      dps.storageSoc,
+      dps.storagePower,
+      dps.storageChargePower,
+      dps.storageDischargePower,
     ];
     const writeCandidates = [
-      storageDps.targetPowerObjectId, storageDps.maxChargeObjectId,
-      storageDps.maxDischargeObjectId, storageDps.chargeEnableObjectId,
-      storageDps.dischargeEnableObjectId, storageDps.runObjectId,
+      storageDps.targetPowerObjectId,
+      storageDps.maxChargeObjectId,
+      storageDps.maxDischargeObjectId,
+      storageDps.chargeEnableObjectId,
+      storageDps.dischargeEnableObjectId,
+      storageDps.runObjectId,
     ];
-    if (!installed && !readCandidates.some(truthyDp) && !writeCandidates.some(truthyDp)) return [];
-    const reads = readCandidates.filter(truthyDp).length;
-    const writes = writeCandidates.filter(truthyDp).length;
+    const reads = mappedCount(readCandidates);
+    const writes = mappedCount(writeCandidates);
+    if ((reads + writes) === 0) return [];
     return [{
       sourceId: 'storage:primary',
       name: text(storage.name, 'Speicher'),
@@ -372,109 +473,127 @@
       sourceTab: 'storageconfig',
       reads,
       writes,
+      nativeLiveSupported: writes > 0,
+      nativeMappings: normalizeMappings({
+        socReadId: storageDps.socObjectId || dps.storageSoc,
+        powerReadId: storageDps.powerObjectId || storageDps.chargePowerObjectId || storageDps.dischargePowerObjectId || dps.storagePower || dps.storageChargePower || dps.storageDischargePower,
+        onlineReadId: storageDps.onlineObjectId || storageDps.availableObjectId,
+        alarmReadId: storageDps.alarmObjectId || storageDps.faultObjectId,
+        capacityReadId: storageDps.capacityObjectId,
+      }),
       capabilities: [
-        reads ? 'Messwerte vorhanden' : 'Messwerte unvollständig',
-        writes ? 'Stellpfad vorhanden – hier gesperrt' : 'Kein Stellpfad erkannt',
-        'Nachtenergie-Reserve vorgesehen',
+        `${reads} Lesebindung${reads === 1 ? '' : 'en'}`,
+        writes ? 'Stellpfad bleibt in der Speicherregelung' : 'Kein Stellpfad erkannt',
+        'Nachtenergie-Reserve verfügbar',
       ],
     }];
   }
 
   function deriveEvcsResources(config: AnyRecord): AnyRecord[] {
+    if (!eosAppActive(config, 'charging') || config.enableChargingManagement !== true) return [];
     const settingsConfig = record(config.settingsConfig);
     return list(settingsConfig.evcsList).map((row, index) => {
-      const readKeys = ['powerId', 'energyTotalId', 'statusId', 'vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'vehicleSocId', 'onlineId', 'activeId'];
-      const writeKeys = ['setCurrentAId', 'setPowerWId', 'enableWriteId', 'phaseSwitchWriteId'];
+      const readKeys = ['powerId', 'actualPowerWId', 'energyTotalId', 'statusId', 'vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'vehicleSocId', 'onlineId', 'activeId'];
+      const writeKeys = ['setCurrentAId', 'setPowerWId', 'enableWriteId', 'enableId', 'phaseSwitchWriteId'];
       const reads = readKeys.filter((key) => truthyDp(row[key])).length;
       const writes = writeKeys.filter((key) => truthyDp(row[key])).length;
+      if (row.enabled !== true || (reads + writes) === 0) return null;
       const stationKey = text(row.stationKey);
       const connectorNo = integer(row.connectorNo, index + 1, 0, 999);
       const summary = [stationKey ? `Station ${stationKey}` : '', connectorNo ? `Connector ${connectorNo}` : '', text(row.chargerType)].filter(Boolean).join(' · ');
       return {
-        sourceId: `evcs:lp${index + 1}`,
-        name: text(row.name, `Ladepunkt ${index + 1}`),
-        resourceType: 'chargingPoint',
-        resourceSubtype: 'ev',
-        controlType: writes ? 'energyTarget' : 'monitor',
-        usableCapacityKWh: number(row.vehicleCapacityKWh ?? row.batteryCapacityKWh, 0, 0, 1000000),
-        efficiencyPct: number(row.chargingEfficiencyPct, 92, 1, 100),
-        sourceLabel: summary || 'EOS Ladepunkt',
-        sourceTab: 'evcs',
-        currentMode: text(row.userMode || row.mode, 'Auto/Benutzerauswahl'),
-        reads,
-        writes,
-        enabledAtSource: row.enabled !== false,
-        capabilities: [
-          reads ? `${reads} Lesebindung${reads === 1 ? '' : 'en'}` : 'Messwerte unvollständig',
-          truthyDp(row.vehicleSocId) ? 'Fahrzeug-SoC verfügbar' : 'Fahrzeug-SoC fehlt',
-          writes ? 'Stellpfad vorhanden – hier gesperrt' : 'Kein Stellpfad erkannt',
-          'Spätere Strategie ausschließlich in Auto',
-        ],
+        sourceId: `evcs:lp${index + 1}`, name: text(row.name, `Ladepunkt ${index + 1}`), resourceType: 'chargingPoint', resourceSubtype: 'ev',
+        controlType: writes ? 'energyTarget' : 'monitor', usableCapacityKWh: number(row.vehicleCapacityKWh ?? row.batteryCapacityKWh, 0, 0, 1000000),
+        minPowerW: number(row.minPowerW, 0, 0, 1000000000), maxPowerW: number(row.maxPowerW, 0, 0, 1000000000), efficiencyPct: number(row.chargingEfficiencyPct, 92, 1, 100),
+        sourceLabel: summary || 'EOS Ladepunkt', sourceTab: 'evcs', currentMode: text(row.userMode || row.mode, 'Auto/Benutzerauswahl'), reads, writes,
+        nativeMappings: normalizeMappings({
+          powerReadId: row.powerId || row.actualPowerWId,
+          energyReadId: row.energySessionId || row.energyTotalId,
+          stateReadId: row.statusId,
+          socReadId: row.vehicleSocId,
+          onlineReadId: row.onlineId || row.heartbeatId || row.activeId,
+          capacityReadId: row.vehicleCapacityReadId,
+        }),
+        capabilities: [reads ? `${reads} Lesebindung${reads === 1 ? '' : 'en'}` : 'Messwerte unvollständig', truthyDp(row.vehicleSocId) ? 'Fahrzeug-SoC verfügbar' : 'Fahrzeug-SoC optional ergänzen', writes ? 'Stellpfad über Lademanagement' : 'Kein Stellpfad erkannt', 'Strategie greift ausschließlich im Modus Auto'],
       };
-    }).filter((entry) => entry.enabledAtSource || entry.reads || entry.writes || entry.name);
+    }).filter(Boolean) as AnyRecord[];
   }
 
   function deriveFlowConsumerResources(config: AnyRecord): AnyRecord[] {
     const flowSlots = record(record(config.vis).flowSlots);
     const dps = record(config.datapoints);
+    const thermalActive = eosAppActive(config, 'thermal', 'enableThermalControl');
+    const heatingActive = eosAppActive(config, 'heatingrod', 'enableHeatingRodControl');
     return list(flowSlots.consumers).map((slot, index) => {
       const ctrl = record(slot.ctrl);
       const powerDp = text(dps[`consumer${index + 1}Power`]);
-      const readCandidates = [powerDp, ctrl.switchReadId, ctrl.setpointReadId, ctrl.sgReadyAReadId, ctrl.sgReadyBReadId];
-      const writeCandidates = [ctrl.switchWriteId, ctrl.setpointWriteId, ctrl.sgReadyAWriteId, ctrl.sgReadyBWriteId];
-      for (let stage = 1; stage <= 12; stage += 1) {
-        readCandidates.push(ctrl[`stage${stage}ReadId`]);
-        writeCandidates.push(ctrl[`stage${stage}WriteId`]);
-      }
+      const readCandidates: any[] = [powerDp, ctrl.switchReadId, ctrl.setpointReadId, ctrl.sgReadyAReadId, ctrl.sgReadyBReadId, ctrl.sgReady1ReadId, ctrl.sgReady2ReadId];
+      const writeCandidates: any[] = [ctrl.switchWriteId, ctrl.setpointWriteId, ctrl.sgReadyAWriteId, ctrl.sgReadyBWriteId, ctrl.sgReady1WriteId, ctrl.sgReady2WriteId];
+      for (let stage = 1; stage <= 12; stage += 1) { readCandidates.push(ctrl[`stage${stage}ReadId`]); writeCandidates.push(ctrl[`stage${stage}WriteId`]); }
       const reads = readCandidates.filter(truthyDp).length;
       const writes = writeCandidates.filter(truthyDp).length;
-      const name = text(slot.name);
-      if (!name && !reads && !writes) return null;
+      if (slot.enabled !== true || (reads + writes) === 0) return null;
+      const name = text(slot.name, `Energiefluss-Verbraucher ${index + 1}`);
       const consumerType = text(slot.consumerType, 'generic');
-      const inferredCooling = consumerType === 'cooling'
-        || /(?:kühl|kuehl|cool|cold|refriger)/i.test(`${name} ${consumerType}`);
-      const resourceType = ['heatPump', 'heatingRod', 'cooling'].includes(consumerType) || inferredCooling ? 'thermal' : 'consumer';
-      const resourceSubtype = consumerType === 'heatingRod'
-        ? 'heatingRod'
-        : (consumerType === 'heatPump' ? 'heatPump' : (inferredCooling ? 'cooling' : consumerType));
+      const inferredCooling = consumerType === 'cooling' || /(?:kühl|kuehl|cool|cold|refriger)/i.test(`${name} ${consumerType}`);
+      if ((consumerType === 'heatingRod' || /heizstab|heating.?rod/i.test(consumerType)) && !heatingActive) return null;
+      if ((consumerType === 'heatPump' || consumerType === 'cooling' || inferredCooling) && !thermalActive) return null;
+      // Dedicated Thermik-/Heizstabmodule expose their own device rows. Avoid duplicates.
+      if ((thermalActive && (consumerType === 'heatPump' || consumerType === 'cooling' || inferredCooling)) || (heatingActive && consumerType === 'heatingRod')) return null;
       return {
-        sourceId: `flow-consumer:${index + 1}`,
-        name: name || `Energiefluss-Verbraucher ${index + 1}`,
-        resourceType,
-        resourceSubtype,
-        controlType: writes ? (consumerType === 'heatingRod' ? 'stepped' : 'switch') : 'monitor',
-        sourceLabel: `Energiefluss · Slot ${index + 1}`,
-        sourceTab: 'flow',
-        reads,
-        writes,
-        capabilities: [
-          powerDp ? 'Leistungsmessung vorhanden' : 'Leistungsmessung fehlt',
-          writes ? 'Steuerzuordnung vorhanden – hier gesperrt' : 'Nur messbar / Steuerung ergänzen',
-        ],
+        sourceId: `flow-consumer:${index + 1}`, name, resourceType: 'consumer', resourceSubtype: consumerType, controlType: writes ? 'switch' : 'monitor',
+        sourceLabel: `Energiefluss · Slot ${index + 1}`, sourceTab: 'flow', reads, writes,
+        nativeMappings: normalizeMappings({ powerReadId: powerDp, stateReadId: ctrl.switchReadId || ctrl.setpointReadId }),
+        capabilities: [powerDp ? 'Leistungsmessung vorhanden' : 'Leistungsmessung fehlt', writes ? 'Steuerzuordnung vorhanden' : 'Nur messbar'],
       };
     }).filter(Boolean) as AnyRecord[];
   }
 
   function deriveModuleDevices(config: AnyRecord, key: string, label: string, tab: string, resourceType: string): AnyRecord[] {
+    const appId = key === 'heatingRod' ? 'heatingrod' : key;
+    const enableFlag = key === 'heatingRod' ? 'enableHeatingRodControl' : 'enableThermalControl';
+    if (!eosAppActive(config, appId, enableFlag)) return [];
     const moduleConfig = record(config[key]);
+    const flowConsumers = list(record(record(config.vis).flowSlots).consumers);
+    const dps = record(config.datapoints);
     return list(moduleConfig.devices).map((device, index) => {
-      const dpCount = objectDpCount(device);
-      const name = text(device.name, `${label} ${index + 1}`);
-      if (!name && !dpCount) return null;
+      if (device.enabled !== true) return null;
+      const slot = integer(device.slot ?? device.consumerSlot, index + 1, 1, 999);
+      const flowSlot = record(flowConsumers[slot - 1]);
+      const ctrl = record(flowSlot.ctrl);
+      const reads: any[] = [
+        dps[`consumer${slot}Power`], device.powerReadId, device.temperatureReadId,
+        device.alarmReadId, device.onlineReadId, device.stateReadId,
+        ctrl.switchReadId, ctrl.setpointReadId,
+      ];
+      const writes: any[] = [device.switchWriteId, device.setpointWriteId, ctrl.switchWriteId, ctrl.setpointWriteId];
+      if (key === 'thermal') {
+        reads.push(ctrl.sgReadyAReadId, ctrl.sgReadyBReadId, ctrl.sgReady1ReadId, ctrl.sgReady2ReadId);
+        writes.push(ctrl.sgReadyAWriteId, ctrl.sgReadyBWriteId, ctrl.sgReady1WriteId, ctrl.sgReady2WriteId);
+      } else {
+        const stages = list(device.stages);
+        for (let stage = 1; stage <= 12; stage += 1) {
+          const stageCfg = record(stages[stage - 1]);
+          reads.push(stageCfg.readId, stageCfg.dpReadId, stageCfg.readDp, ctrl[`stage${stage}ReadId`], ctrl[`heatingStage${stage}ReadId`]);
+          writes.push(stageCfg.writeId, stageCfg.dpWriteId, stageCfg.writeDp, ctrl[`stage${stage}WriteId`], ctrl[`heatingStage${stage}WriteId`]);
+        }
+      }
+      const readCount = reads.filter(truthyDp).length;
+      const writeCount = writes.filter(truthyDp).length;
+      if ((readCount + writeCount) <= 0) return null;
       return {
-        sourceId: `${key}:${index + 1}`,
-        name,
-        resourceType,
-        resourceSubtype: key === 'heatingRod' ? 'heatingRod' : (key === 'thermal' ? 'thermal' : key),
-        controlType: key === 'heatingRod' ? 'stepped' : 'thermal',
-        sourceLabel: `${label} · Geräteprofil ${index + 1}`,
-        sourceTab: tab,
-        reads: dpCount,
-        writes: 0,
-        capabilities: [
-          dpCount ? `${dpCount} Datenpunkt-Zuordnung${dpCount === 1 ? '' : 'en'} erkannt` : 'Zuordnung unvollständig',
-          'Bestehende Modulregelung bleibt zuständig',
-        ],
+        sourceId: `${key}:${index + 1}`, runtimeId: `c${slot}`, name: text(device.name || flowSlot.name, `${label} ${slot}`), resourceType,
+        resourceSubtype: key === 'heatingRod' ? 'heatingRod' : text(device.type || device.deviceType, 'thermal'),
+        controlType: key === 'heatingRod' ? 'stepped' : 'thermal', maxPowerW: number(device.maxPowerW || device.estimatedPowerW, 0, 0, 1000000000),
+        sourceLabel: `${label} · Slot ${slot}`, sourceTab: tab, reads: readCount, writes: writeCount,
+        nativeMappings: normalizeMappings({
+          powerReadId: device.powerReadId || dps[`consumer${slot}Power`],
+          temperatureReadId: device.temperatureReadId,
+          alarmReadId: device.alarmReadId,
+          onlineReadId: device.onlineReadId,
+          stateReadId: device.stateReadId || ctrl.switchReadId || ctrl.setpointReadId,
+        }),
+        capabilities: [`${readCount} Lesepfad${readCount === 1 ? '' : 'e'} · ${writeCount} Stellpfad${writeCount === 1 ? '' : 'e'}`, 'Bestehendes EOS-Modul bleibt Single Writer'],
       };
     }).filter(Boolean) as AnyRecord[];
   }
@@ -484,9 +603,9 @@
     const combined = [
       ...(storageFarmResources.length ? storageFarmResources : deriveStorageResource(config)),
       ...deriveEvcsResources(config),
-      ...deriveFlowConsumerResources(config),
       ...deriveModuleDevices(config, 'thermal', 'Thermisches Gerät', 'thermal', 'thermal'),
       ...deriveModuleDevices(config, 'heatingRod', 'Heizstab', 'heatingrod', 'thermal'),
+      ...deriveFlowConsumerResources(config),
     ];
     const seen = new Set<string>();
     return combined.filter((entry) => {
@@ -517,7 +636,9 @@
         strategyEnabled: link.enabled === true,
       };
     });
-    const custom = list(workingConfig.customResources).map((entry, index) => ({
+    const custom = list(workingConfig.customResources)
+      .filter((entry) => entry.enabled !== false && Object.values(record(entry.mappings)).some((value) => text(value)))
+      .map((entry, index) => ({
       sourceId: `custom:${text(entry.id, String(index + 1))}`,
       name: text(entry.name, `Benutzerdefinierte Ressource ${index + 1}`),
       resourceType: text(entry.resourceType, 'consumer'),
@@ -540,15 +661,21 @@
 
   function linkBySourceId(sourceId: string): AnyRecord {
     const existing = list(workingConfig.resourceLinks).find((entry) => text(entry.sourceId) === sourceId);
-    return existing || {
+    return normalizeLink(existing || {
       sourceId,
       enabled: false,
       priority: 50,
       roleOverride: 'auto',
       autoOnly: sourceId.startsWith('evcs:'),
+      controlMode: 'observe',
+      commissioningConfirmed: false,
+      autoSource: 'standard',
+      fallback: 'standardAuto',
+      staleTimeoutSec: sourceId.startsWith('evcs:') ? 30 : 60,
       observeOnly: true,
       writeEnabled: false,
-    };
+      mappings: {},
+    }) || {};
   }
 
   function resourceTypeLabel(type: string): string {
@@ -584,32 +711,84 @@
     return tab ? `<button type="button" class="nw-btn nw-btn--small" data-os-goto-tab="${esc(tab)}">Zuordnung öffnen</button>` : '';
   }
 
+  function existingReadMappingInput(resource: AnyRecord, link: AnyRecord, key: string, label: string): string {
+    const sourceId = text(resource.sourceId);
+    const id = `osLink_${safeId(sourceId, 'resource')}_${key}`;
+    const current = text(record(link.mappings)[key], text(record(resource.nativeMappings)[key]));
+    return `
+      <label class="nw-field nw-os-dp-field">
+        <span>${esc(label)}</span>
+        <div class="nw-os-dp-row">
+          <input id="${esc(id)}" type="text" value="${esc(current)}" placeholder="Datenpunkt-ID …" data-os-link-map-source="${esc(sourceId)}" data-os-link-map-key="${esc(key)}">
+          <button type="button" class="nw-btn nw-btn--small" data-browse="${esc(id)}">Auswählen</button>
+        </div>
+      </label>`;
+  }
+
+  function existingReadMappingsHtml(resource: AnyRecord, link: AnyRecord): string {
+    const fields: Array<[string, string]> = [
+      ['powerReadId', 'Aktuelle Leistung'],
+      ['energyReadId', 'Energiezähler'],
+      ['stateReadId', 'Betriebszustand'],
+      ['onlineReadId', 'Online / Verfügbarkeit'],
+      ['alarmReadId', 'Störung / Alarm'],
+    ];
+    if (resource.resourceType === 'storage' || resource.resourceType === 'chargingPoint') {
+      fields.push(['socReadId', resource.resourceType === 'storage' ? 'Speicher-SoC' : 'Fahrzeug-SoC']);
+      fields.push(['capacityReadId', 'Nutzbare Kapazität (optional)']);
+    }
+    if (resource.resourceType === 'thermal') fields.push(['temperatureReadId', 'Temperatur']);
+    return `<details class="nw-os-subdetails"><summary>Optionale Strategiemesswerte / DP-Zuordnung</summary><div class="nw-config-grid">${fields.map(([key, label]) => existingReadMappingInput(resource, link, key, label)).join('')}</div><p class="nw-hint">Nur Lesedaten werden ergänzt. Stellpfade bleiben ausschließlich beim vorhandenen EOS-Fachmodul.</p></details>`;
+  }
+
   function existingResourcesHtml(resources: AnyRecord[]): string {
     if (!resources.length) {
-      return '<div class="nw-os-empty">Noch keine vorhandenen EOS-Geräte erkannt. Benutzerdefinierte Ressourcen können darunter angelegt werden.</div>';
+      return '<div class="nw-os-empty">Keine aktiven und zugeordneten EOS-Geräte erkannt. Es werden bewusst keine leeren Geräteplätze angezeigt. Noch nicht im EOS angelegte Geräte können darunter als benutzerdefinierte Ressource ergänzt werden.</div>';
     }
+    const cfg = workingConfig;
+    const globalLive = appEnabled === true
+      && edition() === 'eos'
+      && cfg.enabled === true
+      && cfg.mode === 'active'
+      && cfg.commissioningConfirmed === true
+      && cfg.controlTakeoverEnabled === true
+      && cfg.writeExecutionEnabled === true
+      && record(cfg.autoControl).enabled !== false
+      && text(record(cfg.autoControl).stage) === 'active';
     return resources.map((resource) => {
       const link = linkBySourceId(resource.sourceId);
-      const modeBadge = resource.resourceType === 'chargingPoint'
-        ? badge('Nur Auto → Betriebsstrategie', 'lock')
-        : badge('Beobachtung', 'safe');
-      const mappingTone = resource.reads > 0 ? 'safe' : 'warn';
-      const mappingLabel = resource.reads > 0 ? `${resource.reads} Lesepfad${resource.reads === 1 ? '' : 'e'}` : 'Keine Lesebindung';
+      const nativeSupported = /^(evcs:|thermal:|heatingRod:|storage:|storagefarm:)/.test(resource.sourceId);
+      const linkLive = globalLive && nativeSupported && link.enabled === true && link.controlMode === 'active' && link.commissioningConfirmed === true;
+      const mappingLabel = `${Math.max(0, Number(resource.reads) || 0)} L / ${Math.max(0, Number(resource.writes) || 0)} S`;
+      const statusLabel = linkLive ? 'Live freigegeben' : (link.enabled ? 'Beobachtung' : 'Nicht beteiligt');
+      const statusTone = linkLive ? 'live' : (link.enabled ? 'safe' : 'muted');
+      const chargingOptions = resource.resourceType === 'chargingPoint' ? `
+        <label class="nw-field"><span>Auto-Quelle in dieser App</span><select data-os-link-auto-source="${esc(resource.sourceId)}"><option value="standard"${link.autoSource !== 'strategy' ? ' selected' : ''}>Standard-Automatik</option><option value="strategy"${link.autoSource === 'strategy' ? ' selected' : ''}>EOS Betriebsstrategie</option></select><small>Zusätzlich muss am Ladepunkt selbst „Auto → Betriebsstrategie“ gewählt sein.</small></label>` : '';
       return `
-        <div class="nw-os-resource" data-os-existing-resource="${esc(resource.sourceId)}">
-          <div class="nw-os-resource__select">
-            <label class="nw-field nw-field--switch"><span>Für Strategie vormerken</span><input type="checkbox" data-os-link-enabled="${esc(resource.sourceId)}" ${link.enabled ? 'checked' : ''}></label>
-            <label class="nw-field"><span>Priorität</span><input type="number" min="1" max="100" value="${esc(link.priority)}" data-os-link-priority="${esc(resource.sourceId)}"></label>
-            <label class="nw-field"><span>Strategierolle</span><select data-os-link-role="${esc(resource.sourceId)}"><option value="auto"${link.roleOverride === 'auto' ? ' selected' : ''}>Automatisch aus EOS</option><option value="cooling"${link.roleOverride === 'cooling' ? ' selected' : ''}>Kühl-/Gefrieranlage</option><option value="heatPump"${link.roleOverride === 'heatPump' ? ' selected' : ''}>Wärmepumpe / thermisch</option><option value="heatingRod"${link.roleOverride === 'heatingRod' ? ' selected' : ''}>Heizstab / stufig</option><option value="flexConsumer"${link.roleOverride === 'flexConsumer' ? ' selected' : ''}>Flexibler Verbraucher</option><option value="storage"${link.roleOverride === 'storage' ? ' selected' : ''}>Speicher</option><option value="chargingPoint"${link.roleOverride === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option></select></label>
+        <details class="nw-os-resource nw-os-compact" data-os-existing-resource="${esc(resource.sourceId)}">
+          <summary class="nw-os-compact__summary">
+            <label class="nw-os-compact__check" title="Teilnahme an Betriebsstrategien"><input type="checkbox" data-os-link-enabled="${esc(resource.sourceId)}" ${link.enabled ? 'checked' : ''}></label>
+            <span class="nw-os-compact__identity"><strong>${esc(resource.name)}</strong><small>${esc(resource.sourceLabel)} · ${esc(resourceTypeLabel(resource.resourceType))}</small></span>
+            <span class="nw-os-badges">${badge(mappingLabel, resource.reads > 0 ? 'safe' : 'warn')}${badge(statusLabel, statusTone)}${resource.resourceType === 'chargingPoint' ? badge('nur Auto', 'lock') : ''}</span>
+            <span class="nw-os-compact__chevron">▾</span>
+          </summary>
+          <div class="nw-os-compact__body">
+            <div class="nw-config-grid">
+              <label class="nw-field"><span>Priorität</span><input type="number" min="1" max="100" value="${esc(link.priority)}" data-os-link-priority="${esc(resource.sourceId)}"></label>
+              <label class="nw-field"><span>Strategierolle</span><select data-os-link-role="${esc(resource.sourceId)}"><option value="auto"${link.roleOverride === 'auto' ? ' selected' : ''}>Automatisch aus EOS</option><option value="cooling"${link.roleOverride === 'cooling' ? ' selected' : ''}>Kühl-/Gefrieranlage</option><option value="heatPump"${link.roleOverride === 'heatPump' ? ' selected' : ''}>Wärmepumpe / thermisch</option><option value="heatingRod"${link.roleOverride === 'heatingRod' ? ' selected' : ''}>Heizstab / stufig</option><option value="flexConsumer"${link.roleOverride === 'flexConsumer' ? ' selected' : ''}>Flexibler Verbraucher</option><option value="storage"${link.roleOverride === 'storage' ? ' selected' : ''}>Speicher</option><option value="chargingPoint"${link.roleOverride === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option></select></label>
+              <label class="nw-field"><span>Ressourcenmodus</span><select data-os-link-control-mode="${esc(resource.sourceId)}"><option value="observe"${link.controlMode !== 'active' ? ' selected' : ''}>Nur beobachten</option><option value="active"${link.controlMode === 'active' ? ' selected' : ''}>Regelanforderungen zulassen</option></select></label>
+              <label class="nw-field nw-field--switch"><span>Gerät in Betrieb genommen</span><input type="checkbox" data-os-link-commissioning="${esc(resource.sourceId)}" ${link.commissioningConfirmed ? 'checked' : ''}></label>
+              ${chargingOptions}
+              <label class="nw-field"><span>Rückfall bei fehlender Strategie</span><select data-os-link-fallback="${esc(resource.sourceId)}"><option value="standardAuto"${link.fallback !== 'pause' ? ' selected' : ''}>Bisherige Standard-Automatik</option><option value="pause"${link.fallback === 'pause' ? ' selected' : ''}>Sicher pausieren</option></select></label>
+              <label class="nw-field"><span>Maximales Messwertalter</span><input type="number" min="1" max="86400" value="${esc(link.staleTimeoutSec)}" data-os-link-stale="${esc(resource.sourceId)}"><small>s</small></label>
+            </div>
+            ${existingReadMappingsHtml(resource, link)}
+            <div class="nw-os-resource-foot">
+              <div class="nw-os-badges">${nativeSupported ? badge('Single Writer: bestehendes EOS-Modul', 'safe') : badge('Nur Beobachtung', 'muted')}${resource.writes ? badge(`${resource.writes} Stellpfad${resource.writes === 1 ? '' : 'e'} vorhanden`, 'safe') : badge('Kein Stellpfad', 'warn')}</div>
+              ${gotoTabButton(resource.sourceTab)}
+            </div>
           </div>
-          <div class="nw-os-resource__body">
-            <div class="nw-os-resource__title">${esc(resource.name)}</div>
-            <div class="nw-os-resource__subtitle">${esc(resource.sourceLabel)} · ${esc(resourceTypeLabel(resource.resourceType))}</div>
-            <div class="nw-os-badges">${modeBadge}${badge(mappingLabel, mappingTone)}${resource.writes ? badge(`${resource.writes} Stellpfad${resource.writes === 1 ? '' : 'e'} erkannt – gesperrt`, 'lock') : badge('Kein Stellpfad erkannt', 'muted')}</div>
-            <ul class="nw-os-capabilities">${(Array.isArray(resource.capabilities) ? resource.capabilities : []).map((entry: any) => `<li>${esc(entry)}</li>`).join('')}</ul>
-          </div>
-          <div class="nw-os-resource__action">${gotoTabButton(resource.sourceTab)}</div>
-        </div>`;
+        </details>`;
     }).join('');
   }
 
@@ -631,73 +810,31 @@
       return '<div class="nw-os-empty">Noch keine benutzerdefinierte Ressource. Lege hier Geräte an, die noch nicht in Speicher, Ladepunkten oder Energiefluss zugeordnet sind.</div>';
     }
     return resources.map((resource, index) => `
-      <div class="nw-os-custom" data-os-custom-index="${index}">
-        <div class="nw-os-custom__header">
-          <div>
-            <div class="nw-os-custom__title">${esc(resource.name)}</div>
-            <div class="nw-os-custom__subtitle">${esc(resourceTypeLabel(resource.resourceType))} · ${esc(controlTypeLabel(resource.controlType))}</div>
+      <details class="nw-os-custom nw-os-compact" data-os-custom-index="${index}">
+        <summary class="nw-os-compact__summary">
+          <label class="nw-os-compact__check"><input type="checkbox" data-os-custom-index="${index}" data-os-custom-field="enabled" ${resource.enabled !== false ? 'checked' : ''}></label>
+          <span class="nw-os-compact__identity"><strong>${esc(resource.name)}</strong><small>${esc(resourceTypeLabel(resource.resourceType))} · ${esc(controlTypeLabel(resource.controlType))}</small></span>
+          <span class="nw-os-badges">${badge('RC56 nur Beobachtung', 'lock')}${badge(`${Object.values(record(resource.mappings)).filter((value) => text(value)).length} Zuordnungen`, 'muted')}</span>
+          <span class="nw-os-compact__chevron">▾</span>
+        </summary>
+        <div class="nw-os-compact__body">
+          <div class="nw-os-custom__header"><div class="nw-os-custom__subtitle">Freie Datenpunkt-Schreibpfade bleiben bis zur generischen Aktor- und Rückmeldeprüfung gesperrt.</div><button type="button" class="nw-btn nw-btn--small" data-os-delete-custom="${index}">Löschen</button></div>
+          <div class="nw-config-grid">
+            <label class="nw-field"><span>Name</span><input type="text" value="${esc(resource.name)}" data-os-custom-index="${index}" data-os-custom-field="name"></label>
+            <label class="nw-field"><span>Ressourcentyp</span><select data-os-custom-index="${index}" data-os-custom-field="resourceType"><option value="consumer"${resource.resourceType === 'consumer' ? ' selected' : ''}>Allgemeiner Verbraucher</option><option value="thermal"${resource.resourceType === 'thermal' ? ' selected' : ''}>Thermisch flexibler Verbraucher</option><option value="chargingPoint"${resource.resourceType === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option><option value="storage"${resource.resourceType === 'storage' ? ' selected' : ''}>Speicher</option><option value="producer"${resource.resourceType === 'producer' ? ' selected' : ''}>Erzeuger</option><option value="sensor"${resource.resourceType === 'sensor' ? ' selected' : ''}>Sensor / externe Messgröße</option><option value="virtualGroup"${resource.resourceType === 'virtualGroup' ? ' selected' : ''}>Virtuelle Gruppe</option></select></label>
+            <label class="nw-field"><span>Fähigkeitsprofil</span><select data-os-custom-index="${index}" data-os-custom-field="controlType"><option value="monitor"${resource.controlType === 'monitor' ? ' selected' : ''}>Nur messen</option><option value="switch"${resource.controlType === 'switch' ? ' selected' : ''}>Ein/Aus</option><option value="setpoint"${resource.controlType === 'setpoint' ? ' selected' : ''}>Stufenloser Sollwert</option><option value="stepped"${resource.controlType === 'stepped' ? ' selected' : ''}>Stufig</option><option value="thermal"${resource.controlType === 'thermal' ? ' selected' : ''}>Temperaturgeführt</option><option value="energyTarget"${resource.controlType === 'energyTarget' ? ' selected' : ''}>Energie-/SoC-Ziel</option></select></label>
+            <label class="nw-field"><span>Leistungseinheit</span><select data-os-custom-index="${index}" data-os-custom-field="powerUnit"><option value="W"${resource.powerUnit === 'W' ? ' selected' : ''}>W</option><option value="kW"${resource.powerUnit === 'kW' ? ' selected' : ''}>kW</option></select></label>
+            <label class="nw-field"><span>Maximales Messwertalter</span><input type="number" min="1" max="86400" value="${esc(resource.staleTimeoutSec)}" data-os-custom-index="${index}" data-os-custom-field="staleTimeoutSec"><small>s</small></label>
+            <label class="nw-field"><span>Fail-Safe-Vorbereitung</span><select data-os-custom-index="${index}" data-os-custom-field="failSafePolicy"><option value="observe-only"${resource.failSafePolicy === 'observe-only' ? ' selected' : ''}>Nur beobachten</option><option value="release"${resource.failSafePolicy === 'release' ? ' selected' : ''}>Später Regelung freigeben</option><option value="safe-on"${resource.failSafePolicy === 'safe-on' ? ' selected' : ''}>Später sicher einschalten</option><option value="safe-off"${resource.failSafePolicy === 'safe-off' ? ' selected' : ''}>Später sicher ausschalten</option><option value="block-optimization"${resource.failSafePolicy === 'block-optimization' ? ' selected' : ''}>Später Optimierung sperren</option></select></label>
+            <label class="nw-field"><span>Nutzbare Kapazität</span><input type="number" step="0.1" min="0" value="${esc(resource.usableCapacityKWh)}" data-os-custom-index="${index}" data-os-custom-field="usableCapacityKWh"><small>kWh</small></label>
+            <label class="nw-field"><span>Minimale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.minPowerW)}" data-os-custom-index="${index}" data-os-custom-field="minPowerW"><small>W</small></label>
+            <label class="nw-field"><span>Maximale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.maxPowerW)}" data-os-custom-index="${index}" data-os-custom-field="maxPowerW"><small>W</small></label>
+            <label class="nw-field"><span>Wirkungsgrad</span><input type="number" step="0.1" min="1" max="100" value="${esc(resource.efficiencyPct)}" data-os-custom-index="${index}" data-os-custom-field="efficiencyPct"><small>%</small></label>
           </div>
-          <button type="button" class="nw-btn nw-btn--small" data-os-delete-custom="${index}">Löschen</button>
+          <div class="nw-os-section-label">Lesedatenpunkte</div><div class="nw-config-grid">${dpInput(resource, index, 'powerReadId', 'Aktuelle Leistung')}${dpInput(resource, index, 'energyReadId', 'Energiezähler')}${dpInput(resource, index, 'stateReadId', 'Betriebszustand')}${dpInput(resource, index, 'socReadId', 'SoC')}${dpInput(resource, index, 'temperatureReadId', 'Temperatur')}${dpInput(resource, index, 'alarmReadId', 'Alarm / Störung')}${dpInput(resource, index, 'onlineReadId', 'Online / Kommunikation')}${dpInput(resource, index, 'capacityReadId', 'Nutzbare Kapazität')}${dpInput(resource, index, 'forecastEnergyReadId', 'Energie-/PV-Prognose')}${dpInput(resource, index, 'surplusPowerReadId', 'Verfügbarer Überschuss')}</div>
+          <div class="nw-os-section-label">Vorbereitete Stell- und Rückmeldepunkte</div><div class="nw-os-lock-note">Die Zuordnungen werden gespeichert, aber benutzerdefinierte Schreibdatenpunkte werden in RC56 noch nicht beschrieben.</div><div class="nw-config-grid">${dpInput(resource, index, 'switchWriteId', 'Ein/Aus oder Freigabe', true)}${dpInput(resource, index, 'switchReadId', 'Rückmeldung Ein/Aus')}${dpInput(resource, index, 'setpointWriteId', 'Leistungs-/Sollwertvorgabe', true)}${dpInput(resource, index, 'setpointReadId', 'Rückmeldung Sollwert')}</div>
         </div>
-        <div class="nw-config-grid">
-          <label class="nw-field nw-field--switch"><span>Ressource verwenden</span><input type="checkbox" data-os-custom-index="${index}" data-os-custom-field="enabled" ${resource.enabled !== false ? 'checked' : ''}></label>
-          <label class="nw-field"><span>Name</span><input type="text" value="${esc(resource.name)}" data-os-custom-index="${index}" data-os-custom-field="name"></label>
-          <label class="nw-field"><span>Ressourcentyp</span><select data-os-custom-index="${index}" data-os-custom-field="resourceType">
-            <option value="consumer"${resource.resourceType === 'consumer' ? ' selected' : ''}>Allgemeiner Verbraucher</option>
-            <option value="thermal"${resource.resourceType === 'thermal' ? ' selected' : ''}>Thermisch flexibler Verbraucher</option>
-            <option value="chargingPoint"${resource.resourceType === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option>
-            <option value="storage"${resource.resourceType === 'storage' ? ' selected' : ''}>Speicher</option>
-            <option value="producer"${resource.resourceType === 'producer' ? ' selected' : ''}>Erzeuger</option>
-            <option value="sensor"${resource.resourceType === 'sensor' ? ' selected' : ''}>Sensor / externe Messgröße</option>
-            <option value="virtualGroup"${resource.resourceType === 'virtualGroup' ? ' selected' : ''}>Virtuelle Gruppe</option>
-          </select></label>
-          <label class="nw-field"><span>Fähigkeitsprofil</span><select data-os-custom-index="${index}" data-os-custom-field="controlType">
-            <option value="monitor"${resource.controlType === 'monitor' ? ' selected' : ''}>Nur messen</option>
-            <option value="switch"${resource.controlType === 'switch' ? ' selected' : ''}>Ein/Aus</option>
-            <option value="setpoint"${resource.controlType === 'setpoint' ? ' selected' : ''}>Stufenloser Sollwert</option>
-            <option value="stepped"${resource.controlType === 'stepped' ? ' selected' : ''}>Stufig</option>
-            <option value="thermal"${resource.controlType === 'thermal' ? ' selected' : ''}>Temperaturgeführt</option>
-            <option value="energyTarget"${resource.controlType === 'energyTarget' ? ' selected' : ''}>Energie-/SoC-Ziel</option>
-          </select></label>
-          <label class="nw-field"><span>Leistungseinheit</span><select data-os-custom-index="${index}" data-os-custom-field="powerUnit"><option value="W"${resource.powerUnit === 'W' ? ' selected' : ''}>W</option><option value="kW"${resource.powerUnit === 'kW' ? ' selected' : ''}>kW</option></select></label>
-          <label class="nw-field"><span>Maximales Messwertalter</span><input type="number" min="1" max="86400" value="${esc(resource.staleTimeoutSec)}" data-os-custom-index="${index}" data-os-custom-field="staleTimeoutSec"><small>s</small></label>
-          <label class="nw-field"><span>Fail-Safe-Vorbereitung</span><select data-os-custom-index="${index}" data-os-custom-field="failSafePolicy">
-            <option value="observe-only"${resource.failSafePolicy === 'observe-only' ? ' selected' : ''}>Nur beobachten</option>
-            <option value="release"${resource.failSafePolicy === 'release' ? ' selected' : ''}>Später Regelung freigeben</option>
-            <option value="safe-on"${resource.failSafePolicy === 'safe-on' ? ' selected' : ''}>Später sicher einschalten</option>
-            <option value="safe-off"${resource.failSafePolicy === 'safe-off' ? ' selected' : ''}>Später sicher ausschalten</option>
-            <option value="block-optimization"${resource.failSafePolicy === 'block-optimization' ? ' selected' : ''}>Später Optimierung sperren</option>
-          </select></label>
-        </div>
-        <div class="nw-os-section-label">Planungsdaten für Ziel- und Simulationsregeln</div>
-        <div class="nw-config-grid">
-          <label class="nw-field"><span>Nutzbare Kapazität</span><input type="number" step="0.1" min="0" value="${esc(resource.usableCapacityKWh)}" data-os-custom-index="${index}" data-os-custom-field="usableCapacityKWh"><small>kWh</small></label>
-          <label class="nw-field"><span>Minimale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.minPowerW)}" data-os-custom-index="${index}" data-os-custom-field="minPowerW"><small>W</small></label>
-          <label class="nw-field"><span>Maximale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.maxPowerW)}" data-os-custom-index="${index}" data-os-custom-field="maxPowerW"><small>W</small></label>
-          <label class="nw-field"><span>Wirkungsgrad</span><input type="number" step="0.1" min="1" max="100" value="${esc(resource.efficiencyPct)}" data-os-custom-index="${index}" data-os-custom-field="efficiencyPct"><small>%</small></label>
-        </div>
-        <div class="nw-os-section-label">Lesedatenpunkte</div>
-        <div class="nw-config-grid">
-          ${dpInput(resource, index, 'powerReadId', 'Aktuelle Leistung')}
-          ${dpInput(resource, index, 'energyReadId', 'Energiezähler')}
-          ${dpInput(resource, index, 'stateReadId', 'Betriebszustand')}
-          ${dpInput(resource, index, 'socReadId', 'SoC')}
-          ${dpInput(resource, index, 'temperatureReadId', 'Temperatur')}
-          ${dpInput(resource, index, 'alarmReadId', 'Alarm / Störung')}
-          ${dpInput(resource, index, 'onlineReadId', 'Online / Kommunikation')}
-          ${dpInput(resource, index, 'capacityReadId', 'Nutzbare Kapazität')}
-          ${dpInput(resource, index, 'forecastEnergyReadId', 'Energie-/PV-Prognose')}
-          ${dpInput(resource, index, 'surplusPowerReadId', 'Verfügbarer Überschuss')}
-        </div>
-        <div class="nw-os-section-label">Vorbereitete Stell- und Rückmeldepunkte</div>
-        <div class="nw-os-lock-note">Diese Zuordnungen werden gespeichert, aber RC54 führt daraus ausdrücklich keine Schreibbefehle aus.</div>
-        <div class="nw-config-grid">
-          ${dpInput(resource, index, 'switchWriteId', 'Ein/Aus oder Freigabe', true)}
-          ${dpInput(resource, index, 'switchReadId', 'Rückmeldung Ein/Aus')}
-          ${dpInput(resource, index, 'setpointWriteId', 'Leistungs-/Sollwertvorgabe', true)}
-          ${dpInput(resource, index, 'setpointReadId', 'Rückmeldung Sollwert')}
-        </div>
-      </div>`).join('');
+      </details>`).join('');
   }
 
   function profilesHtml(profiles: AnyRecord[], resources: AnyRecord[]): string {
@@ -706,66 +843,80 @@
       const reserve = record(profile.nightReserve);
       const storageOptions = storages.map((storage) => `<option value="${esc(storage.sourceId)}"${reserve.storageResourceId === storage.sourceId ? ' selected' : ''}>${esc(storage.name)}</option>`).join('');
       return `
-        <div class="nw-os-profile" data-os-profile-index="${index}">
-          <div class="nw-os-custom__header">
-            <div>
-              <div class="nw-os-custom__title">${esc(profile.name)}</div>
-              <div class="nw-os-custom__subtitle">Nachtenergie wird bis zum Nachtbeginn zurückgehalten und darf während der Nacht den Grundverbrauch decken.</div>
+        <details class="nw-os-profile nw-os-compact" data-os-profile-index="${index}">
+          <summary class="nw-os-compact__summary">
+            <label class="nw-os-compact__check"><input type="checkbox" data-os-profile-index="${index}" data-os-profile-field="enabled" ${profile.enabled !== false ? 'checked' : ''}></label>
+            <span class="nw-os-compact__identity"><strong>${esc(profile.name)}</strong><small>${esc(profile.season)} · Nachtziel ${esc(reserve.targetSocPct)} % · Untergrenze ${esc(reserve.absoluteMinSocPct)} %</small></span>
+            <span class="nw-os-badges">${badge(reserve.enabled !== false ? 'Nachtreserve aktiv' : 'Nachtreserve aus', reserve.enabled !== false ? 'safe' : 'muted')}</span><span class="nw-os-compact__chevron">▾</span>
+          </summary>
+          <div class="nw-os-compact__body">
+            <div class="nw-os-custom__header"><div class="nw-os-custom__subtitle">Der Ziel-SoC wird bis Nachtbeginn geschützt; nachts darf er bis zur absoluten Untergrenze für den Grundverbrauch genutzt werden.</div>${profiles.length > 1 ? `<button type="button" class="nw-btn nw-btn--small" data-os-delete-profile="${index}">Löschen</button>` : ''}</div>
+            <div class="nw-config-grid">
+              <label class="nw-field"><span>Name</span><input type="text" value="${esc(profile.name)}" data-os-profile-index="${index}" data-os-profile-field="name"></label>
+              <label class="nw-field"><span>Profilart</span><select data-os-profile-index="${index}" data-os-profile-field="season"><option value="winter"${profile.season === 'winter' ? ' selected' : ''}>Winter</option><option value="summer"${profile.season === 'summer' ? ' selected' : ''}>Sommer</option><option value="custom"${profile.season === 'custom' ? ' selected' : ''}>Benutzerdefiniert</option></select></label>
+              <label class="nw-field nw-field--switch"><span>Nachtenergie-Reserve verwenden</span><input type="checkbox" data-os-profile-index="${index}" data-os-profile-reserve-field="enabled" ${reserve.enabled !== false ? 'checked' : ''}></label>
+              <label class="nw-field"><span>Zugeordneter Speicher</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="storageResourceId"><option value="">Automatisch / noch zuordnen</option>${storageOptions}</select></label>
+              <label class="nw-field"><span>SoC-Ziel zum Nachtbeginn</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.targetSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="targetSocPct"><small>%</small></label>
+              <label class="nw-field"><span>Absolute Speicheruntergrenze</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.absoluteMinSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="absoluteMinSocPct"><small>%</small></label>
+              <label class="nw-field"><span>Nachtbeginn</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="startMode"><option value="sunset"${reserve.startMode === 'sunset' ? ' selected' : ''}>Sonnenuntergang</option><option value="fixed"${reserve.startMode === 'fixed' ? ' selected' : ''}>Feste Uhrzeit</option><option value="sunrise"${reserve.startMode === 'sunrise' ? ' selected' : ''}>Sonnenaufgang</option></select></label>
+              <label class="nw-field"><span>Feste Zeit / Rückfall</span><input type="time" value="${esc(reserve.startTime)}" data-os-profile-index="${index}" data-os-profile-reserve-field="startTime"></label>
+              <label class="nw-field"><span>Nachtende</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="endMode"><option value="sunrise"${reserve.endMode === 'sunrise' ? ' selected' : ''}>Sonnenaufgang</option><option value="fixed"${reserve.endMode === 'fixed' ? ' selected' : ''}>Feste Uhrzeit</option><option value="sunset"${reserve.endMode === 'sunset' ? ' selected' : ''}>Sonnenuntergang</option></select></label>
+              <label class="nw-field"><span>Feste Zeit / Rückfall</span><input type="time" value="${esc(reserve.endTime)}" data-os-profile-index="${index}" data-os-profile-reserve-field="endTime"></label>
             </div>
-            ${profiles.length > 1 ? `<button type="button" class="nw-btn nw-btn--small" data-os-delete-profile="${index}">Löschen</button>` : ''}
           </div>
-          <div class="nw-config-grid">
-            <label class="nw-field nw-field--switch"><span>Profil aktiv</span><input type="checkbox" data-os-profile-index="${index}" data-os-profile-field="enabled" ${profile.enabled !== false ? 'checked' : ''}></label>
-            <label class="nw-field"><span>Name</span><input type="text" value="${esc(profile.name)}" data-os-profile-index="${index}" data-os-profile-field="name"></label>
-            <label class="nw-field"><span>Profilart</span><select data-os-profile-index="${index}" data-os-profile-field="season"><option value="winter"${profile.season === 'winter' ? ' selected' : ''}>Winter</option><option value="summer"${profile.season === 'summer' ? ' selected' : ''}>Sommer</option><option value="custom"${profile.season === 'custom' ? ' selected' : ''}>Benutzerdefiniert</option></select></label>
-            <label class="nw-field nw-field--switch"><span>Nachtenergie-Reserve verwenden</span><input type="checkbox" data-os-profile-index="${index}" data-os-profile-reserve-field="enabled" ${reserve.enabled !== false ? 'checked' : ''}></label>
-            <label class="nw-field"><span>Zugeordneter Speicher</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="storageResourceId"><option value="">Automatisch / noch zuordnen</option>${storageOptions}</select><small>Nur ausdrücklich vorgemerkte Speicher werden später steuerbar.</small></label>
-            <label class="nw-field"><span>SoC-Ziel zum Nachtbeginn</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.targetSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="targetSocPct"><small>%</small></label>
-            <label class="nw-field"><span>Absolute Speicheruntergrenze</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.absoluteMinSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="absoluteMinSocPct"><small>%</small></label>
-            <label class="nw-field"><span>Nachtbeginn</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="startMode"><option value="sunset"${reserve.startMode === 'sunset' ? ' selected' : ''}>Sonnenuntergang</option><option value="fixed"${reserve.startMode === 'fixed' ? ' selected' : ''}>Feste Uhrzeit</option><option value="sunrise"${reserve.startMode === 'sunrise' ? ' selected' : ''}>Sonnenaufgang</option></select></label>
-            <label class="nw-field"><span>Feste Zeit / Rückfall</span><input type="time" value="${esc(reserve.startTime)}" data-os-profile-index="${index}" data-os-profile-reserve-field="startTime"></label>
-            <label class="nw-field"><span>Nachtende</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="endMode"><option value="sunrise"${reserve.endMode === 'sunrise' ? ' selected' : ''}>Sonnenaufgang</option><option value="fixed"${reserve.endMode === 'fixed' ? ' selected' : ''}>Feste Uhrzeit</option><option value="sunset"${reserve.endMode === 'sunset' ? ' selected' : ''}>Sonnenuntergang</option></select></label>
-            <label class="nw-field"><span>Feste Zeit / Rückfall</span><input type="time" value="${esc(reserve.endTime)}" data-os-profile-index="${index}" data-os-profile-reserve-field="endTime"></label>
-          </div>
-        </div>`;
+        </details>`;
     }).join('');
   }
 
   function styleHtml(): string {
     return `<style>
-      #${ROOT_ID}{display:grid;gap:16px}
-      #${ROOT_ID} .nw-os-hero{border:1px solid rgba(119,185,0,.45);background:rgba(119,185,0,.08);border-radius:14px;padding:16px}
-      #${ROOT_ID} .nw-os-hero__title{font-size:1.15rem;font-weight:700;margin-bottom:6px}
-      #${ROOT_ID} .nw-os-hero__text{opacity:.86;line-height:1.5}
-      #${ROOT_ID} .nw-os-badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
-      #${ROOT_ID} .nw-os-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:.78rem;border:1px solid rgba(255,255,255,.16)}
-      #${ROOT_ID} .nw-os-badge--safe{border-color:rgba(119,185,0,.55);background:rgba(119,185,0,.12)}
-      #${ROOT_ID} .nw-os-badge--warn{border-color:rgba(255,183,77,.55);background:rgba(255,183,77,.12)}
-      #${ROOT_ID} .nw-os-badge--lock{border-color:rgba(100,181,246,.45);background:rgba(100,181,246,.10)}
-      #${ROOT_ID} .nw-os-badge--muted{opacity:.68}
-      #${ROOT_ID} .nw-os-section{border:1px solid rgba(255,255,255,.11);border-radius:14px;padding:16px;background:rgba(255,255,255,.025)}
-      #${ROOT_ID} .nw-os-section__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-      #${ROOT_ID} .nw-os-section__title{font-size:1.05rem;font-weight:700}
-      #${ROOT_ID} .nw-os-section__subtitle{opacity:.72;margin-top:4px;line-height:1.45}
-      #${ROOT_ID} .nw-os-resource{display:grid;grid-template-columns:minmax(180px,240px) minmax(260px,1fr) auto;gap:14px;padding:14px 0;border-top:1px solid rgba(255,255,255,.09)}
-      #${ROOT_ID} .nw-os-resource:first-child{border-top:0;padding-top:0}
-      #${ROOT_ID} .nw-os-resource__select{display:grid;gap:8px;align-content:start}
-      #${ROOT_ID} .nw-os-resource__title,#${ROOT_ID} .nw-os-custom__title{font-weight:700;font-size:1rem}
-      #${ROOT_ID} .nw-os-resource__subtitle,#${ROOT_ID} .nw-os-custom__subtitle{opacity:.7;margin-top:3px;line-height:1.4}
-      #${ROOT_ID} .nw-os-resource__action{display:flex;align-items:flex-start}
-      #${ROOT_ID} .nw-os-capabilities{margin:9px 0 0 18px;padding:0;opacity:.8;line-height:1.45}
-      #${ROOT_ID} .nw-os-custom,#${ROOT_ID} .nw-os-profile{border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px;margin-top:12px}
-      #${ROOT_ID} .nw-os-custom__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-      #${ROOT_ID} .nw-os-section-label{font-weight:700;margin:16px 0 10px}
+      #${ROOT_ID}{display:grid;gap:14px}
+      #${ROOT_ID} .nw-os-hero{padding:16px;border:1px solid rgba(92,223,160,.28);border-radius:14px;background:linear-gradient(135deg,rgba(36,126,84,.16),rgba(24,46,65,.2))}
+      #${ROOT_ID} .nw-os-hero__title{font-size:1.12rem;font-weight:800}
+      #${ROOT_ID} .nw-os-hero__text{margin-top:6px;line-height:1.5;opacity:.82}
+      #${ROOT_ID} .nw-os-badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+      #${ROOT_ID} .nw-os-badge{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:.72rem;line-height:1.25;white-space:nowrap}
+      #${ROOT_ID} .nw-os-badge--safe{border-color:rgba(76,214,143,.38);background:rgba(76,214,143,.09)}
+      #${ROOT_ID} .nw-os-badge--live{border-color:rgba(110,240,142,.62);background:rgba(55,190,90,.18);box-shadow:0 0 12px rgba(55,190,90,.12)}
+      #${ROOT_ID} .nw-os-badge--warn{border-color:rgba(255,190,70,.42);background:rgba(255,190,70,.08)}
+      #${ROOT_ID} .nw-os-badge--lock{border-color:rgba(100,181,246,.35);background:rgba(100,181,246,.08)}
+      #${ROOT_ID} .nw-os-badge--muted{opacity:.66}
+      #${ROOT_ID} .nw-os-section{border:1px solid rgba(255,255,255,.11);border-radius:14px;padding:14px;background:rgba(255,255,255,.025)}
+      #${ROOT_ID} .nw-os-section__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+      #${ROOT_ID} .nw-os-section__title{font-size:1.02rem;font-weight:700}
+      #${ROOT_ID} .nw-os-section__subtitle{opacity:.72;margin-top:3px;line-height:1.4}
+      #${ROOT_ID} .nw-os-compact{display:block;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.018);margin-top:7px;overflow:hidden}
+      #${ROOT_ID} .nw-os-compact:first-child{margin-top:0}
+      #${ROOT_ID} .nw-os-compact__summary{list-style:none;display:grid;grid-template-columns:auto minmax(180px,1fr) auto auto;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;min-height:38px}
+      #${ROOT_ID} .nw-os-compact__summary::-webkit-details-marker{display:none}
+      #${ROOT_ID} .nw-os-compact__check{display:flex;align-items:center;justify-content:center;margin:0}
+      #${ROOT_ID} .nw-os-compact__check input{width:17px;height:17px}
+      #${ROOT_ID} .nw-os-compact__identity{display:flex;flex-direction:column;min-width:0}
+      #${ROOT_ID} .nw-os-compact__identity strong{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #${ROOT_ID} .nw-os-compact__identity small{opacity:.66;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #${ROOT_ID} .nw-os-compact__chevron{opacity:.65;transition:transform .15s ease}
+      #${ROOT_ID} details[open]>.nw-os-compact__summary .nw-os-compact__chevron{transform:rotate(180deg)}
+      #${ROOT_ID} .nw-os-compact__body{padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.08)}
+      #${ROOT_ID} .nw-os-subdetails{margin-top:10px;border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:0;background:rgba(0,0,0,.08)}
+      #${ROOT_ID} .nw-os-subdetails>summary{cursor:pointer;padding:8px 10px;font-weight:650;opacity:.86}
+      #${ROOT_ID} .nw-os-subdetails>.nw-config-grid{padding:8px 10px 2px}
+      #${ROOT_ID} .nw-os-subdetails>.nw-hint{padding:0 10px 10px;margin:4px 0 0;opacity:.7}
+      #${ROOT_ID} .nw-os-resource-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:8px}
+      #${ROOT_ID} .nw-os-custom__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+      #${ROOT_ID} .nw-os-custom__subtitle{opacity:.7;line-height:1.4}
+      #${ROOT_ID} .nw-os-section-label{font-weight:700;margin:14px 0 8px}
       #${ROOT_ID} .nw-os-dp-row{display:flex;gap:7px;align-items:center}
       #${ROOT_ID} .nw-os-dp-row input{min-width:0;flex:1}
       #${ROOT_ID} .nw-os-dp-field--write{border-left:3px solid rgba(100,181,246,.42);padding-left:9px}
-      #${ROOT_ID} .nw-os-lock-note{padding:10px 12px;border-radius:9px;background:rgba(100,181,246,.09);border:1px solid rgba(100,181,246,.28);margin-bottom:12px;line-height:1.45}
-      #${ROOT_ID} .nw-os-empty{padding:14px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;opacity:.72;line-height:1.5}
-      #${ROOT_ID} .nw-os-contract{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-      #${ROOT_ID} .nw-os-contract__item{padding:11px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
-      #${ROOT_ID} .nw-os-contract__item strong{display:block;margin-bottom:4px}
-      @media(max-width:900px){#${ROOT_ID} .nw-os-resource{grid-template-columns:1fr}#${ROOT_ID} .nw-os-resource__action{justify-content:flex-start}}
+      #${ROOT_ID} .nw-os-lock-note{padding:9px 11px;border-radius:9px;background:rgba(100,181,246,.09);border:1px solid rgba(100,181,246,.28);margin-bottom:10px;line-height:1.42}
+      #${ROOT_ID} .nw-os-empty{padding:12px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;opacity:.72;line-height:1.5}
+      #${ROOT_ID} .nw-os-contract{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+      #${ROOT_ID} .nw-os-contract__item{padding:9px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);font-size:.9rem}
+      #${ROOT_ID} .nw-os-contract__item strong{display:block;margin-bottom:3px}
+      #${ROOT_ID} .nw-os-live-warning{padding:10px 12px;border-radius:10px;border:1px solid rgba(255,174,66,.42);background:rgba(255,174,66,.09);line-height:1.45;margin-top:10px}
+      #${ROOT_ID} .nw-os-system-map{margin-top:10px;border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:8px 10px}
+      #${ROOT_ID} .nw-os-system-map summary{cursor:pointer;font-weight:700}
+      @media(max-width:760px){#${ROOT_ID} .nw-os-compact__summary{grid-template-columns:auto minmax(120px,1fr) auto}#${ROOT_ID} .nw-os-compact__summary>.nw-os-badges{grid-column:2/4;margin-top:0}#${ROOT_ID} .nw-os-compact__chevron{grid-column:4;grid-row:1}}
     </style>`;
   }
 
@@ -774,109 +925,97 @@
     const cfg = workingConfig;
     const eos = edition() === 'eos';
     const activeProfileOptions = list(cfg.profiles).map((profile) => `<option value="${esc(profile.id)}"${profile.id === cfg.activeProfileId ? ' selected' : ''}>${esc(profile.name)}</option>`).join('');
-    const linkedCount = list(cfg.resourceLinks).filter((entry) => entry.enabled === true).length;
+    const linkedCount = list(cfg.resourceLinks).filter((entry) => entry.enabled === true && resources.some((resource) => resource.sourceId === entry.sourceId)).length;
     const catalog = strategyResourceCatalog();
+    const globalLive = appEnabled && eos && cfg.enabled === true && cfg.mode === 'active' && cfg.commissioningConfirmed === true && cfg.controlTakeoverEnabled === true && cfg.writeExecutionEnabled === true && record(cfg.autoControl).enabled !== false && text(record(cfg.autoControl).stage) === 'active';
+    const statusBadges = globalLive
+      ? `${badge('Live-Regelanforderungen aktiv', 'live')}${badge('Single Writer bleibt erhalten', 'safe')}`
+      : `${badge(cfg.mode === 'active' ? 'Freigabe noch unvollständig' : 'Beobachtung / Simulation', cfg.mode === 'active' ? 'warn' : 'safe')}${badge('Keine direkten App-Hardwarewrites', 'lock')}`;
+    const map = record(cfg.systemMappings);
+    const systemMapField = (key: string, label: string) => `<label class="nw-field"><span>${esc(label)}</span><div class="nw-os-dp-row"><input id="osSystem_${esc(key)}" type="text" value="${esc(map[key])}" data-os-system-map="${esc(key)}" placeholder="optional – EOS-Fallback wird verwendet"><button type="button" class="nw-btn nw-btn--small" data-browse="osSystem_${esc(key)}">Auswählen</button></div></label>`;
     return `${styleHtml()}
       <div id="${ROOT_ID}">
-        <div class="nw-os-hero">
-          <div class="nw-os-hero__title">Betriebsstrategien · Regelbaukasten und sicherer Trockenlauf</div>
-          <div class="nw-os-hero__text">RC54 ergänzt modulare Muss-/Soll-/Kann-Regeln, Prioritätskaskade und einen manuellen Trockenlauf. Die App speichert und simuliert ausschließlich; bestehende Lade-, Speicher-, Heizstab- und Thermikregler bleiben unverändert zuständig.</div>
-          <div class="nw-os-badges">
-            ${badge('Beobachtungs- und Simulationsmodus', 'safe')}
-            ${badge('0 Hardware-Schreibbefehle', 'lock')}
-            ${badge('Ladepunkte später nur in Auto', 'lock')}
-            ${badge('Single-Writer-Vertrag vorbereitet', 'safe')}
-          </div>
-        </div>
+        <div class="nw-os-hero"><div class="nw-os-hero__title">Betriebsstrategien · koordinierte EOS-Regelanforderungen</div><div class="nw-os-hero__text">RC56 verbindet freigegebene Regeln mit den vorhandenen Lade-, Speicher-, Thermik- und Heizstabreglern. Die App plant Ziele; die bestehenden Fachmodule bleiben alleinige Hardware-Writer und wenden weiterhin §14a, Parkregler, Netz-, Stations- und Geräteschutz an.</div><div class="nw-os-badges">${statusBadges}${badge(`${resources.length} aktive EOS-Ressourcen`, resources.length ? 'safe' : 'muted')}</div></div>
 
         <div class="nw-os-section">
-          <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">App- und Sicherheitsstatus</div><div class="nw-os-section__subtitle">Installiert/Aktiv wird im AppCenter festgelegt. Steuerübernahme und Hardware-Ausführung bleiben in RC54 technisch fest auf „aus“ verriegelt.</div></div>
-          </div>
+          <div class="nw-os-section__header"><div><div class="nw-os-section__title">App- und Sicherheitsfreigabe</div><div class="nw-os-section__subtitle">Live-Betrieb erfordert alle globalen und ressourcenbezogenen Bestätigungen. Fehlt eine Freigabe oder läuft eine Anforderung ab, greift der definierte Rückfall.</div></div></div>
           <div class="nw-config-grid">
             <label class="nw-field"><span>Edition</span><input type="text" value="${eos ? 'EOS Pro' : 'Nicht freigeschaltet'}" disabled></label>
-            <label class="nw-field"><span>App-Status</span><input type="text" value="${appEnabled ? 'Aktiviert · nur Konfiguration/Beobachtung' : 'Nicht aktiv'}" disabled></label>
-            <label class="nw-field"><span>Betriebsmodus</span><input type="text" value="Beobachtung" disabled></label>
-            <label class="nw-field"><span>Steuerübernahme</span><input type="text" value="Gesperrt" disabled></label>
-            <label class="nw-field nw-field--switch"><span>Vorhandene EOS-Geräte automatisch anzeigen</span><input id="osAutoImportExisting" type="checkbox" ${cfg.autoImportExisting !== false ? 'checked' : ''}></label>
-            <label class="nw-field"><span>Aktives Profil vorbereiten</span><select id="osActiveProfileId">${activeProfileOptions}</select></label>
+            <label class="nw-field"><span>AppCenter-Status</span><input type="text" value="${appEnabled ? 'Installiert und aktiviert' : 'Nicht aktiv'}" disabled></label>
+            <label class="nw-field"><span>Betriebsmodus</span><select id="osMode"><option value="observe"${cfg.mode !== 'active' ? ' selected' : ''}>Beobachtung / Simulation</option><option value="active"${cfg.mode === 'active' ? ' selected' : ''}>Aktive Regelanforderungen</option></select></label>
+            <label class="nw-field"><span>Inbetriebnahmestufe</span><select id="osAutoStage"><option value="shadow"${text(record(cfg.autoControl).stage) === 'shadow' ? ' selected' : ''}>Shadow – nur vergleichen</option><option value="commissioning"${text(record(cfg.autoControl).stage) === 'commissioning' ? ' selected' : ''}>Inbetriebnahme – noch keine Übernahme</option><option value="active"${text(record(cfg.autoControl).stage) === 'active' ? ' selected' : ''}>Aktiv – freigegebene Anforderungen anwenden</option></select></label>
+            <label class="nw-field nw-field--switch"><span>Globale Inbetriebnahme bestätigt</span><input id="osCommissioningConfirmed" type="checkbox" ${cfg.commissioningConfirmed ? 'checked' : ''}></label>
+            <label class="nw-field nw-field--switch"><span>Steuerübernahme freigeben</span><input id="osControlTakeoverEnabled" type="checkbox" ${cfg.controlTakeoverEnabled ? 'checked' : ''}></label>
+            <label class="nw-field nw-field--switch"><span>Ausführung über Fachmodule freigeben</span><input id="osWriteExecutionEnabled" type="checkbox" ${cfg.writeExecutionEnabled ? 'checked' : ''}></label>
+            <label class="nw-field"><span>Anforderungs-Gültigkeit</span><input id="osRequestTtlSeconds" type="number" min="3" max="60" value="${esc(record(cfg.autoControl).requestTtlSeconds)}"><small>s</small></label>
+            <label class="nw-field"><span>Globaler Rückfall</span><select id="osGlobalFallback"><option value="standardAuto"${text(record(cfg.autoControl).fallback) !== 'pause' ? ' selected' : ''}>Standard-Automatik / Fachmodul</option><option value="pause"${text(record(cfg.autoControl).fallback) === 'pause' ? ' selected' : ''}>Sicher pausieren</option></select></label>
+            <label class="nw-field nw-field--switch"><span>Nur aktive EOS-Geräte automatisch anzeigen</span><input id="osAutoImportExisting" type="checkbox" ${cfg.autoImportExisting !== false ? 'checked' : ''}></label>
+            <label class="nw-field"><span>Aktives Profil</span><select id="osActiveProfileId">${activeProfileOptions}</select></label>
           </div>
+          ${globalLive ? '<div class="nw-os-live-warning"><strong>Live-Betrieb ist vollständig freigegeben.</strong> Nur zusätzlich pro Ressource freigegebene Geräte können Anforderungen erhalten. Ladepunkte benötigen außerdem im Ladepunkt-Reiter „Auto → Betriebsstrategie“.</div>' : '<div class="nw-os-live-warning"><strong>Fail-closed:</strong> Die Freigabekette ist nicht vollständig. Regeln werden nur simuliert oder beobachtet; bestehende Regelungen laufen unverändert weiter.</div>'}
+          <details class="nw-os-system-map"><summary>Optionale System-Datenpunkte für Wetter, Prognose und Tarif</summary><div class="nw-config-grid" style="margin-top:10px">${systemMapField('outsideTemperatureReadId','Außentemperatur')}${systemMapField('pvForecastReadId','PV-Prognose')}${systemMapField('pvSurplusReadId','PV-Überschuss')}${systemMapField('gridPowerReadId','Netzleistung')}${systemMapField('electricityPriceReadId','Strompreis')}${systemMapField('cheapTariffReadId','Günstiger Tarif')}</div></details>
           ${eos ? '' : '<div class="nw-notice nw-notice--warn" style="margin-top:12px">Die Betriebsstrategien-App ist ausschließlich in EOS Pro verfügbar.</div>'}
         </div>
 
-        <div class="nw-os-section">
-          <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">Verbindlicher Steuervertrag</div><div class="nw-os-section__subtitle">Diese Regeln verhindern, dass die neue App bestehende Betriebsmodi oder Regler überschreibt.</div></div>
-          </div>
-          <div class="nw-os-contract">
-            <div class="nw-os-contract__item"><strong>Ladepunkte</strong>Spätere Teilnahme nur bei „Auto → Betriebsstrategie“ und ausdrücklicher Freigabe je Ladepunkt.</div>
-            <div class="nw-os-contract__item"><strong>Andere Lademodi</strong>Manuell, Boost, PV-Überschuss, Min+PV und Zeit-Ziel bleiben vollständig eigenständig.</div>
-            <div class="nw-os-contract__item"><strong>Ausführung</strong>Die Strategie liefert später nur Ziele; das bestehende Lademanagement bleibt Echtzeitregler.</div>
-            <div class="nw-os-contract__item"><strong>Rückfall</strong>Bei Ausfall ist für Ladepunkte die bestehende Standard-Automatik vorgesehen.</div>
-          </div>
-        </div>
+        <div class="nw-os-section"><div class="nw-os-section__header"><div><div class="nw-os-section__title">Verbindlicher Steuervertrag</div><div class="nw-os-section__subtitle">Die Betriebsstrategie ersetzt keinen Fachregler, sondern liefert nur zeitlich begrenzte Anforderungen.</div></div></div><div class="nw-os-contract"><div class="nw-os-contract__item"><strong>Ladepunkte</strong>Doppeltes Opt-in: Ressource freigeben und am Ladepunkt „Auto → Betriebsstrategie“ wählen.</div><div class="nw-os-contract__item"><strong>Andere Lademodi</strong>Manuell, Boost, PV, Min+PV und Zeit-Ziel bleiben eigenständig.</div><div class="nw-os-contract__item"><strong>Thermik / Heizstab</strong>Eingriff nur im jeweiligen PV-Auto-Modus; Sicherheitsfreigaben bleiben überlegen.</div><div class="nw-os-contract__item"><strong>Speicher</strong>Strategie darf Reservegrenzen nur verschärfen, niemals bestehende Schutzgrenzen absenken.</div></div></div>
 
-        <div class="nw-os-section">
-          <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">Vorhandene EOS-Ressourcen</div><div class="nw-os-section__subtitle">Speicher, Ladepunkte und Energiefluss-Verbraucher werden aus ihrer bestehenden Zuordnung gelesen; es entstehen keine doppelten Geräte. Vorgemerkt: ${linkedCount}.</div></div>
-          </div>
-          <div id="osExistingResources">${cfg.autoImportExisting !== false ? existingResourcesHtml(resources) : '<div class="nw-os-empty">Automatische Anzeige ist deaktiviert. Bereits gespeicherte Verknüpfungen bleiben erhalten.</div>'}</div>
-        </div>
+        <div class="nw-os-section"><div class="nw-os-section__header"><div><div class="nw-os-section__title">Aktive EOS-Ressourcen</div><div class="nw-os-section__subtitle">Es werden nur installierte, aktivierte und tatsächlich zugeordnete Geräte angezeigt. Leere Thermik-, Heizstab-, Speicher- und Ladepunktplätze bleiben ausgeblendet. Beteiligt: ${linkedCount}.</div></div></div><div id="osExistingResources">${cfg.autoImportExisting !== false ? existingResourcesHtml(resources) : '<div class="nw-os-empty">Automatische Anzeige ist deaktiviert. Gespeicherte, derzeit nicht sichtbare Verknüpfungen werden sicher auf Beobachtung zurückgesetzt.</div>'}</div></div>
 
-        <div class="nw-os-section">
-          <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">Benutzerdefinierte Ressourcen</div><div class="nw-os-section__subtitle">Für Geräte, die noch nicht in NexoWatt EOS angelegt sind. Lese- und spätere Stellpfade können bereits vollständig zugeordnet werden.</div></div>
-            <button id="osAddCustomResource" type="button" class="nw-btn nw-btn--primary">Ressource hinzufügen</button>
-          </div>
-          <div id="osCustomResources">${customResourcesHtml(list(cfg.customResources))}</div>
-        </div>
+        <div class="nw-os-section"><div class="nw-os-section__header"><div><div class="nw-os-section__title">Benutzerdefinierte Ressourcen</div><div class="nw-os-section__subtitle">Für noch nicht nativ im EOS angelegte Geräte. In RC56 können sie planen und simulieren, bleiben aber bei freien Schreibdatenpunkten bewusst read-only.</div></div><button id="osAddCustomResource" type="button" class="nw-btn nw-btn--primary">Ressource hinzufügen</button></div><div id="osCustomResources">${customResourcesHtml(list(cfg.customResources))}</div></div>
 
-        <div class="nw-os-section">
-          <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">Saison- und Nachtreserveprofile</div><div class="nw-os-section__subtitle">Der Ziel-SoC wird bis zum Nachtbeginn geschützt. Während der Nacht darf diese Energie den allgemeinen Nachtverbrauch decken; nur die absolute Untergrenze bleibt gesperrt.</div></div>
-            <button id="osAddProfile" type="button" class="nw-btn nw-btn--primary">Profil hinzufügen</button>
-          </div>
-          <div id="osProfiles">${profilesHtml(list(cfg.profiles), catalog)}</div>
-        </div>
+        <div class="nw-os-section"><div class="nw-os-section__header"><div><div class="nw-os-section__title">Saison- und Nachtreserveprofile</div><div class="nw-os-section__subtitle">Der Ziel-SoC wird bis Nachtbeginn geschützt; nachts steht die Energie bis zur absoluten Untergrenze für den Grundverbrauch bereit.</div></div><button id="osAddProfile" type="button" class="nw-btn nw-btn--primary">Profil hinzufügen</button></div><div id="osProfiles">${profilesHtml(list(cfg.profiles), catalog)}</div></div>
 
-        ${typeof ruleBuilder().render === 'function'
-          ? ruleBuilder().render(cfg, catalog)
-          : '<div class="nw-os-section"><div class="nw-os-section__title">Regelbaukasten nicht geladen</div><div class="nw-os-section__subtitle">Die Ressourcen- und Profilgrundlage bleibt verfügbar; Steuerung bleibt gesperrt.</div></div>'}
-
-        <div class="nw-os-section">
-          <div class="nw-os-section__title">Nächste sichere Kopplungsstufe</div>
-          <div class="nw-os-section__subtitle">Erst nach Feldtest und separater Freigabe werden simulierte Zielanforderungen über Auto → Betriebsstrategie an den zentralen Stellwertverteiler übergeben. Bestehende Auto-, Boost-, PV-, Min+PV-, Zeit-Ziel-, Speicher- und Safety-Regler werden nicht ersetzt.</div>
-        </div>
+        ${typeof ruleBuilder().render === 'function' ? ruleBuilder().render(cfg, catalog) : '<div class="nw-os-section"><div class="nw-os-section__title">Regelbaukasten nicht geladen</div><div class="nw-os-section__subtitle">Die Ressourcen- und Profilgrundlage bleibt verfügbar; Live-Steuerung bleibt fail-closed.</div></div>'}
       </div>`;
   }
 
   function syncLinksFromDom(): void {
+    const existingMap = new Map(list(workingConfig.resourceLinks).map((entry) => [text(entry.sourceId), normalizeLink(entry)]));
+    const rendered = deriveExistingResources(fullConfig);
+    const renderedIds = new Set(rendered.map((entry) => text(entry.sourceId)));
     const out: AnyRecord[] = [];
     document.querySelectorAll<HTMLInputElement>('[data-os-link-enabled]').forEach((checkbox) => {
       const sourceId = text(checkbox.getAttribute('data-os-link-enabled'));
       if (!sourceId) return;
-      const priorityInput = Array.from(document.querySelectorAll<HTMLInputElement>('[data-os-link-priority]'))
-        .find((entry) => text(entry.getAttribute('data-os-link-priority')) === sourceId);
-      const roleInput = Array.from(document.querySelectorAll<HTMLSelectElement>('[data-os-link-role]'))
-        .find((entry) => text(entry.getAttribute('data-os-link-role')) === sourceId);
+      const find = <T extends HTMLElement>(selector: string, attr: string): T | undefined => Array.from(document.querySelectorAll<T>(selector)).find((entry) => text(entry.getAttribute(attr)) === sourceId);
+      const priorityInput = find<HTMLInputElement>('[data-os-link-priority]', 'data-os-link-priority');
+      const roleInput = find<HTMLSelectElement>('[data-os-link-role]', 'data-os-link-role');
+      const modeInput = find<HTMLSelectElement>('[data-os-link-control-mode]', 'data-os-link-control-mode');
+      const commissioningInput = find<HTMLInputElement>('[data-os-link-commissioning]', 'data-os-link-commissioning');
+      const autoSourceInput = find<HTMLSelectElement>('[data-os-link-auto-source]', 'data-os-link-auto-source');
+      const fallbackInput = find<HTMLSelectElement>('[data-os-link-fallback]', 'data-os-link-fallback');
+      const staleInput = find<HTMLInputElement>('[data-os-link-stale]', 'data-os-link-stale');
+      const previous = record(existingMap.get(sourceId));
+      const mappings = normalizeMappings(previous.mappings);
+      document.querySelectorAll<HTMLInputElement>('[data-os-link-map-source]').forEach((node) => {
+        if (text(node.getAttribute('data-os-link-map-source')) !== sourceId) return;
+        const key = text(node.getAttribute('data-os-link-map-key'));
+        if (key) mappings[key] = text(node.value);
+      });
       const roleOverride = text(roleInput?.value, 'auto');
-      out.push({
+      out.push(normalizeLink({
+        ...previous,
+        mappings,
         sourceId,
         enabled: checkbox.checked,
         priority: integer(priorityInput?.value, 50, 1, 100),
         roleOverride,
         autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint',
-        observeOnly: true,
-        writeEnabled: false,
-      });
+        controlMode: text(modeInput?.value) === 'active' ? 'active' : 'observe',
+        commissioningConfirmed: commissioningInput?.checked === true,
+        autoSource: text(autoSourceInput?.value) === 'strategy' ? 'strategy' : 'standard',
+        fallback: text(fallbackInput?.value) === 'pause' ? 'pause' : 'standardAuto',
+        staleTimeoutSec: integer(staleInput?.value, sourceId.startsWith('evcs:') ? 30 : 60, 1, 86400),
+      }) || {});
     });
-    const renderedIds = new Set(out.map((entry) => entry.sourceId));
+    // Nicht mehr aktive/zugeordnete Geräte bleiben nicht heimlich steuerbar.
     list(workingConfig.resourceLinks).forEach((entry) => {
-      if (renderedIds.has(text(entry.sourceId))) return;
-      const normalized = normalizeLink(entry);
+      const sourceId = text(entry.sourceId);
+      if (!sourceId || renderedIds.has(sourceId)) return;
+      const normalized = normalizeLink({ ...entry, enabled: false, controlMode: 'observe', commissioningConfirmed: false, observeOnly: true, writeEnabled: false });
       if (normalized) out.push(normalized);
     });
-    workingConfig.resourceLinks = out.filter(Boolean);
+    workingConfig.resourceLinks = out.filter((entry) => text(entry.sourceId));
   }
 
   function syncCustomFromDom(): void {
@@ -920,10 +1059,47 @@
     if (text(active)) workingConfig.activeProfileId = text(active);
   }
 
+  function syncGlobalFromDom(): void {
+    const mode = byId('osMode') as HTMLSelectElement | null;
+    const stage = byId('osAutoStage') as HTMLSelectElement | null;
+    const commissioning = byId('osCommissioningConfirmed') as HTMLInputElement | null;
+    const takeover = byId('osControlTakeoverEnabled') as HTMLInputElement | null;
+    const execution = byId('osWriteExecutionEnabled') as HTMLInputElement | null;
+    const ttl = byId('osRequestTtlSeconds') as HTMLInputElement | null;
+    const fallback = byId('osGlobalFallback') as HTMLSelectElement | null;
+    if (mode) workingConfig.mode = mode.value === 'active' ? 'active' : 'observe';
+    if (commissioning) workingConfig.commissioningConfirmed = commissioning.checked;
+    if (takeover) workingConfig.controlTakeoverEnabled = takeover.checked;
+    if (execution) workingConfig.writeExecutionEnabled = execution.checked;
+    workingConfig.autoControl = record(workingConfig.autoControl);
+    if (stage) workingConfig.autoControl.stage = ['shadow', 'commissioning', 'active'].includes(stage.value) ? stage.value : 'shadow';
+    if (ttl) workingConfig.autoControl.requestTtlSeconds = integer(ttl.value, 15, 3, 60);
+    if (fallback) workingConfig.autoControl.fallback = fallback.value === 'pause' ? 'pause' : 'standardAuto';
+  }
+
   function syncFromDom(): void {
     if (!byId(ROOT_ID)) return;
+    const getCheck = (id: string, fallback = false): boolean => (byId(id) as HTMLInputElement | null)?.checked ?? fallback;
+    const getValue = (id: string, fallback = ''): string => text((byId(id) as HTMLInputElement | HTMLSelectElement | null)?.value, fallback);
+    workingConfig.mode = getValue('osMode', 'observe') === 'active' ? 'active' : 'observe';
+    workingConfig.commissioningConfirmed = getCheck('osCommissioningConfirmed', false);
+    workingConfig.controlTakeoverEnabled = getCheck('osControlTakeoverEnabled', false);
+    workingConfig.writeExecutionEnabled = getCheck('osWriteExecutionEnabled', false);
+    workingConfig.autoControl = {
+      ...record(workingConfig.autoControl),
+      enabled: true,
+      stage: ['shadow', 'commissioning', 'active'].includes(getValue('osAutoStage', 'shadow')) ? getValue('osAutoStage', 'shadow') : 'shadow',
+      requestTtlSeconds: integer(getValue('osRequestTtlSeconds', '15'), 15, 3, 60),
+      fallback: getValue('osGlobalFallback', 'standardAuto') === 'pause' ? 'pause' : 'standardAuto',
+    };
     const autoImport = byId('osAutoImportExisting') as HTMLInputElement | null;
     if (autoImport) workingConfig.autoImportExisting = autoImport.checked;
+    const systemMappings = normalizeSystemMappings(workingConfig.systemMappings);
+    document.querySelectorAll<HTMLInputElement>('[data-os-system-map]').forEach((node) => {
+      const key = text(node.getAttribute('data-os-system-map'));
+      if (key) systemMappings[key] = text(node.value);
+    });
+    workingConfig.systemMappings = systemMappings;
     syncLinksFromDom();
     syncCustomFromDom();
     syncProfilesFromDom();
@@ -1007,7 +1183,13 @@
       if (target) target.click();
     }));
 
-    document.querySelectorAll<HTMLElement>('[data-os-link-enabled],[data-os-link-priority],[data-os-link-role],[data-os-custom-field],[data-os-custom-map-key],[data-os-profile-field],[data-os-profile-reserve-field]')
+    // Die Teilnahme-Checkbox sitzt absichtlich in der kompakten Summary-Zeile.
+    // Ein Klick auf die Checkbox darf die Detailkarte nicht gleichzeitig auf-/zuklappen.
+    document.querySelectorAll<HTMLElement>('.nw-os-compact__check').forEach((label) => label.addEventListener('click', (event) => {
+      event.stopPropagation();
+    }));
+
+    document.querySelectorAll<HTMLElement>('#osMode,#osAutoStage,#osCommissioningConfirmed,#osControlTakeoverEnabled,#osWriteExecutionEnabled,#osRequestTtlSeconds,#osGlobalFallback,[data-os-link-enabled],[data-os-link-priority],[data-os-link-role],[data-os-link-control-mode],[data-os-link-commissioning],[data-os-link-auto-source],[data-os-link-fallback],[data-os-link-stale],[data-os-link-map-source],[data-os-system-map],[data-os-custom-field],[data-os-custom-map-key],[data-os-profile-field],[data-os-profile-reserve-field]')
       .forEach((node) => node.addEventListener('change', () => {
         syncFromDom();
       }));
@@ -1051,42 +1233,47 @@
     const eos = edition() === 'eos';
     const out = normalizeConfig(workingConfig);
     out.enabled = eos && enabled === true;
-    out.mode = 'observe';
-    out.controlTakeoverEnabled = false;
-    out.writeExecutionEnabled = false;
+    if (!out.enabled) out.mode = 'observe';
     out.controlContract = defaultControlContract();
+    const globalLive = out.enabled === true
+      && out.mode === 'active'
+      && out.commissioningConfirmed === true
+      && out.controlTakeoverEnabled === true
+      && out.writeExecutionEnabled === true
+      && record(out.autoControl).enabled !== false
+      && text(record(out.autoControl).stage) === 'active';
     const builder = ruleBuilder();
     out.rules = typeof builder.normalizeRules === 'function'
       ? builder.normalizeRules(out.rules, list(out.profiles).map((profile) => text(profile.id)))
       : [];
-    out.rules = list(out.rules).map((entry) => ({ ...entry, simulationOnly: true, executionEnabled: false }));
+    out.rules = list(out.rules).map((entry) => ({ ...entry, simulationOnly: !globalLive, executionEnabled: globalLive && entry.enabled !== false }));
     out.simulation = typeof builder.normalizeSimulation === 'function'
       ? builder.normalizeSimulation(out.simulation, out.activeProfileId)
       : { activeProfileId: out.activeProfileId, resourceStates: {} };
+    const activeIds = new Set(deriveExistingResources(fullConfig).map((resource) => text(resource.sourceId)));
     out.resourceLinks = list(out.resourceLinks).map((entry) => {
       const normalized = normalizeLink(entry);
       if (!normalized) return null;
+      const nativeLiveSupported = /^(evcs:|thermal:|heatingRod:|storage:|storagefarm:)/.test(normalized.sourceId);
+      const sourceStillActive = activeIds.has(normalized.sourceId);
+      const linkLive = globalLive && sourceStillActive && nativeLiveSupported && normalized.enabled === true && normalized.controlMode === 'active' && normalized.commissioningConfirmed === true;
       return {
         ...normalized,
-        observeOnly: true,
-        writeEnabled: false,
+        enabled: sourceStillActive ? normalized.enabled : false,
+        controlMode: sourceStillActive ? normalized.controlMode : 'observe',
+        commissioningConfirmed: sourceStillActive ? normalized.commissioningConfirmed : false,
+        observeOnly: !linkLive,
+        writeEnabled: linkLive,
         autoOnly: normalized.autoOnly === true,
       };
     }).filter(Boolean);
-    out.customResources = list(out.customResources).map((entry, index) => {
-      const normalized = normalizeCustomResource(entry, index);
-      return {
-        ...normalized,
-        observeOnly: true,
-        writeEnabled: false,
-        autoOnly: normalized.autoOnly === true,
-      };
-    });
+    out.customResources = list(out.customResources).map((entry, index) => ({
+      ...normalizeCustomResource(entry, index),
+      controlMode: 'observe', commissioningConfirmed: false, observeOnly: true, writeEnabled: false,
+    }));
     out.metadata = {
-      ...record(out.metadata),
-      foundationVersion: FOUNDATION_VERSION,
-      ruleBuilderVersion: RULE_BUILDER_VERSION,
-      lastEditedAt: new Date().toISOString(),
+      ...record(out.metadata), foundationVersion: FOUNDATION_VERSION, ruleBuilderVersion: RULE_BUILDER_VERSION,
+      liveControlVersion: LIVE_CONTROL_VERSION, lastEditedAt: new Date().toISOString(),
     };
     workingConfig = out;
     return clone(out);
