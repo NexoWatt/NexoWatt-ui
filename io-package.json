@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.178",
+    "version": "0.8.179",
     "news": {
       "0.8.178": {
         "de": "RC54 erweitert die App „Betriebsstrategien“ um einen modularen MUSS-/SOLL-/KANN-Regelbaukasten, Prioritäten, Zeitpläne, Bedingungen, Ziel-SoC-/Zielenergie-Regeln und einen schreibfreien Trockenlauf. Bestehende EOS-Geräte können ausdrücklich vorgemerkt und mit Strategierollen klassifiziert; unbekannte Geräte weiterhin manuell per Datenpunktzuordnung ergänzt werden. Eine Kundenkaskade für Kühlhaus, Fahrzeug, Speicher und Heizstab sowie die korrekt freigegebene Nachtenergie-Reserve sind als Vorlage enthalten. Die Stufe bleibt vollständig im Beobachtungs-/Simulationsmodus und erzeugt 0 Hardware-Schreibvorgänge.",

@@ -782,5 +782,16 @@
       "source": "^Modus:\\s*(.+)$",
       "target": "Modus: $1"
     }
-  ]
+  ],
+  "operatingStrategies.autoControl": "Automatische regeling",
+  "operatingStrategies.autoSource": "Automatische bron",
+  "operatingStrategies.autoSource.standard": "NexoWatt standaardautomaat",
+  "operatingStrategies.autoSource.strategy": "EOS-bedrijfsstrategie",
+  "operatingStrategies.controlStage": "Inbedrijfstellingsfase",
+  "operatingStrategies.controlStage.shadow": "Observatiemodus",
+  "operatingStrategies.controlStage.commissioning": "Inbedrijfstelling",
+  "operatingStrategies.controlStage.active": "Actief",
+  "operatingStrategies.resourceOptIn": "Deelname aan bedrijfsstrategie",
+  "operatingStrategies.fallback.standardAuto": "Terugvallen op standaardautomaat",
+  "operatingStrategies.fallback.pause": "Laden veilig pauzeren"
 }

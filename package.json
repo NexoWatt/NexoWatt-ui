@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.178",
+  "version": "0.8.179",
   "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -432,7 +432,9 @@
     "test:package-runtime-start-smoke": "node scripts/verify-package-runtime-start-smoke.js",
     "test:rc52-charging-diagnostics-log": "node scripts/verify-rc52-charging-diagnostics-log.js && node scripts/verify-rc52-charging-diagnostics-browser.js",
     "test:rc53-operating-strategies-foundation": "node scripts/verify-rc53-operating-strategies-foundation.js && node scripts/verify-rc53-operating-strategies-browser.js",
-    "test:rc54-operating-strategies-rule-builder": "node scripts/verify-rc54-operating-strategies-rules-simulation.js && node scripts/verify-rc54-operating-strategies-rule-builder.js && node scripts/verify-rc54-operating-strategies-browser.js"
+    "test:rc54-operating-strategies-rule-builder": "node scripts/verify-rc54-operating-strategies-rules-simulation.js && node scripts/verify-rc54-operating-strategies-rule-builder.js && node scripts/verify-rc54-operating-strategies-browser.js",
+    "test:rc55:auto-arbitration": "node scripts/test-rc55-operating-strategy-auto-arbitration.js",
+    "test:rc55:fail-closed": "node scripts/test-rc55-fail-closed.cjs"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

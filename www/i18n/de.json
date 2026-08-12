@@ -11,5 +11,16 @@
     "Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh.": "Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh."
   },
   "text": {},
-  "patterns": []
+  "patterns": [],
+  "operatingStrategies.autoControl": "Auto-Steuerung",
+  "operatingStrategies.autoSource": "Auto-Quelle",
+  "operatingStrategies.autoSource.standard": "NexoWatt Standard-Automatik",
+  "operatingStrategies.autoSource.strategy": "EOS Betriebsstrategie",
+  "operatingStrategies.controlStage": "Inbetriebnahmestufe",
+  "operatingStrategies.controlStage.shadow": "Beobachtungsbetrieb",
+  "operatingStrategies.controlStage.commissioning": "Inbetriebnahme",
+  "operatingStrategies.controlStage.active": "Aktiv",
+  "operatingStrategies.resourceOptIn": "Teilnahme an Betriebsstrategie",
+  "operatingStrategies.fallback.standardAuto": "Auf Standard-Automatik zurückfallen",
+  "operatingStrategies.fallback.pause": "Laden sicher pausieren"
 }

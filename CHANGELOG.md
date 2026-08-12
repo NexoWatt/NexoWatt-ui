@@ -1,5 +1,14 @@
 ## 0.8.178 - 2026-08-11
 
+## 0.8.179 (RC55) – Operating Strategies Auto Arbitration
+
+- Added fail-closed Auto ownership contract for `Auto → EOS Betriebsstrategie`.
+- Added explicit per-resource opt-in, Shadow/Commissioning/Active stages and commissioning confirmation.
+- Added TTL-based strategy requests with automatic fallback to Standard Auto.
+- Added deterministic MUST/SOLL/KANN arbitration and planner-envelope clamping.
+- Preserved the existing load-management and device writer as the only execution path.
+- No direct OCPP, Modbus or hardware state writes were added to the strategy module.
+
 - Die EOS-Pro-App „Betriebsstrategien“ um einen modularen Regelbaukasten mit MUSS-/SOLL-/KANN-Klassen, Prioritäten, Profilbezug, Zeitplänen, Prüffenstern und Wochentagen erweitert.
 - Frei kombinierbare Bedingungen für System-, Wetter-, Tarif- und Ressourcenwerte ergänzt. Fehlende Zielgeräte oder Messwerte werden sichtbar blockiert und nicht mit stillen Ersatzzuordnungen weiterverarbeitet.
 - Thermische Sicherheitsparameter für maximale Abschaltdauer, Mindestlauf-/Stillstandszeit, Temperaturgrenzen, Hysterese, Aktualität, Online-Status und Alarm ergänzt. Sicherheitsentscheidungen werden im Trockenlauf vor normalen Zielen priorisiert.
