@@ -1,3 +1,12 @@
+## 0.8.183 - 2026-08-13
+
+- Kritischen RC58-Laufzeitfehler im Lademanagement behoben: Das Diagnosefeld `ocppDatapointMappingMigrations` wird jetzt ausschließlich aus dem definierten Migrationsarray erzeugt. Ein leerer Satz wird als `[]` ausgegeben; der sicherheitskritische `chargingManagement`-Tick kann nicht mehr durch die nicht definierte Variable abbrechen.
+- Speicherfarm-Sicherheitsfreigabe wiederhergestellt: Nach einem erfolgreichen Lademanagement-Tick wird das gemeinsame Safety-Envelope wieder gültig aufgebaut, sodass berechnete Farm-Sollwerte nicht länger wegen des RC58-Tickfehlers auf `farm-stop` beziehungsweise 0 W geklemmt werden. Die fail-closed Schutzkopplung bleibt unverändert aktiv.
+- NexoWatt-OCPP21-Adapter ausschließlich über direkte native Datenpunkte unter `ocpp21.<Instanz>.<Station>.*` angebunden. Produktive Mess- und Schreibpfade verwenden keine `alias.0.nexowatt.ocpp.*`- oder `alias.0.ocpp21.*`-Zwischenschicht mehr.
+- Native OCPP21-Zuordnung für Leistung, Strom, Energie, SoC, Status, WebSocket-Verbindung, Transaktion, Datenaktualität, letzte Aktivität, RFID, `chargeLimit`, `availability` und Phasenanzahl ergänzt. Bekannte Alias- und ältere OCPP-Pfade dienen nur noch als stationsgebundene Migrationsquelle.
+- OCPP21-Zuordnung bei gemischten Ladepunkten gehärtet: Geräte werden nach Stationsidentität und nicht mehr nach Listenposition zugeordnet. Bestehende Modbus-, MQTT- und `nexowatt-devices`-Ladepunkte werden nicht überschrieben; für weitere OCPP21-Stationen wird ein leerer oder neuer Eintrag verwendet.
+- Browser-Regressionstest für gemischte Ladepunktlisten sowie vollständigen Laufzeittest für Lademanagement, OCPP21-Nativvertrag, Safety-Recovery und Speicherfarm-Freigabe ergänzt. Bestehende Boost-, Min+PV-, PV-, §14a-, Stations-, Netz- und Single-Writer-Regeln bleiben maßgeblich.
+
 ## 0.8.182 - 2026-08-12
 
 - Kompakten Datenpunktvertrag des NexoWatt-OCPP-Adapters 0.4 nativ in Erkennung und Lademanagement aufgenommen. Bevorzugt werden die stabilen öffentlichen Aliase unter `alias.0.nexowatt.ocpp.*`, anschließend der kompakte native Baum `ocpp21.*`; technische Aliase und der ältere `ocpp.*`-Adapter bleiben kompatible Rückfälle.

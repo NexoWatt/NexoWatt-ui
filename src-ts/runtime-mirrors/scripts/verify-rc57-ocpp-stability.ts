@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: af46a22bf3ce71d05eeaa12884f4792eda3a0548526efec41fe14dda559ad45e
+ * Original-Hash: f7f0cf05871daada6627243dc3bbb8acfad1926b8e295c9d4411d75326f55375
  */
 
 /**
@@ -51,7 +51,7 @@ const native = inferIoBrokerOcppConnectorContext(
 );
 assert.strictEqual(native.detected, true);
 assert.strictEqual(native.profile, OCPP);
-assert.strictEqual(native.adapterKind, 'nexowatt-ocpp-native-compact');
+assert.strictEqual(native.adapterKind, 'nexowatt-ocpp21-native-compact');
 assert.strictEqual(native.nativeDeviceRoot, 'ocpp21.0.CP_01');
 assert.strictEqual(native.connectorRoot, 'ocpp21.0.CP_01');
 assert.strictEqual(native.statusId, 'ocpp21.0.CP_01.info.status');
@@ -61,25 +61,25 @@ assert.strictEqual(native.dataFreshId, 'ocpp21.0.CP_01.health.dataFresh');
 assert.strictEqual(native.actualPowerId, 'ocpp21.0.CP_01.measurements.powerW');
 assert.strictEqual(native.setPowerId, 'ocpp21.0.CP_01.control.chargeLimit');
 
-// Stable public alias contract.
+// Historical aliases are accepted only as migration input and resolve to native OCPP21 IDs.
 const alias = inferIoBrokerOcppConnectorContext(
   'alias.0.nexowatt.ocpp.0.CP_01.powerW',
 );
 assert.strictEqual(alias.detected, true);
-assert.strictEqual(alias.adapterKind, 'nexowatt-ocpp-public-alias-compact');
+assert.strictEqual(alias.adapterKind, 'nexowatt-ocpp21-alias-migration');
 assert.strictEqual(alias.nativeDeviceRoot, 'ocpp21.0.CP_01');
-assert.strictEqual(alias.deviceRoot, 'alias.0.nexowatt.ocpp.0.CP_01');
-assert.strictEqual(alias.statusId, 'alias.0.nexowatt.ocpp.0.CP_01.status');
-assert.strictEqual(alias.socketConnectedId, 'alias.0.nexowatt.ocpp.0.CP_01.socketConnected');
-assert.strictEqual(alias.dataFreshId, 'alias.0.nexowatt.ocpp.0.CP_01.dataFresh');
-assert.strictEqual(alias.actualPowerId, 'alias.0.nexowatt.ocpp.0.CP_01.powerW');
-assert.strictEqual(alias.setPowerId, 'alias.0.nexowatt.ocpp.0.CP_01.chargeLimit');
+assert.strictEqual(alias.deviceRoot, 'ocpp21.0.CP_01');
+assert.strictEqual(alias.statusId, 'ocpp21.0.CP_01.info.status');
+assert.strictEqual(alias.socketConnectedId, 'ocpp21.0.CP_01.info.socketConnected');
+assert.strictEqual(alias.dataFreshId, 'ocpp21.0.CP_01.health.dataFresh');
+assert.strictEqual(alias.actualPowerId, 'ocpp21.0.CP_01.measurements.powerW');
+assert.strictEqual(alias.setPowerId, 'ocpp21.0.CP_01.control.chargeLimit');
 
 const compat = inferIoBrokerOcppConnectorContext(
   'alias.0.ocpp21.0.CP_01.powerW',
 );
 assert.strictEqual(compat.detected, true);
-assert.strictEqual(compat.adapterKind, 'nexowatt-ocpp-technical-alias-compact');
+assert.strictEqual(compat.adapterKind, 'nexowatt-ocpp21-alias-migration');
 assert.strictEqual(compat.nativeDeviceRoot, 'ocpp21.0.CP_01');
 
 // Physical WebSocket connectivity must replace only volatile OCPP activity or
@@ -126,7 +126,7 @@ assert.strictEqual(
   'A different OCPP station must never be silently remapped',
 );
 assert.strictEqual(isOcppDataFreshObjectId(native.dataFreshId, native), true);
-assert.strictEqual(isOcppDataFreshObjectId(alias.dataFreshId, native), true, 'Native and alias paths of the same station may be mixed');
+assert.strictEqual(isOcppDataFreshObjectId('alias.0.nexowatt.ocpp.0.CP_01.dataFresh', native), true, 'Native and alias paths of the same station may be mixed during migration');
 assert.strictEqual(isOcppDataFreshObjectId('mqtt.0.wallbox.dataFresh', native), false);
 
 // OCPP event order: a fresh Charging status and a real positive meter sample

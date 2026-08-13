@@ -48,7 +48,6 @@ mustNotContain('src-ts/runtime-executables/www/ems-apps.ts', 'root.enableStorage
 // Frontends müssen die zentrale /config Feature-Sichtbarkeit bevorzugen.
 for (const rel of [
   'src-ts/runtime-executables/www/app.ts',
-  'src-ts/runtime-executables/www/cockpit-shell.ts',
   'src-ts/runtime-executables/www/history.ts',
   'src-ts/runtime-executables/www/evcs.ts',
   'src-ts/runtime-executables/www/report-common.ts',
@@ -58,6 +57,8 @@ for (const rel of [
 ]) {
   mustContain(rel, 'featureVisibility.hasStorageFarm', `zentrale Feature-Sichtbarkeit in ${rel}`);
 }
+// cockpit-shell normalisiert /config.featureVisibility lokal als `fv`.
+mustContain('src-ts/runtime-executables/www/cockpit-shell.ts', 'fv.hasStorageFarm === true', 'zentrale Feature-Sichtbarkeit in cockpit-shell.ts');
 
 // Nach dem Runtime-Sync muss der gleiche Schutz auch im ausgelieferten JS stehen.
 mustContain('main.js', 'const appCenterActive = !!(app && app.installed === true && app.enabled === true);', 'Runtime-Backend AppCenter-Pflicht');
@@ -65,6 +66,6 @@ mustNotContain('main.js', 'out.enableStorageFarm = true;', 'Runtime-Backend-Hydr
 mustNotContain('www/ems-apps.js', 'root.enableStorageFarm = true;', 'Runtime-AppCenter-Hydration darf Farm nicht aktivieren');
 mustContain('www/app.js', 'function nwStorageFarmAppCenterActiveFromConfig', 'Runtime-LIVE AppCenter-Helfer');
 mustContain('www/app.js', 'featureVisibility.hasStorageFarm', 'Runtime-LIVE autoritative Farm-Sichtbarkeit');
-mustContain('www/cockpit-shell.js', 'featureVisibility.hasStorageFarm', 'Runtime-Shell Feature-Sichtbarkeit');
+mustContain('www/cockpit-shell.js', 'fv.hasStorageFarm === true', 'Runtime-Shell Feature-Sichtbarkeit');
 
 console.log('[storagefarm-menu-appcenter-gate] OK: Speicherfarm-Menü ist an AppCenter installed+enabled + echte Farm-DPs gebunden.');

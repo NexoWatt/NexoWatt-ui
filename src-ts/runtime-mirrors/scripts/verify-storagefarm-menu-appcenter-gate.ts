@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c69bd69ba3c51e43cd33ca4a44500f4ff60d1faadd4bcb6745892a15204cfa35
+ * Original-Hash: d3a83e2be86297995defc0d53e347e738cd22b83b466da3f26009e4c16b2a024
  */
 
 /**
@@ -122,7 +122,6 @@ mustNotContain('src-ts/runtime-executables/www/ems-apps.ts', 'root.enableStorage
 // Frontends müssen die zentrale /config Feature-Sichtbarkeit bevorzugen.
 for (const rel of [
   'src-ts/runtime-executables/www/app.ts',
-  'src-ts/runtime-executables/www/cockpit-shell.ts',
   'src-ts/runtime-executables/www/history.ts',
   'src-ts/runtime-executables/www/evcs.ts',
   'src-ts/runtime-executables/www/report-common.ts',
@@ -132,6 +131,8 @@ for (const rel of [
 ]) {
   mustContain(rel, 'featureVisibility.hasStorageFarm', `zentrale Feature-Sichtbarkeit in ${rel}`);
 }
+// cockpit-shell normalisiert /config.featureVisibility lokal als `fv`.
+mustContain('src-ts/runtime-executables/www/cockpit-shell.ts', 'fv.hasStorageFarm === true', 'zentrale Feature-Sichtbarkeit in cockpit-shell.ts');
 
 // Nach dem Runtime-Sync muss der gleiche Schutz auch im ausgelieferten JS stehen.
 mustContain('main.js', 'const appCenterActive = !!(app && app.installed === true && app.enabled === true);', 'Runtime-Backend AppCenter-Pflicht');
@@ -139,6 +140,6 @@ mustNotContain('main.js', 'out.enableStorageFarm = true;', 'Runtime-Backend-Hydr
 mustNotContain('www/ems-apps.js', 'root.enableStorageFarm = true;', 'Runtime-AppCenter-Hydration darf Farm nicht aktivieren');
 mustContain('www/app.js', 'function nwStorageFarmAppCenterActiveFromConfig', 'Runtime-LIVE AppCenter-Helfer');
 mustContain('www/app.js', 'featureVisibility.hasStorageFarm', 'Runtime-LIVE autoritative Farm-Sichtbarkeit');
-mustContain('www/cockpit-shell.js', 'featureVisibility.hasStorageFarm', 'Runtime-Shell Feature-Sichtbarkeit');
+mustContain('www/cockpit-shell.js', 'fv.hasStorageFarm === true', 'Runtime-Shell Feature-Sichtbarkeit');
 
 console.log('[storagefarm-menu-appcenter-gate] OK: Speicherfarm-Menü ist an AppCenter installed+enabled + echte Farm-DPs gebunden.');

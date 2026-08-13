@@ -11743,6 +11743,48 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return '';
   }
 
+  function _ocppStationIdentityFromRow(row) {
+    const r = row && typeof row === 'object' ? row : {};
+    for (const field of [
+      'powerId', 'energyTotalId', 'statusId', 'activeId', 'heartbeatId',
+      'onlineId', 'dataFreshId', 'setPowerWId', 'enableWriteId',
+      'vehicleSocId', 'rfidReadId',
+    ]) {
+      const identity = _ocppStationIdentityFromDp(r[field]);
+      if (identity) return identity;
+    }
+    const stationKey = String(r.stationKey || '').trim();
+    if (stationKey) {
+      const instanceMatch = String(r.ocppAdapterInstance || r.adapterInstance || '').match(/(?:^|\.)ocpp21\.(\d+)(?:\.|$)/i);
+      if (instanceMatch) return `${instanceMatch[1]}|${stationKey}`;
+    }
+    return '';
+  }
+
+  function _ocppStationIdentityFromConnector(connector) {
+    const c = connector && typeof connector === 'object' ? connector : {};
+    const ids = c.ids && typeof c.ids === 'object' ? c.ids : {};
+    for (const field of [
+      'powerId', 'energyTotalId', 'statusId', 'activeId', 'heartbeatId',
+      'onlineId', 'dataFreshId', 'setPowerWId', 'enableWriteId',
+      'vehicleSocId', 'rfidReadId',
+    ]) {
+      const identity = _ocppStationIdentityFromDp(ids[field]);
+      if (identity) return identity;
+    }
+    const baseIdentity = _ocppStationIdentityFromDp(c.base);
+    return baseIdentity || '';
+  }
+
+  function _isEmptyEvcsMappingRow(row) {
+    const r = row && typeof row === 'object' ? row : {};
+    return ![
+      'powerId', 'energyTotalId', 'statusId', 'activeId', 'vehicleConnectedId',
+      'chargeDemandId', 'heartbeatId', 'onlineId', 'dataFreshId', 'setCurrentAId',
+      'setPowerWId', 'enableWriteId', 'vehicleSocId', 'rfidReadId',
+    ].some(field => String(r[field] || '').trim());
+  }
+
   function _isKnownLegacyNexoWattOcppMapping(field, currentId, replacementId) {
     const current = String(currentId || '').trim();
     const replacement = String(replacementId || '').trim();
@@ -11751,11 +11793,24 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const replacementStation = _ocppStationIdentityFromDp(replacement);
     if (!currentStation || currentStation !== replacementStation) return false;
     const lower = current.toLowerCase();
+    const replacementLower = replacement.toLowerCase();
+    // Alias paths of the same station are always migrated to the direct native
+    // OCPP21 contract. They are never retained as productive read/write paths.
+    if (
+      (lower.startsWith('alias.0.nexowatt.ocpp.') || lower.startsWith('alias.0.ocpp21.'))
+      && replacementLower.startsWith('ocpp21.')
+    ) return true;
     const legacyByField = {
       powerId: ['.metervalues.power_active_import'],
       energyTotalId: ['.metervalues.energy_active_import_register', '.metervalues.energy_active_import_register_kwh'],
       statusId: ['.connector1status'],
+      activeId: ['.transactions.transactionactive'],
+      heartbeatId: ['.health.lastheartbeatms', '.info.lastheartbeat', '.heartbeat'],
+      dataFreshId: ['.health.datafresh', '.datafresh'],
+      setPowerWId: ['.control.chargelimit', '.chargelimit'],
+      enableWriteId: ['.control.availability', '.availability'],
       vehicleSocId: ['.metervalues.soc'],
+      rfidReadId: ['.info.rfid', '.rfid'],
     };
     if (field === 'statusId' && (/\.evse\.\d+\.connector\.\d+\.status$/i.test(current) || /\.connectors\.\d+_\d+\.status$/i.test(current))) return true;
     if (field === 'onlineId' && (
@@ -11825,7 +11880,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       out.energyTotalInputIsWh = c && c.energyTotalInputIsWh === true;
     }
 
-    // Compact NexoWatt OCPP contract metadata.
+    // Native NexoWatt OCPP21 contract metadata.
     if (c && c.telemetryProfile && (overwrite || onlyEmpty)) {
       if (overwrite || !String(out.telemetryProfile || '').trim() || String(out.telemetryProfile || '').trim().toLowerCase().includes('ocpp')) {
         out.telemetryProfile = String(c.telemetryProfile);
@@ -11855,11 +11910,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   async function ocppAutoDetect() {
     try {
-      setStatus('OCPP: Suche nach Ladepunkten…');
+      setStatus('OCPP21: Suche nach nativen Ladepunkten…');
       const { connectors } = await fetchOcppDiscovery();
 
       if (!connectors.length) {
-        setStatus('OCPP: Keine Ladepunkte gefunden (prüfe ob OCPP-Adapter läuft und Chargepoints angemeldet sind).', 'error');
+        setStatus('OCPP21: Keine Ladepunkte gefunden (prüfe, ob der NexoWatt-OCPP21-Adapter läuft und die Station verbunden ist).', 'error');
         return;
       }
 
@@ -11875,7 +11930,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (hasExisting) {
         const ok = window.confirm('Es sind bereits Ladepunkte konfiguriert.\n\nSoll die OCPP-Erkennung die aktuelle Konfiguration überschreiben?');
         if (!ok) {
-          setStatus('OCPP: Abgebrochen.', 'ok');
+          setStatus('OCPP21: Abgebrochen.', 'ok');
           return;
         }
       }
@@ -11895,9 +11950,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       try { buildStationGroupsUI(); } catch (_e) {}
       scheduleValidation(300);
 
-      setStatus(`OCPP: ${count} Ladepunkte erkannt und vorbelegt. Bitte „Speichern & EMS neu starten“ klicken.`, 'ok');
+      setStatus(`OCPP21: ${count} Ladepunkte direkt erkannt und vorbelegt. Bitte „Speichern & EMS neu starten“ klicken.`, 'ok');
     } catch (e) {
-      setStatus('OCPP: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
+      setStatus('OCPP21: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }
   }
   /**
@@ -11908,38 +11963,75 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   async function ocppMapExisting() {
     try {
-      setStatus('OCPP: Suche Datenpunkte…');
+      setStatus('OCPP21: Suche direkte native Datenpunkte…');
       const { connectors } = await fetchOcppDiscovery();
 
       if (!connectors.length) {
-        setStatus('OCPP: Keine Ladepunkte gefunden.', 'error');
+        setStatus('OCPP21: Keine nativen Ladepunkte gefunden.', 'error');
         return;
       }
 
       const sc = _ensureSettingsConfig();
       const currentCount = _clampInt(sc.evcsCount, 0, 50, 0);
+      const list = _ensureEvcsList(currentCount).slice();
+      const usedRows = new Set();
+      let migratedCount = 0;
+      let appendedCount = 0;
+      let skippedCount = 0;
 
-      if (connectors.length > currentCount) {
-        const ok = window.confirm(`OCPP hat ${connectors.length} Ladepunkte erkannt, konfiguriert sind aktuell ${currentCount}.\n\nSoll die Anzahl automatisch auf ${Math.min(50, connectors.length)} erhöht werden?`);
-        if (ok) {
-          sc.evcsCount = Math.min(50, connectors.length);
-          if (els.evcsCount) els.evcsCount.value = String(sc.evcsCount);
+      for (const connector of connectors) {
+        const connectorIdentity = _ocppStationIdentityFromConnector(connector);
+        let rowIndex = -1;
+
+        // 1. A previously configured OCPP21/alias row of the same station wins.
+        if (connectorIdentity) {
+          rowIndex = list.findIndex((row, index) => !usedRows.has(index) && _ocppStationIdentityFromRow(row) === connectorIdentity);
         }
+
+        // 2. An explicitly stored stationKey may identify a still-empty OCPP row.
+        if (rowIndex < 0 && connector && connector.stationKey) {
+          rowIndex = list.findIndex((row, index) => !usedRows.has(index)
+            && String(row && row.stationKey || '').trim() === String(connector.stationKey || '').trim()
+            && (_isEmptyEvcsMappingRow(row) || String(row && row.telemetryProfile || '').toLowerCase().includes('ocpp')));
+        }
+
+        // 3. Reuse only a genuinely empty row. Never overwrite a Modbus/MQTT or
+        // nexowatt-devices chargepoint merely because it occupies the same index.
+        if (rowIndex < 0) {
+          rowIndex = list.findIndex((row, index) => !usedRows.has(index) && _isEmptyEvcsMappingRow(row));
+        }
+
+        // 4. If all existing rows are occupied, append a dedicated OCPP21 row.
+        if (rowIndex < 0 && list.length < 50) {
+          rowIndex = list.length;
+          list.push({});
+          appendedCount += 1;
+        }
+
+        if (rowIndex < 0) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const before = JSON.stringify(list[rowIndex] || {});
+        list[rowIndex] = _applyOcppConnectorToRow(list[rowIndex], connector, { onlyEmpty: true });
+        if (JSON.stringify(list[rowIndex] || {}) !== before) migratedCount += 1;
+        usedRows.add(rowIndex);
       }
 
-      const count = _clampInt(sc.evcsCount, 0, 50, 0);
-      const list = _ensureEvcsList(count);
-
-      for (let i = 0; i < count && i < connectors.length; i++) {
-        list[i] = _applyOcppConnectorToRow(list[i], connectors[i], { onlyEmpty: true });
-      }
-      sc.evcsList = list;
+      sc.evcsCount = Math.min(50, list.length);
+      sc.evcsList = list.slice(0, sc.evcsCount);
+      if (els.evcsCount) els.evcsCount.value = String(sc.evcsCount);
 
       buildEvcsUI();
+      try { buildStationGroupsUI(); } catch (_e) {}
       scheduleValidation(300);
-      setStatus('OCPP: Leere Felder und bekannte OCPP-0.3-Pfade wurden auf den kompakten 0.4-Vertrag zugeordnet. Bitte speichern.', 'ok');
+      const parts = [`${migratedCount} OCPP21-Zuordnung(en) aktualisiert`];
+      if (appendedCount) parts.push(`${appendedCount} neuer Ladepunkt angelegt`);
+      if (skippedCount) parts.push(`${skippedCount} Station(en) wegen Maximalzahl nicht übernommen`);
+      setStatus(`OCPP21: ${parts.join(', ')}. Fremde Ladepunkte wurden nicht überschrieben. Bitte speichern.`, skippedCount ? 'error' : 'ok');
     } catch (e) {
-      setStatus('OCPP: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
+      setStatus('OCPP21: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }
   }
 
@@ -16477,14 +16569,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 if (els.ocppAutoDetect) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.ocppAutoDetect. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.ocppAutoDetect.addEventListener('click', () => {
-      ocppAutoDetect().catch(e => setStatus('OCPP: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+      ocppAutoDetect().catch(e => setStatus('OCPP21: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 
   if (els.ocppMapExisting) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.ocppMapExisting. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.ocppMapExisting.addEventListener('click', () => {
-      ocppMapExisting().catch(e => setStatus('OCPP: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+      ocppMapExisting().catch(e => setStatus('OCPP21: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 

@@ -18,7 +18,9 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ab5da9cc5a1247a7883531fb6b26b9d740cdbc2daa17d94290f42adfa1e7ce6d
+ * Original-Hash: cd7e7f2c182cbdb21f4a14f4d3b9a853b2b76e1018b8b63051353fc783aaa11c
+ * RC59-Prüfhinweis: Die produktive OCPP21-Nativzuordnung und die Runtime-Regressionen
+ * werden in den kanonischen Runtime-Executables sowie den RC59-Browsertests geprüft.
  */
 
 /**

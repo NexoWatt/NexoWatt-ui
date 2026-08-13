@@ -1405,7 +1405,7 @@ function strictFiniteEvcsNumber(value) {
 function inferIoBrokerOcppConnectorContext(...objectIds) {
     const candidates = objectIds.flat ? objectIds.flat(Infinity) : objectIds;
 
-    const buildNexoWattContext = ({ objectId, instance, station, layout, aliasRoot = '' }) => {
+    const buildNexoWattContext = ({ objectId, instance, station, layout }) => {
         const nativeDeviceRoot = `ocpp21.${instance}.${station}`;
         const parts = String(objectId || '').split('.');
         const lower = parts.map(part => String(part || '').toLowerCase());
@@ -1427,22 +1427,21 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
         const nativeCompactConnectorRoot = `${nativeDeviceRoot}.connectors.${evseNo}_${connectorNo}`;
         const nativeLegacyConnectorRoot = `${nativeDeviceRoot}.evse.${evseNo}.connector.${connectorNo}`;
         const nativeConnectorRoot = connectorDetails ? nativeCompactConnectorRoot : nativeDeviceRoot;
-        const deviceRoot = aliasRoot || nativeDeviceRoot;
-        const aliasConnectorStatusId = aliasRoot && connectorDetails && connectorNo > 0 ? `${aliasRoot}.connector${connectorNo}Status` : '';
-        const statusId = aliasRoot
-            ? (aliasConnectorStatusId || `${aliasRoot}.status`)
-            : (connectorDetails ? `${nativeCompactConnectorRoot}.status` : `${nativeDeviceRoot}.info.status`);
+        const statusId = connectorDetails ? `${nativeCompactConnectorRoot}.status` : `${nativeDeviceRoot}.info.status`;
         return {
             detected: true,
             profile: 'ocpp-1.6-event-driven',
             layout,
             adapterKind: layout,
-            contractVersion: 'nexowatt-ocpp-0.4-compact',
+            contractVersion: 'nexowatt-ocpp21-0.4-native',
             sourceObjectId: objectId,
             adapterInstance: `ocpp21.${instance}`,
-            deviceRoot,
+            // The NexoWatt UI uses only the native OCPP21 datapoint contract.
+            // Alias paths are accepted solely as a one-time migration input and
+            // are immediately canonicalised back to this native station root.
+            deviceRoot: nativeDeviceRoot,
             nativeDeviceRoot,
-            connectorRoot: aliasRoot ? deviceRoot : nativeConnectorRoot,
+            connectorRoot: nativeConnectorRoot,
             nativeConnectorRoot,
             nativeCompactConnectorRoot,
             nativeLegacyConnectorRoot,
@@ -1450,29 +1449,26 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
             evseNo,
             connectorNo,
             statusId,
-            chargingStateId: aliasRoot ? `${aliasRoot}.chargingState` : `${nativeDeviceRoot}.transactions.chargingState`,
-            transactionActiveId: aliasRoot ? `${aliasRoot}.txActive` : `${nativeDeviceRoot}.transactions.transactionActive`,
-            connectedId: aliasRoot ? `${aliasRoot}.connected` : `${nativeDeviceRoot}.info.connection`,
-            socketConnectedId: aliasRoot ? `${aliasRoot}.socketConnected` : `${nativeDeviceRoot}.info.socketConnected`,
-            activityFreshId: aliasRoot ? `${aliasRoot}.activityFresh` : `${nativeDeviceRoot}.health.activityFresh`,
-            dataFreshId: aliasRoot ? `${aliasRoot}.dataFresh` : `${nativeDeviceRoot}.health.dataFresh`,
-            powerFreshId: aliasRoot ? `${aliasRoot}.powerFresh` : `${nativeDeviceRoot}.health.powerFresh`,
-            heartbeatAliveId: aliasRoot ? `${aliasRoot}.heartbeatAlive` : `${nativeDeviceRoot}.health.heartbeatAlive`,
-            // lastSeenMs is intentionally native because the public compact alias
-            // exposes health booleans but no timestamp. Native and public alias
-            // belong to the same station and may safely be mixed.
+            chargingStateId: `${nativeDeviceRoot}.transactions.chargingState`,
+            transactionActiveId: `${nativeDeviceRoot}.transactions.transactionActive`,
+            connectedId: `${nativeDeviceRoot}.info.connection`,
+            socketConnectedId: `${nativeDeviceRoot}.info.socketConnected`,
+            activityFreshId: `${nativeDeviceRoot}.health.activityFresh`,
+            dataFreshId: `${nativeDeviceRoot}.health.dataFresh`,
+            powerFreshId: `${nativeDeviceRoot}.health.powerFresh`,
+            heartbeatAliveId: `${nativeDeviceRoot}.health.heartbeatAlive`,
             heartbeatId: `${nativeDeviceRoot}.health.lastSeenMs`,
-            actualPowerId: aliasRoot ? `${aliasRoot}.powerW` : `${nativeDeviceRoot}.measurements.powerW`,
-            actualCurrentId: aliasRoot ? `${aliasRoot}.currentTotalA` : `${nativeDeviceRoot}.measurements.currentA`,
-            energyTotalId: aliasRoot ? `${aliasRoot}.energyKWh` : `${nativeDeviceRoot}.measurements.energyKWh`,
-            energyTotalWhId: aliasRoot ? `${aliasRoot}.energyWh` : `${nativeDeviceRoot}.measurements.energyWh`,
+            actualPowerId: `${nativeDeviceRoot}.measurements.powerW`,
+            actualCurrentId: `${nativeDeviceRoot}.measurements.currentA`,
+            energyTotalId: `${nativeDeviceRoot}.measurements.energyKWh`,
+            energyTotalWhId: `${nativeDeviceRoot}.measurements.energyWh`,
             energyTotalInputIsWh: false,
-            vehicleSocId: aliasRoot ? `${aliasRoot}.soc` : `${nativeDeviceRoot}.measurements.socPercent`,
+            vehicleSocId: `${nativeDeviceRoot}.measurements.socPercent`,
             vehicleNeedsSocId: `${nativeDeviceRoot}.vehicle.socPercent`,
-            rfidId: aliasRoot ? `${aliasRoot}.rfid` : `${nativeDeviceRoot}.info.rfid`,
-            setPowerId: aliasRoot ? `${aliasRoot}.chargeLimit` : `${nativeDeviceRoot}.control.chargeLimit`,
-            availabilityId: aliasRoot ? `${aliasRoot}.availability` : `${nativeDeviceRoot}.control.availability`,
-            numberPhasesId: aliasRoot ? `${aliasRoot}.numberPhases` : `${nativeDeviceRoot}.control.numberOfPhases`,
+            rfidId: `${nativeDeviceRoot}.info.rfid`,
+            setPowerId: `${nativeDeviceRoot}.control.chargeLimit`,
+            availabilityId: `${nativeDeviceRoot}.control.availability`,
+            numberPhasesId: `${nativeDeviceRoot}.control.numberOfPhases`,
             lastCommandId: `${nativeDeviceRoot}.control.lastCommand`,
             lastCommandAtId: `${nativeDeviceRoot}.control.lastCommandAt`,
             lastCommandSuccessId: `${nativeDeviceRoot}.control.lastSuccess`,
@@ -1489,7 +1485,7 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
 
         // NexoWatt OCPP native compact tree: ocpp21.<Instanz>.<Station>....
         if (parts.length >= 3 && lower[0] === 'ocpp21' && /^\d+$/.test(String(parts[1] || '')) && parts[2]) {
-            return buildNexoWattContext({ objectId, instance: parts[1], station: parts[2], layout: 'nexowatt-ocpp-native-compact' });
+            return buildNexoWattContext({ objectId, instance: parts[1], station: parts[2], layout: 'nexowatt-ocpp21-native-compact' });
         }
 
         // Stabiler öffentlicher Alias: alias.0.nexowatt.ocpp.<Instanz>.<Station>....
@@ -1506,8 +1502,7 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
                 objectId,
                 instance: parts[4],
                 station: parts[5],
-                layout: 'nexowatt-ocpp-public-alias-compact',
-                aliasRoot: parts.slice(0, 6).join('.'),
+                layout: 'nexowatt-ocpp21-alias-migration',
             });
         }
 
@@ -1524,8 +1519,7 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
                 objectId,
                 instance: parts[3],
                 station: parts[4],
-                layout: 'nexowatt-ocpp-technical-alias-compact',
-                aliasRoot: parts.slice(0, 5).join('.'),
+                layout: 'nexowatt-ocpp21-alias-migration',
             });
         }
 
@@ -1694,7 +1688,7 @@ function resolveOcppOnlineObjectId(configuredOnlineId, ocppContext) {
 
 /**
  * Erkennt ausschließlich bekannte OCPP-Datenpunktverträge derselben Station.
- * Dadurch können 0.3-Pfade nach dem kompakten 0.4-Update sicher migriert werden,
+ * Dadurch können Alias- und ältere OCPP-Pfade sicher auf den nativen OCPP21-Vertrag migriert werden,
  * ohne kundenspezifische MQTT-/Modbus-Zuordnungen anzutasten.
  */
 function isKnownOcppSemanticObjectId(objectId, ocppContext, semantic) {
@@ -1719,7 +1713,7 @@ function isKnownOcppSemanticObjectId(objectId, ocppContext, semantic) {
     return (suffixes[semantic] || []).some(suffix => lower.endsWith(suffix));
 }
 
-/** Liefert den kanonischen OCPP-0.4-Datenpunkt für dieselbe Station. */
+/** Liefert den kanonischen nativen OCPP21-Datenpunkt für dieselbe Station. */
 function resolveOcppCanonicalObjectId(configuredObjectId, ocppContext, semantic) {
     const configured = String(configuredObjectId || '').trim();
     if (!ocppContext || ocppContext.detected !== true) return configured;
@@ -4904,7 +4898,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('ocppConnectorRoot', 'Erkannter OCPP-Connectorpfad', 'string', 'text');
         await mk('ocppAdapterKind', 'Erkannte OCPP-Adapterstruktur', 'string', 'text');
         await mk('ocppDatapointContract', 'Erkannter OCPP-Datenpunktvertrag', 'string', 'text');
-        await mk('ocppDatapointMappingMigrated', 'OCPP-0.3-Zuordnung auf kompakten 0.4-Vertrag migriert', 'boolean', 'indicator');
+        await mk('ocppDatapointMappingMigrated', 'Alte OCPP-/Alias-Zuordnung auf nativen OCPP21-Vertrag migriert', 'boolean', 'indicator');
         await mk('ocppDatapointMappingMigrations', 'OCPP-Datenpunktmigrationen (json)', 'string', 'json');
         await mk('onlineSourceId', 'Verwendeter Online-/Verbindungs-Datenpunkt', 'string', 'text');
         await mk('onlineIdWasDataFresh', 'Fehlzuordnung dataFresh als Online automatisch getrennt', 'boolean', 'indicator');
@@ -5811,7 +5805,7 @@ class ChargingManagementModule extends BaseModule {
             if (telemetryProfile === 'ocpp-1.6-event-driven' && !transactionActiveId) mappingIssues.push('ocpp_no_transaction_state');
             if (onlineIdWasDataFresh) mappingIssues.push('ocpp_online_datafresh_migrated');
             else if (onlineSourceMigrated) mappingIssues.push('ocpp_online_source_migrated');
-            if (ocppDatapointMappingMigrated) mappingIssues.push('ocpp_0_4_compact_mapping_migrated');
+            if (ocppDatapointMappingMigrated) mappingIssues.push('ocpp21_native_mapping_migrated');
 
             let meterAgeMs = 0;
             let meterStale = false;
@@ -6743,7 +6737,7 @@ class ChargingManagementModule extends BaseModule {
                 onlineSourceMigrated,
                 ocppDatapointContract: telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.contractVersion || '') : '',
                 ocppDatapointMappingMigrated,
-                ocppDatapointMappingMigrations,
+                ocppDatapointMappingMigrations: Array.isArray(ocppDatapointMigrations) ? ocppDatapointMigrations : [],
                 dataFreshId,
                 dataFreshKnown,
                 dataFresh,

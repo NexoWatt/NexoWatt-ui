@@ -3982,7 +3982,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.182',
+        liveControlVersion: '0.8.183',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -16256,93 +16256,66 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           ? Math.max(1, Math.min(50, Math.round(Number(q.max))))
           : 50;
 
-        // NexoWatt OCPP 0.4 exposes a deliberately compact station-level tree
-        // plus a stable public alias contract. Prefer that contract before the
-        // generic legacy scanner so old meterValues/evse paths cannot be selected
-        // after an adapter update.
-        const compactObjects = {};
-        const compactPatterns = [
-          'alias.0.nexowatt.ocpp.*',
-          'ocpp21.*',
-          'alias.0.ocpp21.*',
-        ];
-        for (const pattern of compactPatterns) {
-          try {
-            const found = await this.getForeignObjectsAsync(pattern, 'state');
-            Object.assign(compactObjects, found || {});
-          } catch (_compactScanError) {
-            // A missing optional alias subtree must not block the native scan.
-          }
+        // NexoWatt EOS uses the native compact datapoint contract of its own
+        // OCPP21 adapter directly. Aliases are deliberately not part of automatic
+        // discovery, because they can be missing, stale or resolve through a
+        // different ioBroker write path. Existing alias configurations are migrated
+        // by ChargingManagement/UI to these native IDs.
+        let compactObjects = {};
+        try {
+          compactObjects = await this.getForeignObjectsAsync('ocpp21.*', 'state') || {};
+        } catch (_compactScanError) {
+          compactObjects = {};
         }
 
         const compactGroups = new Map();
-        const ensureCompactGroup = (instance, station) => {
-          const key = `${instance}|${station}`;
-          if (!compactGroups.has(key)) compactGroups.set(key, { instance: String(instance), station: String(station), publicRoot: '', nativeRoot: '', technicalRoot: '' });
-          return compactGroups.get(key);
-        };
         for (const id of Object.keys(compactObjects)) {
-          let m = String(id).match(/^alias\.0\.nexowatt\.ocpp\.(\d+)\.([^.]+)\./);
-          if (m) {
-            ensureCompactGroup(m[1], m[2]).publicRoot = `alias.0.nexowatt.ocpp.${m[1]}.${m[2]}`;
-            continue;
-          }
-          m = String(id).match(/^ocpp21\.(\d+)\.([^.]+)\./);
-          if (m) {
-            ensureCompactGroup(m[1], m[2]).nativeRoot = `ocpp21.${m[1]}.${m[2]}`;
-            continue;
-          }
-          m = String(id).match(/^alias\.0\.ocpp21\.(\d+)\.([^.]+)\./);
-          if (m) ensureCompactGroup(m[1], m[2]).technicalRoot = `alias.0.ocpp21.${m[1]}.${m[2]}`;
+          const match = String(id).match(/^ocpp21\.(\d+)\.([^.]+)\./);
+          if (!match) continue;
+          const key = `${match[1]}|${match[2]}`;
+          if (!compactGroups.has(key)) compactGroups.set(key, { instance: String(match[1]), station: String(match[2]) });
         }
 
         const compactHas = (id) => !!(id && compactObjects[id]);
         const compactPick = (...ids) => ids.flat().map(id => String(id || '').trim()).find(compactHas) || '';
         const compactConnectors = [];
         for (const group of compactGroups.values()) {
-          const publicRoot = group.publicRoot;
-          const nativeRoot = group.nativeRoot || `ocpp21.${group.instance}.${group.station}`;
-          const technicalRoot = group.technicalRoot;
-          const preferredRoot = publicRoot || (compactHas(`${nativeRoot}.measurements.powerW`) ? nativeRoot : technicalRoot);
-          if (!preferredRoot) continue;
-
-          const aliasId = (name) => publicRoot ? `${publicRoot}.${name}` : '';
-          const techId = (name) => technicalRoot ? `${technicalRoot}.${name}` : '';
+          const nativeRoot = `ocpp21.${group.instance}.${group.station}`;
           const nativeId = (suffix) => `${nativeRoot}.${suffix}`;
-          const powerId = compactPick(aliasId('powerW'), nativeId('measurements.powerW'), techId('powerW'));
-          const energyKWhId = compactPick(aliasId('energyKWh'), nativeId('measurements.energyKWh'), techId('energyKWh'));
-          const energyWhId = compactPick(aliasId('energyWh'), nativeId('measurements.energyWh'), techId('energyWh'));
+          const powerId = compactPick(nativeId('measurements.powerW'));
+          const energyKWhId = compactPick(nativeId('measurements.energyKWh'));
+          const energyWhId = compactPick(nativeId('measurements.energyWh'));
           const energyTotalId = energyKWhId || energyWhId;
           const ids = {
             powerId,
             energyTotalId,
-            statusId: compactPick(aliasId('status'), nativeId('info.status'), techId('status')),
-            activeId: compactPick(aliasId('txActive'), nativeId('transactions.transactionActive'), techId('txActive')),
+            statusId: compactPick(nativeId('info.status')),
+            activeId: compactPick(nativeId('transactions.transactionActive')),
             vehicleConnectedId: '',
             chargeDemandId: '',
             heartbeatId: compactPick(nativeId('health.lastSeenMs')),
-            onlineId: compactPick(aliasId('socketConnected'), nativeId('info.socketConnected'), techId('socketConnected')),
-            dataFreshId: compactPick(aliasId('dataFresh'), nativeId('health.dataFresh'), techId('dataFresh')),
+            onlineId: compactPick(nativeId('info.socketConnected')),
+            dataFreshId: compactPick(nativeId('health.dataFresh')),
             setCurrentAId: '',
-            setPowerWId: compactPick(aliasId('chargeLimit'), nativeId('control.chargeLimit'), techId('chargeLimit')),
-            enableWriteId: compactPick(aliasId('availability'), nativeId('control.availability'), techId('availability')),
-            vehicleSocId: compactPick(aliasId('soc'), nativeId('measurements.socPercent'), nativeId('vehicle.socPercent'), techId('soc')),
-            rfidReadId: compactPick(aliasId('rfid'), nativeId('info.rfid'), techId('rfid')),
-            currentId: compactPick(aliasId('currentTotalA'), nativeId('measurements.currentA'), techId('currentTotalA')),
+            setPowerWId: compactPick(nativeId('control.chargeLimit')),
+            enableWriteId: compactPick(nativeId('control.availability')),
+            vehicleSocId: compactPick(nativeId('measurements.socPercent'), nativeId('vehicle.socPercent')),
+            rfidReadId: compactPick(nativeId('info.rfid')),
+            currentId: compactPick(nativeId('measurements.currentA')),
           };
           if (!Object.values(ids).some(value => String(value || '').trim())) continue;
           compactConnectors.push({
             stationKey: group.station,
             connectorNo: 1,
-            base: preferredRoot,
+            base: nativeRoot,
             name: group.station,
             ids,
             energyTotalInputIsWh: !!energyWhId && !energyKWhId,
             energyUnit: energyKWhId ? 'kWh' : (energyWhId ? 'Wh' : ''),
             telemetryProfile: 'nexowattocpp',
             controlPreference: 'powerW',
-            contractVersion: 'nexowatt-ocpp-0.4-compact',
-            adapterKind: publicRoot ? 'nexowatt-ocpp-public-alias-compact' : (preferredRoot === nativeRoot ? 'nexowatt-ocpp-native-compact' : 'nexowatt-ocpp-technical-alias-compact'),
+            contractVersion: 'nexowatt-ocpp21-0.4-native',
+            adapterKind: 'nexowatt-ocpp21-native-compact',
           });
         }
         compactConnectors.sort((a, b) => String(a.stationKey).localeCompare(String(b.stationKey)));
@@ -16351,10 +16324,26 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
             ok: true,
             ts: now,
             usedFallback: false,
-            discoveryContract: 'nexowatt-ocpp-0.4-compact',
+            discoveryContract: 'nexowatt-ocpp21-0.4-native',
             totalStates: Object.keys(compactObjects).length,
             connectorCount: compactConnectors.length,
             connectors: compactConnectors.slice(0, maxConnectors),
+          });
+        }
+
+        // The normal installer path intentionally stops here. A legacy scan can
+        // only be requested explicitly for diagnostics and is never used by the
+        // NexoWatt UI auto-mapping flow.
+        const allowLegacyDiscovery = ['1', 'true', 'yes'].includes(String(q.legacy || '').trim().toLowerCase());
+        if (!allowLegacyDiscovery) {
+          return res.json({
+            ok: true,
+            ts: now,
+            usedFallback: false,
+            discoveryContract: 'nexowatt-ocpp21-0.4-native',
+            totalStates: Object.keys(compactObjects).length,
+            connectorCount: 0,
+            connectors: [],
           });
         }
 
