@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 33d9f017ce9d43410c67245adbf80b8103fd5b7969fcef4c72955c81938bc725
+ * Original-Hash: a8716c2f8c6f326a43dc28ef97d44d5e8b212dc714129398bd8fb7928dab90b3
  */
 
 /**
@@ -99,7 +99,7 @@ for (const file of storageFiles) {
   must(file, "const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';", 'Zonenbesitzer ist aktives MultiUse');
   must(file, 'const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;', 'Reserve aus zentraler Policy');
   must(file, 'const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;', 'LSK aus zentraler Policy');
-  must(file, 'const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Eigenverbrauchs-Floor aus zentraler Policy');
+  must(file, 'let selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Eigenverbrauchs-Floor aus zentraler Policy');
   must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Assist nur MultiUse');
   must(file, 'const maxByDemandW = measuredDemandCapW;', 'Entlade-Demand-Cap ohne alten Sollwert');
   mustNot(file, 'const selfMinSoc = clamp(num((multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMinSocPct : undefined, reserveMin)', 'versteckter inaktiver MultiUse-Fallback');

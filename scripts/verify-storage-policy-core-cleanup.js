@@ -30,7 +30,7 @@ for (const file of [
   must(file, "const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';", 'MultiUse führt nur im aktiven Modus');
   must(file, 'const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;', 'Reserve aus Resolver');
   must(file, 'const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;', 'LSK aus Resolver');
-  must(file, 'const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
+  must(file, 'let selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
   must(file, 'const selfTargetGridW = activeStorageNvpTargetW;', 'NVP-Ziel aus der aktiven Topologie-Policy');
   must(file, 'const selfImportThresholdW = activeStorageNvpHysteresisW;', 'NVP-Hysterese aus der aktiven Topologie-Policy');
   must(file, "await this._setIfChanged('speicher.regelung.selfNvpTuningTopology'", 'Topologie-Quellendiagnose');

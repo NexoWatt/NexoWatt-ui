@@ -152,7 +152,7 @@ const {
   normalizeFarmPower: nwNormalizeFarmPower,
 } = require('./ems/services/storage-farm-aggregation');
 const { physicalPvSourceKey: nwPhysicalPvSourceKey, dedupePvSourceRows: nwDedupePvSourceRows, applyPvCapacityPlausibility: nwApplyPvCapacityPlausibility } = require('./ems/services/pv-source-identity');
-const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
+const { resolveEvcsControlMapping, normalizeEvcsChargeDemandObjectId } = require('./ems/evcs-control-mapping');
 const { normalizeStorageDatapointsConfig: nwNormalizeStorageDatapointsConfig } = require('./ems/services/storage-datapoint-config');
 const {
   resolveControlMode: nwResolveFeneconControlMode,
@@ -3982,7 +3982,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.183',
+        liveControlVersion: '0.8.185',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -8776,6 +8776,25 @@ class NexoWattVis extends utils.Adapter {
       }
     };
 
+    const canUseEvcsReadDp = async (id) => {
+      const objectId = String(id || '').trim();
+      if (!objectId) return false;
+      try {
+        const obj = await this.getForeignObjectAsync(objectId);
+        if (obj && obj.type === 'state') {
+          return !(obj.common && obj.common.read === false);
+        }
+      } catch (_eObj) {
+        // Ältere Geräte-/Aliasobjekte können kurz nach Adapterstart noch fehlen.
+      }
+      try {
+        const state = await this.getForeignStateAsync(objectId);
+        return !!state;
+      } catch (_eState) {
+        return false;
+      }
+    };
+
 
     // derive evcs list (names) from config; keep it stable and only as long as explicitly configured
     const configuredActiveEvcsCount = Array.from({ length: evcsCount }, (_unused, index) => rawList[index] || {})
@@ -8788,13 +8807,25 @@ class NexoWattVis extends utils.Adapter {
       let controlMappingAutoResolvedCurrent = false;
       let controlMappingAutoResolvedPower = false;
       let controlMappingAutoResolvedEnable = false;
+      let controlMappingAutoResolvedPowerRead = false;
+      let controlMappingAutoResolvedEnergyTotal = false;
+      let controlMappingAutoResolvedStatus = false;
+      let controlMappingAutoResolvedVehicleConnected = false;
+      let controlMappingAutoResolvedOnline = false;
+      let controlMappingAutoResolvedHeartbeat = false;
       try {
-        const resolved = await resolveEvcsControlMapping(row, canUseEvcsControlDp);
+        const resolved = await resolveEvcsControlMapping(row, canUseEvcsControlDp, canUseEvcsReadDp);
         if (resolved && resolved.row) row = resolved.row;
         controlMappingAutoResolved = !!(resolved && resolved.changed);
         controlMappingAutoResolvedCurrent = !!(resolved && resolved.inferredCurrent);
         controlMappingAutoResolvedPower = !!(resolved && resolved.inferredPower);
         controlMappingAutoResolvedEnable = !!(resolved && resolved.inferredEnable);
+        controlMappingAutoResolvedPowerRead = !!(resolved && resolved.inferredPowerRead);
+        controlMappingAutoResolvedEnergyTotal = !!(resolved && resolved.inferredEnergyTotal);
+        controlMappingAutoResolvedStatus = !!(resolved && resolved.inferredStatus);
+        controlMappingAutoResolvedVehicleConnected = !!(resolved && resolved.inferredVehicleConnected);
+        controlMappingAutoResolvedOnline = !!(resolved && resolved.inferredOnline);
+        controlMappingAutoResolvedHeartbeat = !!(resolved && resolved.inferredHeartbeat);
         if (controlMappingAutoResolved) {
           // Die Ergänzung wird absichtlich nur in die laufende Native-Konfiguration
           // gespiegelt. Beim nächsten Start wird sie erneut sicher validiert; eine
@@ -8806,6 +8837,12 @@ class NexoWattVis extends utils.Adapter {
               controlMappingAutoResolvedCurrent ? 'Sollstrom' : '',
               controlMappingAutoResolvedPower ? 'Sollleistung' : '',
               controlMappingAutoResolvedEnable ? 'Freigabe' : '',
+              controlMappingAutoResolvedPowerRead ? 'Istleistung' : '',
+              controlMappingAutoResolvedEnergyTotal ? 'Energiezähler' : '',
+              controlMappingAutoResolvedStatus ? 'Status' : '',
+              controlMappingAutoResolvedVehicleConnected ? 'Fahrzeugkontakt' : '',
+              controlMappingAutoResolvedOnline ? 'Online' : '',
+              controlMappingAutoResolvedHeartbeat ? 'Heartbeat' : '',
             ].filter(Boolean).join(', ');
             this.log.info(`[NexoWatt EOS] Ladepunkt ${i + 1}: Steuer-Datenpunkte automatisch aus der Geräte-Aliasstruktur ergänzt (${parts || 'Mapping'}).`);
           } catch (_eLog) {}
@@ -8824,9 +8861,11 @@ class NexoWattVis extends utils.Adapter {
       // Ladepunkt aktivieren; manuelle kWh-Zuordnungen bleiben unveraendert.
       const energyTotalInputIsWh = !!(row && row.energyTotalInputIsWh === true);
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
+      const chargingStateId = (row && typeof row.chargingStateId === 'string' && row.chargingStateId.trim()) ? row.chargingStateId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
       const vehicleConnectedId = (row && typeof row.vehicleConnectedId === 'string' && row.vehicleConnectedId.trim()) ? row.vehicleConnectedId.trim() : '';
-      const chargeDemandId = (row && typeof row.chargeDemandId === 'string' && row.chargeDemandId.trim()) ? row.chargeDemandId.trim() : '';
+      const chargeDemandConfiguredId = (row && typeof row.chargeDemandId === 'string' && row.chargeDemandId.trim()) ? row.chargeDemandId.trim() : '';
+      const chargeDemandId = normalizeEvcsChargeDemandObjectId(chargeDemandConfiguredId);
       const heartbeatId = (row && typeof row.heartbeatId === 'string' && row.heartbeatId.trim()) ? row.heartbeatId.trim() : '';
       const vehicleConnectedTrueValues = (row && typeof row.vehicleConnectedTrueValues === 'string') ? row.vehicleConnectedTrueValues.trim() : '';
       const vehicleConnectedFalseValues = (row && typeof row.vehicleConnectedFalseValues === 'string') ? row.vehicleConnectedFalseValues.trim() : '';
@@ -8907,7 +8946,7 @@ class NexoWattVis extends utils.Adapter {
       const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
         || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
       const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
-      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, telemetryProfile, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, chargingStateId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, telemetryProfile, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable, controlMappingAutoResolvedPowerRead, controlMappingAutoResolvedEnergyTotal, controlMappingAutoResolvedStatus, controlMappingAutoResolvedVehicleConnected, controlMappingAutoResolvedOnline, controlMappingAutoResolvedHeartbeat });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -8976,6 +9015,7 @@ class NexoWattVis extends utils.Adapter {
       { configuredId: wb.onlineId, key: `evcs.${index}.online` },
       { configuredId: wb.dataFreshId, key: `evcs.${index}.dataFresh` },
       { configuredId: wb.activeId, key: `evcs.${index}.active` },
+      { configuredId: wb.chargingStateId, key: `evcs.${index}.chargingState`, mirrorAsString: true },
       { configuredId: wb.vehicleConnectedId, key: `evcs.${index}.vehicleConnected`, mirrorAsString: true },
       { configuredId: wb.chargeDemandId, key: `evcs.${index}.chargeDemand`, mirrorAsString: true },
       { configuredId: wb.heartbeatId, key: `evcs.${index}.heartbeat`, mirrorAsString: true },
@@ -16290,6 +16330,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
             powerId,
             energyTotalId,
             statusId: compactPick(nativeId('info.status')),
+            chargingStateId: compactPick(nativeId('transactions.chargingState')),
             activeId: compactPick(nativeId('transactions.transactionActive')),
             vehicleConnectedId: '',
             chargeDemandId: '',
@@ -17133,6 +17174,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           addId(wb.energyTotalId);
           addId(wb.statusId);
           addId(wb.activeId);
+          addId(wb.chargingStateId);
           addId(wb.vehicleConnectedId);
           addId(wb.chargeDemandId);
           addId(wb.heartbeatId);
@@ -17214,6 +17256,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
               energyTotalId: wb.energyTotalId || '',
               statusId: wb.statusId || '',
               activeId: wb.activeId || '',
+              chargingStateId: wb.chargingStateId || '',
               vehicleConnectedId: wb.vehicleConnectedId || '',
               chargeDemandId: wb.chargeDemandId || '',
               heartbeatId: wb.heartbeatId || '',
@@ -22370,7 +22413,7 @@ app.get('/config', async (req, res) => {
       const datapointFlags = Object.fromEntries(Object.entries(datapoints).map(([k, v]) => [k, !!String(v == null ? '' : v).trim()]));
 
       const evcsMappedFields = [
-        'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'onlineId', 'dataFreshId',
+        'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'chargingStateId', 'activeId', 'vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'onlineId', 'dataFreshId',
         'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'phaseSwitchId', 'rfidReadId',
         'vehicleSocId'
       ];

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1b799b4e80f7a6db81a382cb6abb7b4bb016a1d3bdb1b3a68558c3452bab8fa5
+ * Original-Hash: f1641319d95cd540be69e34719596b52528bda5fbaba3dc5bc61e21fbf553ffa
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:6a9576d8f30a7fa138535499a428ab5157170372b4cb6eae8d42e2589445af0f
+ * Quell-Hash: sha256:7040aa7d2b04dc7fa3dc390e6125df815136e461aaed2d97975242ad48d080bf
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -613,6 +613,7 @@ class EmsEngine {
       // Online detection: prefer explicit online dp (bool), keep statusId as display/status fallback.
       const onlineId = (wb.onlineId || '').trim();
       const statusId = (wb.statusId || '').trim();
+      const chargingStateId = (wb.chargingStateId || '').trim();
       const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
       const chargeDemandId = (wb.chargeDemandId || '').trim();
       const heartbeatId = (wb.heartbeatId || '').trim();
@@ -729,6 +730,7 @@ class EmsEngine {
         ...(enableId ? { enableId } : {}),
         ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
+        ...(chargingStateId ? { chargingStateId } : {}),
         ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
         ...(chargeDemandId ? { chargeDemandId } : {}),
         ...(heartbeatId ? { heartbeatId } : {}),

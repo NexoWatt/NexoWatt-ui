@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c763ed4d358d0476fd0324ffb625bac8fd9d7b600c37925b106aa90ef4499aad
+ * Original-Hash: 53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/charging-budget-helpers.ts
- * Quell-Hash: sha256:e382d241a8048d43b48eb7588bd05598420e955bb57a579c4dc0bb62c4daaa1f
+ * Quell-Hash: sha256:4fe5604bc550ae2b628ed6944dc32460c30e348e28a5b51547d18646a39fc31c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -317,10 +317,51 @@ function computeChargingMinimumServicePlan() {
     const goalBlocked = !boost && !!w.goalEnabled && (goalStatus === 'waiting_soc' || goalStatus === 'soc_stale');
     const demandConfirmed = w.vehicleDemandConfirmed === true
       || (w.vehicleDemandConfirmed === undefined && w.vehiclePlugged === true);
-    const commandDemandAllowed = demandConfirmed || boost;
+    // Ein semantisch verbundenes Fahrzeug darf in Auto/Min+PV seine technische
+    // Mindestleistung als begrenzten Startversuch reservieren. Reines PV bleibt
+    // weiterhin vollständig PV-Grant-geführt und ist deshalb unten ausgeschlossen.
+    const startProbeAllowed = w.vehicleStartEligible === true
+      && w.vehicleStartCooldownActive !== true;
+    const commandDemandAllowed = demandConfirmed || boost || startProbeAllowed;
     const hasSetpoint = !!(w.setAKey || w.setWKey || w.setCurrentAId || w.setPowerWId);
     const controlToken = String(w.controlBasis || 'auto').trim().toLowerCase();
     const controllable = controlToken !== 'none' || hasSetpoint;
+
+    const maxW = Number.isFinite(Number(w.maxPW ?? w.maxPowerW))
+      ? Math.max(0, Number(w.maxPW ?? w.maxPowerW))
+      : Number.POSITIVE_INFINITY;
+    const minWRaw = Number(w.minPW ?? w.minPowerW);
+    const minW = Number.isFinite(minWRaw) ? Math.max(0, Math.min(maxW, minWRaw)) : 0;
+
+    // Die Betriebsstrategien-App darf Auto ausdrücklich pausieren oder unter
+    // die technische Mindestleistung begrenzen. Ein solcher Ladepunkt darf in
+    // der vorgelagerten Fairnessplanung keine Mindestleistung reservieren, weil
+    // er sie im selben Tick anschließend nicht verwenden könnte. Sonst würde
+    // ein pausierter Ladepunkt aktive Nachbarn unnötig verdrängen.
+    const autoSource = String(w.userAutoSource || '').trim().toLowerCase();
+    const userMode = String(w.userMode || w.effectiveMode || '').trim().toLowerCase();
+    const strategy = w.strategyOverlay && typeof w.strategyOverlay === 'object'
+      ? w.strategyOverlay
+      : null;
+    const strategyOwnsAuto = !!strategy
+      && ['auto', 'default', 'global', ''].includes(userMode)
+      && ['strategy', 'operating-strategy', 'operating_strategy'].includes(autoSource);
+    const strategyAction = strategyOwnsAuto ? String(strategy.action || 'standard').trim().toLowerCase() : '';
+    const strategyPaused = strategyOwnsAuto && (
+      strategy.fallbackPause === true
+      || ['pause', 'off', 'block', 'disable', 'stop'].includes(strategyAction)
+    );
+    let strategyCapW = null;
+    if (strategyOwnsAuto && strategy.active === true) {
+      const targetCapW = Number(strategy.targetPowerW);
+      const maxCapW = Number(strategy.maxPowerW);
+      if (Number.isFinite(targetCapW)) strategyCapW = Math.max(0, targetCapW);
+      if (Number.isFinite(maxCapW)) {
+        const normalizedMaxCapW = Math.max(0, maxCapW);
+        strategyCapW = strategyCapW === null ? normalizedMaxCapW : Math.min(strategyCapW, normalizedMaxCapW);
+      }
+    }
+    const strategyBelowMinimum = strategyCapW !== null && minW > 0 && strategyCapW + 1 < minW;
     const eligible = !!safe
       && w.enabled !== false
       && w.online !== false
@@ -328,17 +369,14 @@ function computeChargingMinimumServicePlan() {
       && controllable
       && mode !== 'pv'
       && mode !== 'off'
-      && !goalBlocked;
+      && !goalBlocked
+      && !strategyPaused
+      && !strategyBelowMinimum;
     if (!eligible) {
       if (safe) minimumBySafe.set(safe, 0);
       continue;
     }
 
-    const maxW = Number.isFinite(Number(w.maxPW ?? w.maxPowerW))
-      ? Math.max(0, Number(w.maxPW ?? w.maxPowerW))
-      : Number.POSITIVE_INFINITY;
-    const minWRaw = Number(w.minPW ?? w.minPowerW);
-    const minW = Number.isFinite(minWRaw) ? Math.max(0, Math.min(maxW, minWRaw)) : 0;
     if (!(minW > 0)) {
       minimumBySafe.set(safe, 0);
       continue;

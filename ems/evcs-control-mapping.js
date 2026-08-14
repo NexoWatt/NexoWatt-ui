@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/evcs-control-mapping.ts
- * Quell-Hash: sha256:25bd882ba8b622b50198b83e9ebe4fd90db954f5c2ef0a9da8e59bf3ccb993a7
+ * Quell-Hash: sha256:c18ed7fac2ff56d672c80167818a4356d6d13c8d8072657372ca634376cad99f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -17,41 +17,29 @@
  */
 /**
  * Datei: ems/evcs-control-mapping.js
- * Rolle: Feldkompatible Auflösung von EVCS-Steuer-Datenpunkten.
+ * Rolle: Feldkompatible Auflösung von EVCS-Mess- und Steuer-Datenpunkten.
  *
- * Zweck:
- * - Ältere und neuere Versionen von `nexowatt-devices` verwenden für dieselbe
- *   Sollwertfunktion unterschiedliche Aliasnamen (`currentLimitA`/`powerLimitW`
- *   bzw. `targetCurrentA`/`targetPowerW`).
- * - Bestehende Kundenkonfigurationen dürfen deshalb nach einem Update nicht als
- *   "nicht steuerbar" gelten, nur weil die Sollwertfelder noch nicht erneut im
- *   AppCenter gespeichert wurden.
- * - Explizit konfigurierte Installer-Datenpunkte werden niemals überschrieben.
- *
- * Sicherheitsregel:
- * Der Aufrufer entscheidet über `exists(id)`, ob ein Kandidat tatsächlich als
- * schreibbarer State vorhanden ist. Diese Datei konstruiert nur Kandidaten und
- * führt selbst keine ioBroker-Schreiboperation aus.
+ * Ziel:
+ * - `nexowatt-devices` stellt herstellerunabhängige EVCS-Fähigkeiten über einen
+ *   stabilen Gerätevertrag bereit. Das Lademanagement soll diese Fähigkeiten
+ *   automatisch übernehmen, ohne herstellerspezifische Sonderlogik zu benötigen.
+ * - Explizite Installer-Zuordnungen bleiben immer autoritativ.
+ * - Ein Ladepunkt darf niemals Mess- oder Steuerpfade mehrerer Gerätebasen
+ *   mischen. Alle automatisch ergänzten DPs stammen deshalb aus genau einer
+ *   Gerätebasis.
+ * - Ein Ladebedarf-DP wird bewusst NICHT automatisch abgeleitet. Ein falsches
+ *   `charging=true` als Ladebedarf würde sonst den Startpfad blockieren oder ein
+ *   volles Fahrzeug wiederholt anfordern. Startfähigkeit wird aus Status und
+ *   Fahrzeugkontakt semantisch normalisiert.
  */
 
 'use strict';
 
-/**
- * Normalisiert optionale Konfigurationswerte auf einen getrimmten Text.
- * Die arguments-Schreibweise hält diese ausführbare TS-Quelle zugleich als
- * valides JavaScript nutzbar; der Runtime-Sync führt keinen Transpiler aus.
- */
 function text() {
     const value = arguments[0];
     return String(value === undefined || value === null ? '' : value).trim();
 }
 
-/**
- * Extrahiert aus einem bekannten Geräte-DP den stabilen Gerätebasis-Pfad.
- * Beispiel:
- * `nexowatt-devices.0.devices.lp2.aliases.r.power`
- * -> `nexowatt-devices.0.devices.lp2`
- */
 function deriveNexowattDeviceBaseId() {
     const id = Function.prototype.apply.call(text, null, [arguments[0]]);
     if (!id) return '';
@@ -59,7 +47,6 @@ function deriveNexowattDeviceBaseId() {
     return match && match[1] ? Function.prototype.apply.call(text, null, [match[1]]) : '';
 }
 
-/** Entfernt leere und doppelte Kandidaten ohne deren Prioritätsreihenfolge zu ändern. */
 function unique() {
     const values = arguments[0];
     return Array.from(new Set((Array.isArray(values) ? values : [])
@@ -67,16 +54,14 @@ function unique() {
         .filter(Boolean)));
 }
 
-/**
- * Erstellt alle bekannten kompatiblen Sollwertkandidaten für einen Gerätepfad.
- * Die eindeutigen Target-Aliase werden bevorzugt; Legacy-Limit-/Set-Aliase
- * bleiben vollständig kompatibel.
- */
 function buildEvcsControlCandidates() {
     const base = Function.prototype.apply.call(text, null, [arguments[0]]);
     if (!base) return { current: [], power: [], enable: [] };
     return {
         current: [
+            `${base}.aliases.v1.ctrl.targetCurrentA`,
+            `${base}.aliases.v1.ctrl.currentLimitA`,
+            `${base}.aliases.v1.ctrl.setCurrentA`,
             `${base}.aliases.ctrl.targetCurrentA`,
             `${base}.aliases.ctrl.currentLimitA`,
             `${base}.aliases.ctrl.setCurrentA`,
@@ -85,6 +70,9 @@ function buildEvcsControlCandidates() {
             `${base}.ctrl.setCurrentA`,
         ],
         power: [
+            `${base}.aliases.v1.ctrl.targetPowerW`,
+            `${base}.aliases.v1.ctrl.powerLimitW`,
+            `${base}.aliases.v1.ctrl.setPowerW`,
             `${base}.aliases.ctrl.targetPowerW`,
             `${base}.aliases.ctrl.powerLimitW`,
             `${base}.aliases.ctrl.setPowerW`,
@@ -93,6 +81,9 @@ function buildEvcsControlCandidates() {
             `${base}.ctrl.setPowerW`,
         ],
         enable: [
+            `${base}.aliases.v1.ctrl.run`,
+            `${base}.aliases.v1.ctrl.enable`,
+            `${base}.aliases.v1.ctrl.enabled`,
             `${base}.aliases.ctrl.run`,
             `${base}.aliases.ctrl.enable`,
             `${base}.aliases.ctrl.enabled`,
@@ -103,7 +94,74 @@ function buildEvcsControlCandidates() {
     };
 }
 
-/** Liefert den ersten vom Aufrufer bestätigten, real vorhandenen Steuer-State. */
+/**
+ * Herstellerunabhängige EVCS-Telemetrie des `nexowatt-devices`-Vertrags.
+ * Reihenfolge: versionierter stabiler Vertrag, Legacy-Vertrag, Rohpfad.
+ */
+function buildEvcsTelemetryCandidates() {
+    const base = Function.prototype.apply.call(text, null, [arguments[0]]);
+    if (!base) {
+        return {
+            power: [], energyTotal: [], status: [], vehicleConnected: [], online: [], heartbeat: [],
+        };
+    }
+    return {
+        power: [
+            `${base}.aliases.v1.r.power`,
+            `${base}.aliases.r.power`,
+            `${base}.r.power`,
+            `${base}.aliases.v1.r.powerEstimated`,
+            `${base}.aliases.r.powerEstimated`,
+            `${base}.r.powerEstimated`,
+        ],
+        energyTotal: [
+            `${base}.aliases.v1.r.energyTotal`,
+            `${base}.aliases.r.energyTotal`,
+            `${base}.r.energyTotal`,
+        ],
+        status: [
+            // Mode-3-/EV-Zustände sind für Startfähigkeit aussagekräftiger als
+            // ein generischer numerischer Gerätecode.
+            `${base}.aliases.v1.r.mode3State`,
+            `${base}.aliases.r.mode3State`,
+            `${base}.r.mode3State`,
+            `${base}.aliases.v1.r.mode3Code`,
+            `${base}.aliases.r.mode3Code`,
+            `${base}.r.mode3Code`,
+            `${base}.aliases.v1.r.evState`,
+            `${base}.aliases.r.evState`,
+            `${base}.r.evState`,
+            `${base}.aliases.v1.r.statusText`,
+            `${base}.aliases.r.statusText`,
+            `${base}.r.statusText`,
+            `${base}.aliases.v1.r.statusCode`,
+            `${base}.aliases.r.statusCode`,
+            `${base}.r.statusCode`,
+        ],
+        vehicleConnected: [
+            `${base}.aliases.v1.r.vehicleConnected`,
+            `${base}.aliases.r.vehicleConnected`,
+            `${base}.r.vehicleConnected`,
+        ],
+        online: [
+            `${base}.aliases.v1.r.online`,
+            `${base}.aliases.r.online`,
+            `${base}.r.online`,
+            `${base}.aliases.v1.comm.connected`,
+            `${base}.aliases.comm.connected`,
+            `${base}.comm.connected`,
+        ],
+        heartbeat: [
+            `${base}.aliases.v1.r.lastSeenMs`,
+            `${base}.aliases.r.lastSeenMs`,
+            `${base}.r.lastSeenMs`,
+            `${base}.aliases.v1.r.heartbeat`,
+            `${base}.aliases.r.heartbeat`,
+            `${base}.r.heartbeat`,
+        ],
+    };
+}
+
 async function firstExisting() {
     const candidates = arguments[0];
     const exists = arguments[1];
@@ -113,27 +171,70 @@ async function firstExisting() {
             if (await exists(id)) return id;
         } catch (_e) {
             // Ein einzelner nicht lesbarer Kandidat darf die restliche Suche
-            // nicht abbrechen. Der Aufrufer protokolliert bei Bedarf Details.
+            // nicht abbrechen.
         }
     }
     return '';
 }
 
 /**
- * Ergänzt fehlende EVCS-Sollwertpfade anhand der zugeordneten Geräte-DPs.
+ * Ein Beobachtungs-DP wie `r.charging` oder `transactionActive` ist kein
+ * eigener Ladebedarfswunsch. Alte Zuordnungen werden beim Start neutralisiert,
+ * damit ein noch nicht gestartetes Fahrzeug nicht durch `false` blockiert wird.
+ */
+function normalizeEvcsChargeDemandObjectId() {
+    const id = Function.prototype.apply.call(text, null, [arguments[0]]);
+    if (!id) return '';
+    const token = id.toLowerCase();
+    if (/(?:^|\.)(?:aliases(?:\.v1)?\.)?r\.(?:charging|active)$/.test(token)) return '';
+    if (/(?:^|\.)transactions\.(?:transactionactive|chargingstate)$/.test(token)) return '';
+    if (/(?:^|\.)(?:transactionactive|chargingactive|chargeactive|ischarging)$/.test(token)) return '';
+    return id;
+}
+
+/**
+ * Alte Schnellzuordnungen nutzten häufig nur den generischen Gerätecode.
+ * Wenn derselbe NexoWatt-Devices-Ladepunkt inzwischen einen semantisch
+ * aussagekräftigeren Mode-3-/EV-Zustand anbietet, darf genau diese bekannte
+ * automatische Zuordnung stationsgleich aktualisiert werden. Frei gewählte
+ * Installer-Datenpunkte bleiben unberührt.
+ */
+function isUpgradeableNexowattEvcsStatusObjectId() {
+    const id = Function.prototype.apply.call(text, null, [arguments[0]]).toLowerCase();
+    if (!id || !Function.prototype.apply.call(deriveNexowattDeviceBaseId, null, [id])) return false;
+    return /(?:^|\.)(?:aliases(?:\.v1)?\.)?r\.(?:statuscode|statustext)$/.test(id);
+}
+
+function baseBelongsToRow() {
+    const baseId = Function.prototype.apply.call(text, null, [arguments[0]]);
+    const row = arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : {};
+    if (!baseId) return false;
+    const fields = [
+        'powerId', 'actualPowerWId', 'energyTotalId', 'statusId', 'onlineId',
+        'vehicleConnectedId', 'heartbeatId', 'setCurrentAId', 'setPowerWId',
+        'enableWriteId', 'phaseSwitchId', 'phaseFeedbackId',
+    ];
+    return fields.some((field) => Function.prototype.apply.call(deriveNexowattDeviceBaseId, null, [row[field]]) === baseId);
+}
+
+/**
+ * Ergänzt fehlende EVCS-Mess- und Steuerpfade aus genau einer Gerätebasis.
  *
- * Wichtige Feldregel:
- * Ein Ladepunkt darf niemals Steuerpfade mehrerer Gerätebasen mischen. Es wird
- * vollständig die erste Gerätebasis verwendet, auf der reale Steuer-States
- * gefunden werden. Explizite Installer-Zuordnungen bleiben unangetastet.
+ * @param {object} row
+ * @param {(id:string)=>Promise<boolean>} writeExists
+ * @param {(id:string)=>Promise<boolean>} [readExists]
  */
 async function resolveEvcsControlMapping() {
     const row = arguments[0];
-    const exists = arguments[1];
+    const writeExists = arguments[1];
+    const readExists = typeof arguments[2] === 'function' ? arguments[2] : writeExists;
     const source = row && typeof row === 'object' ? row : {};
     const out = { ...source };
+    const normalizedChargeDemandId = Function.prototype.apply.call(normalizeEvcsChargeDemandObjectId, null, [out.chargeDemandId]);
+    const ignoredObservationDemand = !!Function.prototype.apply.call(text, null, [out.chargeDemandId]) && !normalizedChargeDemandId;
+    out.chargeDemandId = normalizedChargeDemandId;
 
-    const baseIds = Function.prototype.apply.call(unique, null, [[
+    const sourceFields = [
         source.baseId,
         source.deviceBaseId,
         source.deviceId,
@@ -156,54 +257,93 @@ async function resolveEvcsControlMapping() {
         source.setCurrentAId,
         source.setPowerWId,
         source.enableWriteId,
-    ].map((value) => Function.prototype.apply.call(deriveNexowattDeviceBaseId, null, [value]))]);
+    ];
+    const baseIds = Function.prototype.apply.call(unique, null, [sourceFields
+        .map((value) => Function.prototype.apply.call(deriveNexowattDeviceBaseId, null, [value]))]);
 
-    let inferredCurrent = false;
-    let inferredPower = false;
-    let inferredEnable = false;
+    const flags = {
+        inferredCurrent: false,
+        inferredPower: false,
+        inferredEnable: false,
+        inferredPowerRead: false,
+        inferredEnergyTotal: false,
+        inferredStatus: false,
+        upgradedStatus: false,
+        inferredVehicleConnected: false,
+        inferredOnline: false,
+        inferredHeartbeat: false,
+    };
     let usedBaseId = '';
 
+    // Die erste bereits explizit verwendete Gerätebasis hat Vorrang. Ohne
+    // expliziten Pfad wird die erste Basis mit mindestens einer realen Fähigkeit
+    // gewählt. Danach werden ausschließlich Kandidaten dieser Basis ergänzt.
     for (const baseId of baseIds) {
-        const candidates = Function.prototype.apply.call(buildEvcsControlCandidates, null, [baseId]);
-        const currentId = !Function.prototype.apply.call(text, null, [out.setCurrentAId])
-            ? await Function.prototype.apply.call(firstExisting, null, [candidates.current, exists])
-            : '';
-        const powerId = !Function.prototype.apply.call(text, null, [out.setPowerWId])
-            ? await Function.prototype.apply.call(firstExisting, null, [candidates.power, exists])
-            : '';
-        const enableId = !Function.prototype.apply.call(text, null, [out.enableWriteId])
-            ? await Function.prototype.apply.call(firstExisting, null, [candidates.enable, exists])
-            : '';
-        if (!currentId && !powerId && !enableId) continue;
+        const control = Function.prototype.apply.call(buildEvcsControlCandidates, null, [baseId]);
+        const telemetry = Function.prototype.apply.call(buildEvcsTelemetryCandidates, null, [baseId]);
+        const explicitBase = Function.prototype.apply.call(baseBelongsToRow, null, [baseId, source]);
 
+        const resolved = {
+            current: !Function.prototype.apply.call(text, null, [out.setCurrentAId])
+                ? await Function.prototype.apply.call(firstExisting, null, [control.current, writeExists]) : '',
+            power: !Function.prototype.apply.call(text, null, [out.setPowerWId])
+                ? await Function.prototype.apply.call(firstExisting, null, [control.power, writeExists]) : '',
+            enable: !Function.prototype.apply.call(text, null, [out.enableWriteId])
+                ? await Function.prototype.apply.call(firstExisting, null, [control.enable, writeExists]) : '',
+            powerRead: !Function.prototype.apply.call(text, null, [out.powerId || out.actualPowerWId])
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.power, readExists]) : '',
+            energyTotal: !Function.prototype.apply.call(text, null, [out.energyTotalId])
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.energyTotal, readExists]) : '',
+            status: (!Function.prototype.apply.call(text, null, [out.statusId])
+                || (Function.prototype.apply.call(deriveNexowattDeviceBaseId, null, [out.statusId]) === baseId
+                    && Function.prototype.apply.call(isUpgradeableNexowattEvcsStatusObjectId, null, [out.statusId])))
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.status, readExists]) : '',
+            vehicleConnected: !Function.prototype.apply.call(text, null, [out.vehicleConnectedId])
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.vehicleConnected, readExists]) : '',
+            online: !Function.prototype.apply.call(text, null, [out.onlineId])
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.online, readExists]) : '',
+            heartbeat: !Function.prototype.apply.call(text, null, [out.heartbeatId])
+                ? await Function.prototype.apply.call(firstExisting, null, [telemetry.heartbeat, readExists]) : '',
+        };
+
+        const foundAny = Object.values(resolved).some(Boolean);
+        if (!explicitBase && !foundAny) continue;
         usedBaseId = baseId;
-        if (currentId) {
-            out.setCurrentAId = currentId;
-            inferredCurrent = true;
+
+        if (resolved.current) { out.setCurrentAId = resolved.current; flags.inferredCurrent = true; }
+        if (resolved.power) { out.setPowerWId = resolved.power; flags.inferredPower = true; }
+        if (resolved.enable) { out.enableWriteId = resolved.enable; flags.inferredEnable = true; }
+        if (resolved.powerRead) { out.powerId = resolved.powerRead; flags.inferredPowerRead = true; }
+        if (resolved.energyTotal) {
+            out.energyTotalId = resolved.energyTotal;
+            // Der NexoWatt-Gerätevertrag führt kumulierte EVCS-Energie in Wh.
+            out.energyTotalInputIsWh = true;
+            flags.inferredEnergyTotal = true;
         }
-        if (powerId) {
-            out.setPowerWId = powerId;
-            inferredPower = true;
+        if (resolved.status && resolved.status !== Function.prototype.apply.call(text, null, [out.statusId])) {
+            const hadStatus = !!Function.prototype.apply.call(text, null, [out.statusId]);
+            out.statusId = resolved.status;
+            flags.inferredStatus = true;
+            flags.upgradedStatus = hadStatus;
         }
-        if (enableId) {
-            out.enableWriteId = enableId;
-            inferredEnable = true;
-        }
+        if (resolved.vehicleConnected) { out.vehicleConnectedId = resolved.vehicleConnected; flags.inferredVehicleConnected = true; }
+        if (resolved.online) { out.onlineId = resolved.online; flags.inferredOnline = true; }
+        if (resolved.heartbeat) { out.heartbeatId = resolved.heartbeat; flags.inferredHeartbeat = true; }
         break;
     }
 
-    // Ist nur eine numerische Sollwertart vorhanden, wird die Auswahl explizit.
-    // Bei zwei Sollwerten bleibt `auto`; AC bevorzugt dann weiterhin Strom.
     const preference = Function.prototype.apply.call(text, null, [out.controlPreference]).toLowerCase();
     const hasCurrentTarget = !!Function.prototype.apply.call(text, null, [out.setCurrentAId]);
     const hasPowerTarget = !!Function.prototype.apply.call(text, null, [out.setPowerWId]);
     let preferenceMigrated = false;
     if (preference === 'none' || preference === 'off') {
-        // Alte Versionen boten `none` als zweiten, versteckten Abschalter an.
-        // Sobald ein echter Sollwert-DP vorhanden ist, wird dieser Altwert auf
-        // `auto` migriert. Die bewusste Deaktivierung erfolgt ausschließlich
-        // über `enabled` / „Aktiv (Regelung)“.
-        if (hasCurrentTarget || hasPowerTarget) {
+        if (hasPowerTarget && !hasCurrentTarget) {
+            out.controlPreference = 'powerW';
+            preferenceMigrated = true;
+        } else if (hasCurrentTarget && !hasPowerTarget) {
+            out.controlPreference = 'currentA';
+            preferenceMigrated = true;
+        } else if (hasCurrentTarget && hasPowerTarget) {
             out.controlPreference = 'auto';
             preferenceMigrated = true;
         }
@@ -212,21 +352,22 @@ async function resolveEvcsControlMapping() {
         else if (hasCurrentTarget && !hasPowerTarget) out.controlPreference = 'currentA';
     }
 
+    const inferredAny = Object.values(flags).some(Boolean);
     return {
         row: out,
-        changed: inferredCurrent || inferredPower || inferredEnable || preferenceMigrated,
-        inferredCurrent,
-        inferredPower,
-        inferredEnable,
+        changed: inferredAny || preferenceMigrated || ignoredObservationDemand,
+        ...flags,
         preferenceMigrated,
+        ignoredObservationDemand,
         baseId: usedBaseId || baseIds[0] || '',
     };
 }
 
-// `eval('module')` hält die Datei unter strict TypeScript ohne Node-Typ-Paket
-// prüfbar und erzeugt zugleich unverändertes CommonJS für die ioBroker-Runtime.
 eval('module').exports = {
     deriveNexowattDeviceBaseId,
     buildEvcsControlCandidates,
+    buildEvcsTelemetryCandidates,
+    normalizeEvcsChargeDemandObjectId,
+    isUpgradeableNexowattEvcsStatusObjectId,
     resolveEvcsControlMapping,
 };

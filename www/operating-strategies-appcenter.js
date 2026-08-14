@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/operating-strategies-appcenter.ts
- * Quell-Hash: sha256:7a35baf405a3989a89dbcd3c31ec1e4162fc11e50f2ad1e24db85e747262bcc3
+ * Quell-Hash: sha256:55d603cb8534f9ea009b29764f4f3185b11104a6768d07eb0161a8377e27894a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -27,7 +27,7 @@
     'use strict';
     const FOUNDATION_VERSION = '0.8.177';
     const RULE_BUILDER_VERSION = '0.8.178';
-    const LIVE_CONTROL_VERSION = '0.8.183';
+    const LIVE_CONTROL_VERSION = '0.8.185';
     const APP_ID = 'operatingStrategies';
     const ROOT_ID = 'nwOperatingStrategiesRoot';
     let setStatus = () => { };

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b848a3889bedabbb2a810d57d296f77f495a6be40db598c6da98bf0dbe2e84cf
+ * Original-Hash: 4c63accdb2ace60b89a712c5c30bcab91d5d05128965a944458c74851da6151c
  */
 
 /**
@@ -87,7 +87,7 @@ assert(controlTs.includes("coupling: (String(storage.coupling"), 'Speicherregelu
 assert(controlTs.includes('dcPvPowerObjectId'), 'Speicherregelung muss erkennen, ob DC-PV wirklich gemappt ist');
 assert(controlTs.includes('speicher.regelung.speicherKopplung'), 'Speicherregelung muss die Kopplung diagnostizieren');
 assert(controlTs.includes('speicher.regelung.dcPvPowerW'), 'Speicherregelung muss DC-PV diagnostizieren');
-assert(controlTs.includes("pushCandidate(this.dp.getNumberFresh('st.dcPvPowerW'"), 'FENECON-/0-Einspeise-Kontext muss DC-PV als Tages-/PV-Signal nutzen können');
+assert(controlTs.includes("pushPv(ctx.dcPvPowerW, 'st.dcPvPowerW'"), 'FENECON-/0-Einspeise-Kontext muss DC-PV als Tages-/PV-Signal nutzen können');
 
 assert(mainTs.includes("this.config.storage.coupling || '').trim().toLowerCase() === 'dc'"), 'Energiefluss/Historie muss Einzel-DC-Speicher erkennen');
 assert(mainTs.includes("this._nwGetNumberFromCache('speicher.dcPvPowerW')"), 'Energiefluss/Historie muss den Einzel-DC-PV-Mirror lesen');

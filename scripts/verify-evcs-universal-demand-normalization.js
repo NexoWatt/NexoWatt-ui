@@ -5,7 +5,8 @@
  * Regression RC19: Herstellerunabhängige EVCS-Zustände müssen auf eine
  * einheitliche Fahrzeug-/Ladebedarfssemantik abgebildet werden. Freie
  * AppCenter-DPs und Wertemappings bleiben autoritativ; OCPP `Available`
- * darf kein Budget reservieren, ABL/IEC B2 dagegen schon.
+ * darf kein Budget reservieren. Verbundene/startbare Zustände wie Alfen B1/B2
+ * und OCPP EVConnected/Occupied erhalten nur einen begrenzten Startversuch.
  */
 
 const assert = require('assert');
@@ -16,10 +17,12 @@ const root = path.resolve(__dirname, '..');
 const charging = require(path.join(root, 'ems/modules/charging-management.js'));
 const {
   classifyUniversalEvcsVehicleStatus,
+  mergeUniversalEvcsStatusEvidence,
   resolveUniversalEvcsVehicleDemand,
   resolveEvcsSemanticFlag,
   parseEvcsSemanticValues,
   matchesEvcsSemanticStatus,
+  isObservationOnlyEvcsDemandObjectId,
   isPersistentEvcsVehicleState,
   computePendingPvStartIntentW,
 } = charging;
@@ -31,36 +34,118 @@ function classified(status, extra = {}) {
 // ABL / IEC 61851 CP states.
 let out = classified('B2 EV has the permission to charge');
 assert.deepStrictEqual(
-  { state: out.state, plugged: out.plugged, demand: out.demandConfirmed, reason: out.reason },
-  { state: 'ready_to_charge', plugged: true, demand: true, reason: 'abl-b2-permission' },
+  { state: out.state, plugged: out.plugged, demand: out.demandConfirmed, startEligible: out.startEligible, reason: out.reason },
+  { state: 'ready_to_charge', plugged: true, demand: false, startEligible: true, reason: 'mode3-b2-pwm-startable' },
 );
 out = classified('B1 EV connected');
 assert.strictEqual(out.state, 'connected');
 assert.strictEqual(out.plugged, true);
 assert.strictEqual(out.demandConfirmed, false);
+assert.strictEqual(out.startEligible, true);
 out = classified('A1 no EV connected');
 assert.strictEqual(out.state, 'disconnected');
 assert.strictEqual(out.demandConfirmed, false);
-out = classified('C2 charging enabled');
-assert.strictEqual(out.state, 'charging');
-assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.startEligible, false);
+for (const state of ['C1', 'D1']) {
+  out = classified(`${state} EV requests charging`);
+  assert.strictEqual(out.state, 'ready_to_charge', `${state}: ready`);
+  assert.strictEqual(out.demandConfirmed, true, `${state}: demand`);
+  assert.strictEqual(out.startEligible, true, `${state}: start eligible`);
+}
+for (const state of ['C2', 'D2']) {
+  out = classified(`${state} charging enabled`);
+  assert.strictEqual(out.state, 'charging', `${state}: charging`);
+  assert.strictEqual(out.demandConfirmed, true, `${state}: demand`);
+  assert.strictEqual(out.startEligible, true, `${state}: start eligible`);
+}
+for (const state of ['E', 'F']) {
+  out = classified(`${state} fault`);
+  assert.strictEqual(out.state, 'faulted', `${state}: fault`);
+  assert.strictEqual(out.startEligible, false, `${state}: no start`);
+}
 
 // OCPP semantics.
 const ocppExpectations = new Map([
-  ['Available', ['disconnected', false]],
-  ['Preparing', ['ready_to_charge', true]],
-  ['Charging', ['charging', true]],
-  ['SuspendedEVSE', ['paused_by_evse', true]],
-  ['SuspendedEV', ['paused_by_vehicle', false]],
-  ['Finishing', ['finishing', false]],
-  ['Faulted', ['faulted', false]],
-  ['Unavailable', ['unavailable', false]],
+  ['Available', ['disconnected', false, false]],
+  ['Preparing', ['ready_to_charge', false, true]],
+  ['Occupied', ['connected', false, true]],
+  ['EVConnected', ['connected', false, true]],
+  ['Charging', ['charging', true, true]],
+  ['SuspendedEVSE', ['paused_by_evse', true, true]],
+  ['SuspendedEV', ['paused_by_vehicle', false, false]],
+  ['Finishing', ['finishing', false, false]],
+  ['Faulted', ['faulted', false, false]],
+  ['Unavailable', ['unavailable', false, false]],
 ]);
-for (const [status, [state, demand]] of ocppExpectations) {
+for (const [status, [state, demand, startEligible]] of ocppExpectations) {
   out = classified(status);
   assert.strictEqual(out.state, state, `${status}: canonical state`);
   assert.strictEqual(out.demandConfirmed, demand, `${status}: demand`);
+  assert.strictEqual(out.startEligible, startEligible, `${status}: start eligible`);
 }
+
+out = classified('Stopping');
+assert.strictEqual(out.state, 'finishing');
+assert.strictEqual(out.startEligible, false);
+
+let merged = mergeUniversalEvcsStatusEvidence({
+  evidence: [
+    { status: 'Idle', fresh: true, source: 'chargingState' },
+    { status: 'Occupied', fresh: true, source: 'connectorStatus' },
+  ],
+});
+assert.strictEqual(merged.state, 'connected', 'Occupied must complement an early Idle chargingState.');
+assert.strictEqual(merged.startEligible, true);
+assert.strictEqual(merged.evidenceSource, 'connectorStatus');
+
+merged = mergeUniversalEvcsStatusEvidence({
+  evidence: [
+    { status: 'EVConnected', fresh: true, source: 'chargingState' },
+    { status: 'Faulted', fresh: true, source: 'connectorStatus' },
+  ],
+});
+assert.strictEqual(merged.state, 'faulted', 'A fresh fault must dominate startable OCPP evidence.');
+assert.strictEqual(merged.startEligible, false);
+
+merged = mergeUniversalEvcsStatusEvidence({
+  evidence: [
+    { status: 'SuspendedEV', fresh: true, source: 'chargingState' },
+    { status: 'Occupied', fresh: true, source: 'connectorStatus' },
+  ],
+});
+assert.strictEqual(merged.state, 'paused_by_vehicle', 'Vehicle pause must dominate connector occupancy.');
+assert.strictEqual(merged.startEligible, false);
+
+out = resolveUniversalEvcsVehicleDemand({
+  actualPowerW: 4500,
+  classifiedStatus: merged,
+});
+assert.strictEqual(out.state, 'paused_by_vehicle', 'Residual power must not restart a vehicle-paused session.');
+assert.strictEqual(out.demandConfirmed, false);
+
+assert.strictEqual(isObservationOnlyEvcsDemandObjectId('nexowatt-devices.0.devices.lp.aliases.v1.r.charging'), true);
+assert.strictEqual(isObservationOnlyEvcsDemandObjectId('ocpp21.0.CP.transactions.transactionActive'), true);
+assert.strictEqual(isObservationOnlyEvcsDemandObjectId('custom.wallbox.active'), false);
+assert.strictEqual(isObservationOnlyEvcsDemandObjectId('custom.wallbox.charging'), false);
+
+// Generic/KEBA wording must not be misclassified merely because it contains
+// the word `charging`.
+for (const status of [
+  'Not ready for charging',
+  'Charging interrupted / rejected',
+  'Fully charged',
+]) {
+  out = classified(status);
+  assert.strictEqual(out.demandConfirmed, false, `${status}: no demand`);
+  assert.strictEqual(out.startEligible, false, `${status}: no start`);
+}
+out = classified('Ready for charging / waiting for EV');
+assert.strictEqual(out.state, 'disconnected');
+assert.strictEqual(out.startEligible, false);
+out = classified('Waiting for current release');
+assert.strictEqual(out.state, 'ready_to_charge');
+assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.startEligible, true);
 
 // Generic healthy/disconnected wording must not become a fault/offline state.
 out = classified('EV not connected');
@@ -118,15 +203,29 @@ out = resolveUniversalEvcsVehicleDemand({
 assert.strictEqual(out.state, 'ready_to_charge');
 assert.strictEqual(out.demandConfirmed, true);
 
-// ABL B2 must receive the technical PV start reservation. Available must not.
+out = resolveUniversalEvcsVehicleDemand({
+  explicitConnected: true,
+  explicitConnectedKnown: true,
+  status: 'Ready',
+  statusFresh: true,
+});
+assert.strictEqual(out.plugged, true);
+assert.strictEqual(out.demandConfirmed, false);
+assert.strictEqual(out.startEligible, true);
+assert.strictEqual(out.state, 'connected');
+
+// Alfen B2 must receive only the technical PV start reservation. Available must not.
 const abl = resolveUniversalEvcsVehicleDemand({
   status: 'B2 EV has the permission to charge',
   statusFresh: true,
 });
+assert.strictEqual(abl.demandConfirmed, false);
+assert.strictEqual(abl.startEligible, true);
 let intent = computePendingPvStartIntentW({
   enabled: true,
   online: true,
-  connected: abl.demandConfirmed,
+  connected: abl.plugged,
+  startEligible: abl.startEligible,
   mode: 'pv',
   controlBasis: 'currentA',
   status: 'B2 EV has the permission to charge',
@@ -143,6 +242,7 @@ intent = computePendingPvStartIntentW({
   enabled: true,
   online: true,
   connected: false,
+  startEligible: false,
   mode: 'pv',
   controlBasis: 'currentA',
   status: 'Available',
@@ -170,6 +270,8 @@ const chargingSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executabl
 for (const needle of [
   'vehicleConnectedId',
   'chargeDemandId',
+  'vehicleStartEligible',
+  'vehicleStartProbeActive',
   'heartbeatId',
   'statusDemandValues',
   'freshPowerMeterLiveness',
@@ -197,4 +299,4 @@ for (const needle of [
   'r.chargeDemand',
 ]) assert.ok(appCenterSource.includes(needle), `AppCenter wiring missing: ${needle}`);
 
-console.log('[evcs-universal-demand-normalization] OK: ABL/OCPP/freie Herstellerwerte nutzen eine gemeinsame, sichere Ladebedarfssemantik.');
+console.log('[evcs-universal-demand-normalization] OK: Alfen Mode 3, OCPP und freie Herstellerwerte nutzen eine gemeinsame Start-/Bedarfssemantik.');

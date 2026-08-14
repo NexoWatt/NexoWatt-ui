@@ -10815,6 +10815,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       energyInputWh.addEventListener('change', () => _updateEvcsField(i, 'energyTotalInputIsWh', !!energyInputWh.checked));
       dpWrap.appendChild(mkRow('Energie-DP liefert Wh → in kWh umrechnen', energyInputWh));
       dpWrap.appendChild(mkRow('Status / CP-Zustand (lesen, optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
+      dpWrap.appendChild(mkRow('OCPP Ladezustand (lesen, automatisch)', mkIo(`evcs_${i}_chargingStateId`, rowCfg.chargingStateId, v => _updateEvcsField(i, 'chargingStateId', v))));
       dpWrap.appendChild(mkRow('Fahrzeug verbunden (lesen, optional)', mkIo(`evcs_${i}_vehicleConnectedId`, rowCfg.vehicleConnectedId, v => _updateEvcsField(i, 'vehicleConnectedId', v))));
       dpWrap.appendChild(mkRow('Ladebedarf / Ladebereit (lesen, optional)', mkIo(`evcs_${i}_chargeDemandId`, rowCfg.chargeDemandId, v => _updateEvcsField(i, 'chargeDemandId', v))));
       dpWrap.appendChild(mkRow('Heartbeat / LastSeen (lesen, optional)', mkIo(`evcs_${i}_heartbeatId`, rowCfg.heartbeatId, v => _updateEvcsField(i, 'heartbeatId', v))));
@@ -11746,7 +11747,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   function _ocppStationIdentityFromRow(row) {
     const r = row && typeof row === 'object' ? row : {};
     for (const field of [
-      'powerId', 'energyTotalId', 'statusId', 'activeId', 'heartbeatId',
+      'powerId', 'energyTotalId', 'statusId', 'chargingStateId', 'activeId', 'heartbeatId',
       'onlineId', 'dataFreshId', 'setPowerWId', 'enableWriteId',
       'vehicleSocId', 'rfidReadId',
     ]) {
@@ -11765,7 +11766,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const c = connector && typeof connector === 'object' ? connector : {};
     const ids = c.ids && typeof c.ids === 'object' ? c.ids : {};
     for (const field of [
-      'powerId', 'energyTotalId', 'statusId', 'activeId', 'heartbeatId',
+      'powerId', 'energyTotalId', 'statusId', 'chargingStateId', 'activeId', 'heartbeatId',
       'onlineId', 'dataFreshId', 'setPowerWId', 'enableWriteId',
       'vehicleSocId', 'rfidReadId',
     ]) {
@@ -11779,7 +11780,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   function _isEmptyEvcsMappingRow(row) {
     const r = row && typeof row === 'object' ? row : {};
     return ![
-      'powerId', 'energyTotalId', 'statusId', 'activeId', 'vehicleConnectedId',
+      'powerId', 'energyTotalId', 'statusId', 'chargingStateId', 'activeId', 'vehicleConnectedId',
       'chargeDemandId', 'heartbeatId', 'onlineId', 'dataFreshId', 'setCurrentAId',
       'setPowerWId', 'enableWriteId', 'vehicleSocId', 'rfidReadId',
     ].some(field => String(r[field] || '').trim());
@@ -11804,6 +11805,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       powerId: ['.metervalues.power_active_import'],
       energyTotalId: ['.metervalues.energy_active_import_register', '.metervalues.energy_active_import_register_kwh'],
       statusId: ['.connector1status'],
+      chargingStateId: ['.transactions.chargingstate'],
       activeId: ['.transactions.transactionactive'],
       heartbeatId: ['.health.lastheartbeatms', '.info.lastheartbeat', '.heartbeat'],
       dataFreshId: ['.health.datafresh', '.datafresh'],
@@ -11870,7 +11872,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Mappings (fill)
     const previousEnergyId = String(out.energyTotalId || '').trim();
-    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','dataFreshId','setCurrentAId','setPowerWId','enableWriteId','vehicleSocId','rfidReadId']) {
+    for (const k of ['powerId','energyTotalId','statusId','chargingStateId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','dataFreshId','setCurrentAId','setPowerWId','enableWriteId','vehicleSocId','rfidReadId']) {
       if (ids[k]) setField(k, ids[k]);
     }
     const energyMappingWasApplied = !!ids.energyTotalId && (
@@ -12184,17 +12186,38 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // koennen kWh liefern; deshalb wird der Haken aus den Objektmetadaten gesetzt.
       out.energyTotalInputIsWh = unit === 'wh';
     }
-    setIf('statusId',
-      _nwGetAlias(dev, 'r.statusCode')
+    const preferredStatusId = _nwGetAlias(dev, 'r.mode3State')
+      || _nwGetAlias(dev, 'r.mode3Code')
+      || _nwGetAlias(dev, 'r.evState')
+      || _nwGetAlias(dev, 'r.statusText')
+      || _nwGetAlias(dev, 'r.status')
       || _nwGetAlias(dev, 'r.evcsState')
       || _nwGetAlias(dev, 'r.cpState')
-      || _nwGetAlias(dev, 'r.statusText')
-      || _nwGetAlias(dev, 'r.status'));
+      || _nwGetAlias(dev, 'r.statusCode');
+    const currentStatusId = String(out.statusId || '').trim();
+    const deviceBaseId = String((dev && dev.baseId) || '').trim();
+    const currentStatusIsLegacyCode = !!currentStatusId
+      && (!deviceBaseId || currentStatusId.startsWith(`${deviceBaseId}.`))
+      && /\.aliases(?:\.v1)?\.r\.(?:statusCode|statusText|evcsState|cpState)$/i.test(currentStatusId);
+    if (preferredStatusId && (!onlyEmpty || !currentStatusId || currentStatusIsLegacyCode)) {
+      out.statusId = preferredStatusId;
+    }
     setIf('vehicleConnectedId',
       _nwGetAlias(dev, 'r.vehicleConnected')
       || _nwGetAlias(dev, 'r.plugged')
       || _nwGetAlias(dev, 'r.evConnected')
       || _nwGetAlias(dev, 'r.cpConnected'));
+    const currentChargeDemandId = String(out.chargeDemandId || '').trim();
+    if (
+      currentChargeDemandId
+      && (!deviceBaseId || currentChargeDemandId.startsWith(`${deviceBaseId}.`))
+      && /(?:\.aliases(?:\.v1)?\.r\.(?:charging|active)|\.(?:transactionActive|chargingActive|chargeActive|isCharging|charging|active))$/i.test(currentChargeDemandId)
+    ) {
+      // `r.charging=false` is an observation before PWM/current is released, not
+      // an explicit vehicle refusal. Keeping it as chargeDemand would deadlock
+      // Auto/PV/Min+PV for Alfen and comparable IEC-61851 wallboxes.
+      out.chargeDemandId = '';
+    }
     setIf('chargeDemandId',
       _nwGetAlias(dev, 'r.chargeDemand')
       || _nwGetAlias(dev, 'r.vehicleDemand')
@@ -12204,7 +12227,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       _nwGetAlias(dev, 'r.heartbeat')
       || _nwGetAlias(dev, 'comm.heartbeat')
       || _nwGetAlias(dev, 'comm.lastSeenMs'));
-    setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
+    setIf('onlineId', _nwGetAlias(dev, 'r.online') || _nwGetAlias(dev, 'comm.connected'));
 
     // Control (optional)
     // Feldkompatibilität: ältere Geräteprofile verwenden `currentLimitA` /

@@ -17,6 +17,8 @@ const root = path.resolve(__dirname, '..');
 const {
   deriveNexowattDeviceBaseId,
   buildEvcsControlCandidates,
+  buildEvcsTelemetryCandidates,
+  normalizeEvcsChargeDemandObjectId,
   resolveEvcsControlMapping,
 } = require(path.join(root, 'ems/evcs-control-mapping'));
 const {
@@ -39,51 +41,107 @@ const {
   );
 
   const candidates = buildEvcsControlCandidates(base);
-  assert(candidates.current.includes(`${base}.aliases.ctrl.targetCurrentA`));
-  assert(candidates.power.includes(`${base}.aliases.ctrl.targetPowerW`));
+  const telemetryCandidates = buildEvcsTelemetryCandidates(base);
+  assert.strictEqual(candidates.current[0], `${base}.aliases.v1.ctrl.targetCurrentA`);
+  assert.strictEqual(candidates.power[0], `${base}.aliases.v1.ctrl.targetPowerW`);
+  assert.strictEqual(telemetryCandidates.status[0], `${base}.aliases.v1.r.mode3State`);
+  assert.strictEqual(telemetryCandidates.vehicleConnected[0], `${base}.aliases.v1.r.vehicleConnected`);
 
-  const existing = new Set([
-    // Beide Aliasgenerationen sind absichtlich vorhanden. Die aktuelle,
-    // semantisch eindeutige Target-Variante muss bevorzugt werden.
+  const existingWrite = new Set([
+    // Versionierter Vertrag und Legacy-Pfade sind absichtlich gleichzeitig
+    // vorhanden. Der stabile v1-Vertrag muss immer bevorzugt werden.
+    `${base}.aliases.v1.ctrl.targetCurrentA`,
+    `${base}.aliases.v1.ctrl.targetPowerW`,
+    `${base}.aliases.v1.ctrl.run`,
     `${base}.aliases.ctrl.targetCurrentA`,
-    `${base}.aliases.ctrl.currentLimitA`,
     `${base}.aliases.ctrl.targetPowerW`,
-    `${base}.aliases.ctrl.powerLimitW`,
     `${base}.aliases.ctrl.run`,
   ]);
+  const existingRead = new Set([
+    `${base}.aliases.v1.r.power`,
+    `${base}.aliases.v1.r.energyTotal`,
+    `${base}.aliases.v1.r.mode3State`,
+    `${base}.aliases.v1.r.vehicleConnected`,
+    `${base}.aliases.v1.r.online`,
+    `${base}.aliases.v1.r.lastSeenMs`,
+  ]);
+  const writeExists = async (id) => existingWrite.has(id);
+  const readExists = async (id) => existingRead.has(id);
+
   const resolved = await resolveEvcsControlMapping({
     name: 'Marius LP2',
     enabled: true,
-    powerId: `${base}.aliases.r.power`,
-    statusId: `${base}.aliases.r.statusCode`,
-    onlineId: `${base}.aliases.comm.connected`,
+    powerId: `${base}.aliases.v1.r.power`,
+    statusId: `${base}.aliases.v1.r.mode3State`,
+    onlineId: `${base}.aliases.v1.r.online`,
     phases: 3,
     voltageV: 230,
     maxCurrentA: 16,
-  }, async (id) => existing.has(id));
+  }, writeExists, readExists);
 
   assert.strictEqual(resolved.changed, true);
-  assert.strictEqual(resolved.row.setCurrentAId, `${base}.aliases.ctrl.targetCurrentA`);
-  assert.strictEqual(resolved.row.setPowerWId, `${base}.aliases.ctrl.targetPowerW`);
-  assert.strictEqual(resolved.row.enableWriteId, `${base}.aliases.ctrl.run`);
+  assert.strictEqual(resolved.row.setCurrentAId, `${base}.aliases.v1.ctrl.targetCurrentA`);
+  assert.strictEqual(resolved.row.setPowerWId, `${base}.aliases.v1.ctrl.targetPowerW`);
+  assert.strictEqual(resolved.row.enableWriteId, `${base}.aliases.v1.ctrl.run`);
 
   const baseOnly = await resolveEvcsControlMapping({
     baseId: base,
     name: 'Marius LP2',
     enabled: true,
-  }, async (id) => existing.has(id));
-  assert.strictEqual(baseOnly.row.setCurrentAId, `${base}.aliases.ctrl.targetCurrentA`);
-  assert.strictEqual(baseOnly.row.setPowerWId, `${base}.aliases.ctrl.targetPowerW`);
+  }, writeExists, readExists);
+  assert.strictEqual(baseOnly.row.setCurrentAId, `${base}.aliases.v1.ctrl.targetCurrentA`);
+  assert.strictEqual(baseOnly.row.setPowerWId, `${base}.aliases.v1.ctrl.targetPowerW`);
+  assert.strictEqual(baseOnly.row.enableWriteId, `${base}.aliases.v1.ctrl.run`);
+  assert.strictEqual(baseOnly.row.powerId, `${base}.aliases.v1.r.power`);
+  assert.strictEqual(baseOnly.row.energyTotalId, `${base}.aliases.v1.r.energyTotal`);
+  assert.strictEqual(baseOnly.row.energyTotalInputIsWh, true);
+  assert.strictEqual(baseOnly.row.statusId, `${base}.aliases.v1.r.mode3State`);
+  assert.strictEqual(baseOnly.row.vehicleConnectedId, `${base}.aliases.v1.r.vehicleConnected`);
+  assert.strictEqual(baseOnly.row.onlineId, `${base}.aliases.v1.r.online`);
+  assert.strictEqual(baseOnly.row.heartbeatId, `${base}.aliases.v1.r.lastSeenMs`);
+  assert.strictEqual(String(baseOnly.row.chargeDemandId || ''), '', 'Beobachtungsstatus darf nicht als Ladebedarf inferiert werden.');
   assert.strictEqual(baseOnly.baseId, base);
+
+  const observationDemand = await resolveEvcsControlMapping({
+    baseId: base,
+    chargeDemandId: `${base}.aliases.v1.r.charging`,
+  }, writeExists, readExists);
+  assert.strictEqual(String(observationDemand.row.chargeDemandId || ''), '');
+  assert.strictEqual(observationDemand.ignoredObservationDemand, true);
+  assert.strictEqual(normalizeEvcsChargeDemandObjectId(`${base}.aliases.v1.r.active`), '');
+  assert.strictEqual(normalizeEvcsChargeDemandObjectId('custom.wallbox.transactionActive'), '');
+  assert.strictEqual(
+    normalizeEvcsChargeDemandObjectId('custom.wallbox.active'),
+    'custom.wallbox.active',
+    'Ein frei zugeordneter echter Ladebedarfs-DP mit dem Namen active darf nicht pauschal gelöscht werden.',
+  );
+  assert.strictEqual(
+    normalizeEvcsChargeDemandObjectId('custom.wallbox.charging'),
+    'custom.wallbox.charging',
+    'Ein frei zugeordneter echter Ladebedarfs-DP mit dem Namen charging bleibt Installer-autorisiert.',
+  );
+  const explicitDemandNamedActive = await resolveEvcsControlMapping({
+    baseId: base,
+    chargeDemandId: 'custom.wallbox.active',
+  }, writeExists, readExists);
+  assert.strictEqual(explicitDemandNamedActive.row.chargeDemandId, 'custom.wallbox.active');
+  assert.strictEqual(explicitDemandNamedActive.ignoredObservationDemand, false);
+
+  const upgradedStatus = await resolveEvcsControlMapping({
+    powerId: `${base}.aliases.v1.r.power`,
+    statusId: `${base}.aliases.v1.r.statusCode`,
+  }, writeExists, readExists);
+  assert.strictEqual(upgradedStatus.row.statusId, `${base}.aliases.v1.r.mode3State`);
+  assert.strictEqual(upgradedStatus.upgradedStatus, true, 'Generischer Auto-Status wird nicht auf den semantischen Mode-3-Status angehoben.');
 
 
   const otherBase = 'nexowatt-devices.0.devices.other_lp';
   const noCrossDeviceMix = await resolveEvcsControlMapping({
     powerId: `${base}.aliases.r.power`,
     statusId: `${otherBase}.aliases.r.statusCode`,
-  }, async (id) => id === `${base}.aliases.ctrl.targetCurrentA`
-    || id === `${otherBase}.aliases.ctrl.targetPowerW`);
-  assert.strictEqual(noCrossDeviceMix.row.setCurrentAId, `${base}.aliases.ctrl.targetCurrentA`);
+  }, async (id) => id === `${base}.aliases.v1.ctrl.targetCurrentA`
+    || id === `${otherBase}.aliases.v1.ctrl.targetPowerW`, async () => false);
+  assert.strictEqual(noCrossDeviceMix.row.setCurrentAId, `${base}.aliases.v1.ctrl.targetCurrentA`);
   assert.strictEqual(String(noCrossDeviceMix.row.setPowerWId || ''), '', 'Steuerpfade verschiedener Ladepunkte dürfen nicht vermischt werden.');
   assert.strictEqual(noCrossDeviceMix.baseId, base);
 
@@ -106,7 +164,7 @@ const {
     powerId: `${base}.aliases.r.power`,
     setCurrentAId: `${base}.aliases.ctrl.targetCurrentA`,
     controlPreference: 'none',
-  }, async (id) => existing.has(id));
+  }, writeExists, readExists);
   assert.strictEqual(legacyNone.changed, true, 'Legacy-none-Migration wird nicht als Konfigurationsänderung gemeldet.');
   assert.strictEqual(legacyNone.preferenceMigrated, true);
   assert.strictEqual(legacyNone.row.controlPreference, 'auto', 'Vorhandener Sollwert-DP bleibt durch controlPreference=none versteckt deaktiviert.');
@@ -135,9 +193,10 @@ const {
       index,
       name: `LP${index}`,
       enabled: true,
-      powerId: `${deviceBase}.aliases.r.power`,
-      statusId: `${deviceBase}.aliases.r.statusCode`,
-      onlineId: `${deviceBase}.aliases.comm.connected`,
+      baseId: deviceBase,
+      powerId: `${deviceBase}.aliases.v1.r.power`,
+      statusId: `${deviceBase}.aliases.v1.r.mode3State`,
+      onlineId: `${deviceBase}.aliases.v1.r.online`,
       phases: 3,
       voltageV: 230,
       minCurrentA: 6,
@@ -145,9 +204,15 @@ const {
       maxPowerW: 11040,
       controlPreference: 'auto',
     }, async (id) => [
-      `${deviceBase}.aliases.ctrl.targetCurrentA`,
-      `${deviceBase}.aliases.ctrl.targetPowerW`,
-      `${deviceBase}.aliases.ctrl.run`,
+      `${deviceBase}.aliases.v1.ctrl.targetCurrentA`,
+      `${deviceBase}.aliases.v1.ctrl.targetPowerW`,
+      `${deviceBase}.aliases.v1.ctrl.run`,
+    ].includes(id), async (id) => [
+      `${deviceBase}.aliases.v1.r.power`,
+      `${deviceBase}.aliases.v1.r.mode3State`,
+      `${deviceBase}.aliases.v1.r.vehicleConnected`,
+      `${deviceBase}.aliases.v1.r.online`,
+      `${deviceBase}.aliases.v1.r.lastSeenMs`,
     ].includes(id));
     engineRows.push(rowResolved.row);
   }
@@ -165,7 +230,9 @@ const {
   assert.strictEqual(built.chargingCfg.infrastructureWallboxCount, 4);
   assert.strictEqual(built.chargingCfg.infrastructureCapacityW, 44160);
   assert.strictEqual(built.chargingCfg.wallboxes[1].controlBasis, 'auto');
-  assert.strictEqual(built.chargingCfg.wallboxes[1].setCurrentAId, 'nexowatt-devices.0.devices.lp2.aliases.ctrl.targetCurrentA');
+  assert.strictEqual(built.chargingCfg.wallboxes[1].setCurrentAId, 'nexowatt-devices.0.devices.lp2.aliases.v1.ctrl.targetCurrentA');
+  assert.strictEqual(built.chargingCfg.wallboxes[1].statusId, 'nexowatt-devices.0.devices.lp2.aliases.v1.r.mode3State');
+  assert.strictEqual(built.chargingCfg.wallboxes[1].vehicleConnectedId, 'nexowatt-devices.0.devices.lp2.aliases.v1.r.vehicleConnected');
 
   const setAKey = 'cm.wb.lp2.setA';
   const writePlan = buildChargingSetpointWritePlan({
@@ -196,7 +263,7 @@ const {
   const writes = [];
   const dp = {
     getEntry(key) {
-      return key === setAKey ? { objectId: `${base}.aliases.ctrl.targetCurrentA` } : null;
+      return key === setAKey ? { objectId: `${base}.aliases.v1.ctrl.targetCurrentA` } : null;
     },
     async writeNumber(key, value) {
       writes.push({ key, value });
@@ -229,10 +296,16 @@ const {
       || appCenterRuntime.includes("_nwGetAlias(dev, 'ctrl.targetPowerW')"),
     'AppCenter-Schnellerkennung kennt targetPowerW nicht.',
   );
+  assert(
+    appCenterRuntime.includes("_nwGetAlias(dev, 'r.mode3State')")
+      && appCenterRuntime.includes("_nwGetAlias(dev, 'r.mode3Code')")
+      && appCenterRuntime.includes("_nwGetAlias(dev, 'r.evState')"),
+    'AppCenter-Schnellerkennung priorisiert die universellen Mode-3-/EV-Zustände nicht.',
+  );
   assert(!appCenterRuntime.includes('<option value="none">none</option>'), 'AppCenter bietet den versteckten zweiten Ladepunkt-Abschalter weiterhin an.');
   assert(mainRuntime.includes("controlPreferenceToken === 'none' || controlPreferenceToken === 'off'"), 'Backend migriert alte controlPreference=none/off-Konfigurationen nicht.');
 
-  console.log('[evcs-control-alias-mapping] OK: Target-Aliase werden sicher aufgelöst und als echte EVCS-Schreibpfade verwendet.');
+  console.log('[evcs-control-alias-mapping] OK: NexoWatt-Devices EVCS-Telemetrie und -Steuerung werden aus einem stabilen Gerätevertrag aufgelöst.');
 })().catch((error) => {
   console.error('[evcs-control-alias-mapping] FAILED:', error && error.stack ? error.stack : error);
   process.exit(1);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5a573d609d188978a9de07431f57eb9b56df3afbf8799c4a7c408558c93bbd9f
+ * Original-Hash: d91ba69cb9c2ef2314afe79b252564b4e7e0a77535d56c0ff402c6d299f4cb86
  */
 
 /**
@@ -93,7 +93,7 @@ for (const file of [
   must(file, "const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';", 'MultiUse führt nur im aktiven Modus');
   must(file, 'const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;', 'Reserve aus Resolver');
   must(file, 'const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;', 'LSK aus Resolver');
-  must(file, 'const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
+  must(file, 'let selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
   must(file, 'const selfTargetGridW = activeStorageNvpTargetW;', 'NVP-Ziel aus der aktiven Topologie-Policy');
   must(file, 'const selfImportThresholdW = activeStorageNvpHysteresisW;', 'NVP-Hysterese aus der aktiven Topologie-Policy');
   must(file, "await this._setIfChanged('speicher.regelung.selfNvpTuningTopology'", 'Topologie-Quellendiagnose');

@@ -562,6 +562,7 @@ class EmsEngine {
       // Online detection: prefer explicit online dp (bool), keep statusId as display/status fallback.
       const onlineId = (wb.onlineId || '').trim();
       const statusId = (wb.statusId || '').trim();
+      const chargingStateId = (wb.chargingStateId || '').trim();
       const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
       const chargeDemandId = (wb.chargeDemandId || '').trim();
       const heartbeatId = (wb.heartbeatId || '').trim();
@@ -678,6 +679,7 @@ class EmsEngine {
         ...(enableId ? { enableId } : {}),
         ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
+        ...(chargingStateId ? { chargingStateId } : {}),
         ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
         ...(chargeDemandId ? { chargeDemandId } : {}),
         ...(heartbeatId ? { heartbeatId } : {}),

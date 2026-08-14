@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 26fbf0b5c608a6a997627ab986d8f12687a12314115b8ba89b059eb72bd7fd99
+ * Original-Hash: 0023edfa96192086d168489ec3681feb68f84cd1b503c28a55fd60d76973d618
  */
 
 /**
@@ -32,9 +32,11 @@
 'use strict';
 
 /**
- * Regression 0.8.143: Ladepunkte ohne bestaetigten Fahrzeugbedarf duerfen
- * weder Gesamt- noch PV-Budget reservieren. Alte Sollwerte, stale Stati und
- * OCPP `Reserved` muessen fail-closed behandelt werden.
+ * Universelle EVCS-Regressionsprüfung: Ladepunkte ohne bestaetigten Bedarf
+ * duerfen kein laufendes Ladebudget blockieren. Ein semantisch eindeutig
+ * verbundenes/startbereites Fahrzeug darf jedoch in Auto, Min+PV oder PV einen
+ * zeitlich begrenzten technischen Startversuch erhalten. Alte Sollwerte, stale
+ * Stati, Cooldowns und OCPP `Reserved` bleiben fail-closed.
  */
 
 const assert = require('assert');
@@ -97,15 +99,18 @@ out = demand({ status: 'SuspendedEV', statusFresh: true });
 assert.strictEqual(out.plugged, true);
 assert.strictEqual(out.demandConfirmed, false);
 
-// Preparing/Charging sind valide Bedarfszustaende. Occupied bestaetigt nur
-// Belegung, aber noch keinen Leistungsbedarf.
-for (const status of ['Preparing', 'Charging']) {
-  out = demand({ status, statusFresh: true });
-  assert.strictEqual(out.demandConfirmed, true, `${status} muss einen frischen Ladebedarf bestaetigen`);
+// Charging bestaetigt laufenden Bedarf. Preparing/Occupied bestaetigen nur
+// Fahrzeugkontakt bzw. Startbereitschaft und duerfen deshalb ausschliesslich
+// einen begrenzten Startversuch freigeben.
+out = resolveUniversalEvcsVehicleDemand({ status: 'Charging', statusFresh: true });
+assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.startEligible, true);
+for (const status of ['Preparing', 'Occupied']) {
+  out = resolveUniversalEvcsVehicleDemand({ status, statusFresh: true });
+  assert.strictEqual(out.plugged, true, `${status} muss den Fahrzeugkontakt bestaetigen`);
+  assert.strictEqual(out.demandConfirmed, false, `${status} darf noch keinen laufenden Ladebedarf vortaeuschen`);
+  assert.strictEqual(out.startEligible, true, `${status} muss einen begrenzten Startversuch erlauben`);
 }
-out = demand({ status: 'Occupied', statusFresh: true });
-assert.strictEqual(out.plugged, true);
-assert.strictEqual(out.demandConfirmed, false);
 
 
 // Herstellerunabhängige Normalisierung: ABL eMH1/IEC-61851-Zustände müssen
@@ -117,13 +122,15 @@ out = resolveUniversalEvcsVehicleDemand({
 });
 assert.strictEqual(out.state, 'ready_to_charge');
 assert.strictEqual(out.plugged, true);
-assert.strictEqual(out.demandConfirmed, true);
-assert.strictEqual(out.reason, 'abl-b2-permission');
+assert.strictEqual(out.demandConfirmed, false);
+assert.strictEqual(out.startEligible, true);
+assert.strictEqual(out.reason, 'mode3-b2-pwm-startable');
 
 out = resolveUniversalEvcsVehicleDemand({ status: 'B1 EV connected', statusFresh: true });
 assert.strictEqual(out.state, 'connected');
 assert.strictEqual(out.plugged, true);
 assert.strictEqual(out.demandConfirmed, false);
+assert.strictEqual(out.startEligible, true);
 
 out = resolveUniversalEvcsVehicleDemand({ status: 'C2 charging', statusFresh: true });
 assert.strictEqual(out.state, 'charging');
@@ -254,7 +261,8 @@ const ablDemand = resolveUniversalEvcsVehicleDemand({
 intent = computePendingPvStartIntentW({
   enabled: true,
   online: true,
-  connected: ablDemand.demandConfirmed,
+  connected: ablDemand.plugged,
+  startEligible: ablDemand.startEligible,
   mode: 'pv',
   controlBasis: 'currentA',
   status: 'B2 EV has the permission to charge',
@@ -268,58 +276,91 @@ intent = computePendingPvStartIntentW({
 });
 assert.strictEqual(intent.intentW, 4140, 'ABL B2 muss die technische PV-Startleistung reservieren');
 
-// Mindestleistungs-Plan: Ein physisch als verbunden dargestellter Ladepunkt
-// wird ausgeschlossen, sobald die neue Bedarfsdiagnose FALSE meldet.
+// Mindestleistungs-Plan: Ein nur scheinbar verbundener Ladepunkt ohne
+// Bedarfs- oder Startnachweis bleibt ausgeschlossen. Ein startbereites Fahrzeug
+// darf in Auto/Min+PV seine technische Mindestleistung reservieren; im Cooldown
+// wird die Reservierung wieder sicher entfernt.
 const plan = computeChargingMinimumServicePlan({
-  totalBudgetW: 20000,
+  totalBudgetW: 25000,
   wallboxes: [
     {
       safe: 'ghost', enabled: true, online: true, vehiclePlugged: true,
-      vehicleDemandConfirmed: false, controlBasis: 'powerW', effectiveMode: 'minpv',
+      vehicleDemandConfirmed: false, vehicleStartEligible: false,
+      controlBasis: 'powerW', effectiveMode: 'minpv',
+      minPW: 4140, maxPW: 11000,
+    },
+    {
+      safe: 'startable', enabled: true, online: true, vehiclePlugged: true,
+      vehicleDemandConfirmed: false, vehicleStartEligible: true,
+      vehicleStartCooldownActive: false,
+      controlBasis: 'powerW', effectiveMode: 'minpv',
+      minPW: 4140, maxPW: 11000,
+    },
+    {
+      safe: 'cooldown', enabled: true, online: true, vehiclePlugged: true,
+      vehicleDemandConfirmed: false, vehicleStartEligible: true,
+      vehicleStartCooldownActive: true,
+      controlBasis: 'powerW', effectiveMode: 'auto',
       minPW: 4140, maxPW: 11000,
     },
     {
       safe: 'real', enabled: true, online: true, vehiclePlugged: true,
-      vehicleDemandConfirmed: true, controlBasis: 'powerW', effectiveMode: 'minpv',
+      vehicleDemandConfirmed: true, vehicleStartEligible: true,
+      controlBasis: 'powerW', effectiveMode: 'minpv',
       minPW: 4140, maxPW: 11000,
     },
   ],
 });
-assert.strictEqual(plan.eligibleCount, 1);
+assert.strictEqual(plan.eligibleCount, 2);
 assert.strictEqual(plan.minimumBySafe.get('ghost'), 0);
+assert.strictEqual(plan.minimumBySafe.get('startable'), 4140);
+assert.strictEqual(plan.minimumBySafe.get('cooldown'), 0);
 assert.strictEqual(plan.minimumBySafe.get('real'), 4140);
 
-// Boost ist die einzige explizite Vorruest-Ausnahme im Mindestserviceplan.
-// Der positive Sollwert muss im zentralen/stationsbezogenen Budget reserviert
-// werden, bevor ein Fahrzeug ihn physisch annimmt. Auto bleibt ohne Bedarf bei 0.
+// Boost darf weiterhin ohne Fahrzeugstatus vorrüsten. Auto bleibt ohne
+// Startnachweis bei 0, darf mit semantisch startbereitem Fahrzeug jedoch exakt
+// die technische Mindestleistung reservieren.
 const prearmPlan = computeChargingMinimumServicePlan({
   totalBudgetW: 20000,
   wallboxes: [
     {
       safe: 'boost_prearm', enabled: true, online: true, vehiclePlugged: false,
-      vehicleDemandConfirmed: false, controlBasis: 'currentA', effectiveMode: 'boost',
+      vehicleDemandConfirmed: false, vehicleStartEligible: false,
+      controlBasis: 'currentA', effectiveMode: 'boost',
       setAKey: 'test.boost.setA', minPW: 4140, maxPW: 11040,
     },
     {
       safe: 'auto_no_demand', enabled: true, online: true, vehiclePlugged: false,
-      vehicleDemandConfirmed: false, controlBasis: 'currentA', effectiveMode: 'auto',
+      vehicleDemandConfirmed: false, vehicleStartEligible: false,
+      controlBasis: 'currentA', effectiveMode: 'auto',
       setAKey: 'test.auto.setA', minPW: 4140, maxPW: 11040,
+    },
+    {
+      safe: 'auto_startable', enabled: true, online: true, vehiclePlugged: true,
+      vehicleDemandConfirmed: false, vehicleStartEligible: true,
+      vehicleStartCooldownActive: false,
+      controlBasis: 'currentA', effectiveMode: 'auto',
+      setAKey: 'test.auto.startable.setA', minPW: 4140, maxPW: 11040,
     },
   ],
 });
-assert.strictEqual(prearmPlan.eligibleCount, 1);
+assert.strictEqual(prearmPlan.eligibleCount, 2);
 assert.strictEqual(prearmPlan.minimumBySafe.get('boost_prearm'), 4140);
 assert.strictEqual(prearmPlan.minimumBySafe.get('auto_no_demand'), 0);
+assert.strictEqual(prearmPlan.minimumBySafe.get('auto_startable'), 4140);
 
-// Betriebsartenvertrag: Nur Boost darf einen positiven, bereits hart begrenzten
-// Sollwert ohne optionalen Fahrzeug-/Ladebedarfsnachweis vorladen. Alle
-// Automatikmodi bleiben fail-closed. Boost darf außerdem weder durch den
-// Zeit-Ziel-SoC-Wartezustand noch durch die weiche Hochlauframpe verzögert werden.
+// Betriebsartenvertrag: Boost darf immer vorruesten. Auto/PV/Min+PV duerfen
+// ohne bestaetigten Bedarf nur waehrend eines aktiven, positiv budgetierten
+// Startversuchs schreiben. Off bleibt immer gesperrt.
 assert.strictEqual(isChargingCommandDemandAllowed('boost', false), true);
 assert.strictEqual(isChargingCommandDemandAllowed('turbo', false), true);
 for (const mode of ['auto', 'normal', 'pv', 'minpv', 'off']) {
-  assert.strictEqual(isChargingCommandDemandAllowed(mode, false), false, `${mode} darf ohne Ladebedarf nicht vorladen`);
+  assert.strictEqual(isChargingCommandDemandAllowed(mode, false, false, false), false, `${mode} darf ohne Ladebedarf oder Startprobe nicht vorladen`);
 }
+assert.strictEqual(isChargingCommandDemandAllowed('auto', false, true, false), false, 'Startbereitschaft allein darf noch keinen Befehl erzeugen');
+assert.strictEqual(isChargingCommandDemandAllowed('auto', false, true, true), true, 'Auto darf waehrend einer positiven Startprobe die Mindestleistung schreiben');
+assert.strictEqual(isChargingCommandDemandAllowed('minpv', false, true, true), true);
+assert.strictEqual(isChargingCommandDemandAllowed('pv', false, true, true), true);
 assert.strictEqual(isChargingCommandDemandAllowed('auto', true), true);
 assert.strictEqual(shouldPauseChargingForGoalSoc('boost', true, 'waiting_soc'), false);
 assert.strictEqual(shouldPauseChargingForGoalSoc('boost', true, 'soc_stale'), false);
@@ -334,7 +375,7 @@ for (const needle of [
   'resolveConfirmedEvcsVehicleDemand',
   'resolveUniversalEvcsVehicleDemand',
   'classifyUniversalEvcsVehicleStatus',
-  'abl-b2-permission',
+  'mode3-b2-pwm-startable',
   'vehicleConnectedId',
   'chargeDemandId',
   'statusDemandValues',
@@ -344,13 +385,14 @@ for (const needle of [
   'w.vehicleDemandConfirmed === true',
   'const demandReserveThisW = activeChargingDemand ?',
   'vehicleDemandReason',
-  'isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed)',
+  'isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed, w.vehicleStartEligible, w.vehicleStartProbeActive)',
   'shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)',
   'applyChargingModeRamp(prevCmdA, cmdA, wbMaxDeltaA, effMode)',
   'applyChargingModeRamp(prevCmdW, cmdW, wbMaxDeltaW, effMode)',
   'vehiclePlugged: !!(w && w.vehiclePlugged === true)',
   'vehicleDemandConfirmed: !!(w && w.vehicleDemandConfirmed === true)',
-  'boostPrearmAllowed: !!(w && isChargingCommandDemandAllowed(w.effectiveMode, false))',
+  'vehicleStartEligible: !!(w && w.vehicleStartEligible === true)',
+  "boostPrearmAllowed: !!(w && normalizeWallboxModeOverride(w.effectiveMode) === 'boost')",
 ]) {
   assert.ok(source.includes(needle), `Produktivanker fehlt: ${needle}`);
 }
@@ -361,7 +403,8 @@ const allocationSource = fs.readFileSync(path.join(root, 'src-ts/ems/charging-ma
 assert.ok(/const connected = boolValue\([\s\S]*?wallbox\.vehiclePlugged[\s\S]*?false[\s\S]*?\);/.test(allocationSource), 'TS-Allocator muss physischen Fahrzeuganschluss und Ladebedarf getrennt sowie fail-closed erfassen');
 assert.ok(/const demandConfirmed = boolValue\([\s\S]*?wallbox\.vehicleDemandConfirmed[\s\S]*?connected[\s\S]*?\);/.test(allocationSource), 'TS-Allocator muss den bestaetigten Ladebedarf getrennt und mit konservativem Legacy-Fallback erfassen');
 assert.ok(allocationSource.includes('modeAllowsPrearmedSetpoint(wb)'), 'TS-Allocator besitzt keine explizite Boost-Ausnahme fuer den optionalen Bedarfsnachweis');
-assert.ok(allocationSource.includes('commandDemandAllowed(wb)'), 'TS-Allocator trennt bestaetigten Ladebedarf und explizite Boost-Vorruestung nicht zentral');
+assert.ok(allocationSource.includes('vehicleStartProbeActive'), 'TS-Allocator muss den zeitlich begrenzten universellen Startversuch transportieren');
+assert.ok(allocationSource.includes('commandDemandAllowed(wb)'), 'TS-Allocator trennt bestaetigten Ladebedarf, Boost-Vorruestung und universelle Startprobe nicht zentral');
 
 
 const mainSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/main.ts'), 'utf8');

@@ -1,3 +1,16 @@
+## 0.8.185 - 2026-08-13
+
+- Universellen Auto-Orchestrator für NexoWatt Devices, NexoWatt OCPP21 und frei/manuell zugeordnete Ladepunkte ergänzt. Alle Protokolle verwenden dieselbe Fahrzeugkontakt-, Startbereitschafts- und Ladebedarfssemantik.
+- IEC-61851-/Mode-3-Zustände fachlich getrennt: A/A1/A2 getrennt, B1/B2 verbunden und begrenzt startfähig, C1/D1 mit Fahrzeugbedarf, C2/D2 ladend sowie E/F als harte Fehlerzustände. Damit startet insbesondere eine Alfen-Wallbox über Modbus auch aus B1/B2 zuverlässig, ohne B2 fälschlich als bereits laufende Ladeleistung zu bilanzieren.
+- OCPP-Zustände `Preparing`, `Occupied` und `EVConnected` als kontrolliert startfähig, `Charging` und `SuspendedEVSE` als bestätigten Bedarf sowie `SuspendedEV`, `Finishing`, `Faulted` und `Unavailable` als klare Pausen-/Stoppzustände integriert. `transactions.chargingState` wird nativ getrennt vom Stationsstatus übernommen.
+- Zeitlich begrenzten Startversuch für Auto, PV und Min+PV eingeführt: technische Mindestleistung nur bei positivem sicherem Budget, 45 s Antwortzeit für generische/Modbus-Wallboxen, mindestens 75 s für OCPP und 60 s Cooldown nach ausbleibender Reaktion. Harte Netz-, Stations-, Phasen-, §14a- und Safety-Grenzen stoppen weiterhin sofort.
+- Zeit-Ziel-Laden kann aus einem sicher erkannten, noch nicht ladenden Fahrzeugzustand eine kontrollierte technische Startanforderung erzeugen. Nach bestätigter Fahrzeugreaktion begrenzt die berechnete Ziel-Leistung den Sollwert; günstige Tarife können die Smart-Zielstrategie beschleunigen und teure Zeitfenster warten nur solange die Zielerreichung nicht gefährdet ist.
+- NexoWatt-Devices-Zuordnung auf den stabilen `aliases.v1`-Fähigkeitsvertrag erweitert. Mode-3-/EV-Zustände werden vor generischen Statuscodes bevorzugt, Mess- und Stellpfade stammen immer aus genau einer Gerätebasis und bestehende manuelle Installer-Zuordnungen bleiben autoritativ.
+- Beobachtungs-Datenpunkte wie `r.charging`, `transactionActive` oder `chargingActive` werden nicht länger als expliziter Ladebedarf interpretiert. Ein anfängliches `false` kann Auto/PV/Min+PV dadurch nicht mehr blockieren.
+- Negative Herstellertexte mit dem Wortbestandteil `charging` wie `Not charging`, `Charging paused`, `Charging blocked`, `Charging complete` oder `Charging stopped` werden vor der positiven Ladeerkennung ausgewertet und können keinen unbeabsichtigten Auto-Start auslösen.
+- Speicherfarm-, Speicherassistenz-, Stations-, Multi-Ladepunkt-, §14a-, Netz-, Phasen- und Single-Writer-Regressionsgruppen unverändert bestanden. Neue vollständige Regeltick-Tests decken Alfen/Mode 3, OCPP21, generische AC/DC-Wallboxen, Auto, PV, Min+PV, Zeit-Ziel, Tarif, Starttimeout und Cooldown ab.
+
+
 ## 0.8.183 - 2026-08-13
 
 - Kritischen RC58-Laufzeitfehler im Lademanagement behoben: Das Diagnosefeld `ocppDatapointMappingMigrations` wird jetzt ausschließlich aus dem definierten Migrationsarray erzeugt. Ein leerer Satz wird als `[]` ausgegeben; der sicherheitskritische `chargingManagement`-Tick kann nicht mehr durch die nicht definierte Variable abbrechen.

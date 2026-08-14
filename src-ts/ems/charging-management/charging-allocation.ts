@@ -27,6 +27,9 @@ export interface ChargingAllocationWallboxInput {
   userEnabled?: unknown;
   vehiclePlugged?: unknown;
   vehicleDemandConfirmed?: unknown;
+  vehicleStartEligible?: unknown;
+  vehicleStartProbeActive?: unknown;
+  vehicleStartCooldownActive?: unknown;
   boostPrearmAllowed?: unknown;
   charging?: unknown;
   effectiveMode?: unknown;
@@ -146,6 +149,9 @@ export interface ChargingAllocationWallboxPlan {
   online: boolean;
   connected: boolean;
   demandConfirmed: boolean;
+  vehicleStartEligible: boolean;
+  vehicleStartProbeActive: boolean;
+  vehicleStartCooldownActive: boolean;
   boostPrearmAllowed: boolean;
   charging: boolean;
   effectiveMode: string;
@@ -546,7 +552,9 @@ function modeAllowsPrearmedSetpoint(wb: ChargingAllocationWallboxPlan): boolean 
 }
 
 function commandDemandAllowed(wb: ChargingAllocationWallboxPlan): boolean {
-  return wb.demandConfirmed || modeAllowsPrearmedSetpoint(wb);
+  return wb.demandConfirmed
+    || wb.vehicleStartProbeActive
+    || modeAllowsPrearmedSetpoint(wb);
 }
 
 function floorToPositiveStep(value: number, step: number): number {
@@ -1263,6 +1271,18 @@ function normalizeWallboxPlan(
     wallbox.vehicleDemandConfirmed,
     boolValue(allocation ? allocation.vehicleDemandConfirmed : undefined, connected),
   );
+  const vehicleStartEligible = boolValue(
+    wallbox.vehicleStartEligible,
+    boolValue(allocation ? allocation.vehicleStartEligible : undefined, false),
+  );
+  const vehicleStartProbeActive = boolValue(
+    wallbox.vehicleStartProbeActive,
+    boolValue(allocation ? allocation.vehicleStartProbeActive : undefined, false),
+  );
+  const vehicleStartCooldownActive = boolValue(
+    wallbox.vehicleStartCooldownActive,
+    boolValue(allocation ? allocation.vehicleStartCooldownActive : undefined, false),
+  );
   const boostPrearmAllowed = boolValue(
     wallbox.boostPrearmAllowed,
     boolValue(allocation ? allocation.boostPrearmAllowed : undefined, effectiveMode.trim().toLowerCase() === 'boost'),
@@ -1316,6 +1336,9 @@ function normalizeWallboxPlan(
     online,
     connected,
     demandConfirmed,
+    vehicleStartEligible,
+    vehicleStartProbeActive,
+    vehicleStartCooldownActive,
     boostPrearmAllowed,
     charging,
     effectiveMode,

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 461255c7701a2ad0ac3445b2c8fbc7fd115f178b15bbacd2787fdd9fb4ca00fc
+ * Original-Hash: 7d93fffdfd454dc0299cb08a362ff410872edc56195a68f23094d4d1fd551323
  */
 
 /**
@@ -203,15 +203,18 @@ async function main() {
   assert(typeof applyChargingModeRamp === 'function', 'Modusabhängige Rampe fehlt.');
   assert(typeof resolveAcChargingLimits === 'function', 'Gemeinsame AC-Grenzauflösung fehlt.');
 
-  // Betriebsartenvertrag: Boost ist die einzige Vorruest-Ausnahme. Harte
-  // Verfuegbarkeits-/Budgetgrenzen bleiben trotzdem nachgelagert. Auto, PV und
-  // Min+PV duerfen ohne bestaetigten Ladebedarf niemals einen Sollwert bilden.
+  // Betriebsartenvertrag: Boost bleibt die bewusste Vorruest-Ausnahme.
+  // Auto/PV/Min+PV dürfen zusätzlich einen explizit freigegebenen, zeitlich
+  // begrenzten technischen Startprobe-Vertrag nutzen. Harte Verfügbarkeits-
+  // und Budgetgrenzen bleiben in beiden Fällen nachgelagert.
   assert(isChargingCommandDemandAllowed('boost', false) === true, 'Boost darf ohne optionalen Ladebedarfs-DP nicht vorruesten.');
   assert(isChargingCommandDemandAllowed('turbo', false) === true, 'Turbo-Alias wird nicht als Boost behandelt.');
   for (const mode of ['auto', 'normal', 'pv', 'minpv', 'off']) {
     assert(isChargingCommandDemandAllowed(mode, false) === false, `${mode} darf ohne Ladebedarf nicht vorruesten.`);
   }
   assert(isChargingCommandDemandAllowed('auto', true) === true, 'Auto mit bestaetigtem Ladebedarf wird blockiert.');
+  assert(isChargingCommandDemandAllowed('auto', false, true, true) === true, 'Auto blockiert den universellen technischen Startprobe-Vertrag.');
+  assert(isChargingCommandDemandAllowed('auto', false, true, false) === false, 'Auto startet ohne aktiven Startprobe-Vertrag unkontrolliert.');
   assert(shouldPauseChargingForGoalSoc('boost', true, 'waiting_soc') === false, 'Ziel-SoC-Warten stoppt Boost.');
   assert(shouldPauseChargingForGoalSoc('boost', true, 'soc_stale') === false, 'Staler Ziel-SoC stoppt Boost.');
   assert(shouldPauseChargingForGoalSoc('auto', true, 'waiting_soc') === true, 'Auto ignoriert den Ziel-SoC-Wartezustand.');
@@ -544,7 +547,7 @@ async function main() {
   assert(chargingSource.includes("chargingManagement.control.pvPriorityPurePvOnly"), 'Reine-PV-Prioritaetssemantik ist nicht diagnostizierbar.');
   assert(chargingSource.includes('pvPureAvailableW: pvCapW'), 'Reiner PV-Anteil wird nicht separat an den finalen Allocator uebergeben.');
   assert(chargingSource.includes('pvPhysicalAvailableW: pvPhysicalCapW'), 'Physikalischer Min+PV-PV-Rest fehlt im finalen Allocator.');
-  assert(chargingSource.includes('isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed)'), 'Boost wird im Runtime-Abschluss noch vom optionalen Fahrzeugbedarf auf 0 gesetzt.');
+  assert(chargingSource.includes('isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed, w.vehicleStartEligible, w.vehicleStartProbeActive)'), 'Runtime-Abschluss kennt den universellen Startprobe-/Boost-Vertrag nicht.');
   assert(chargingSource.includes('shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)'), 'Zeit-Ziel-SoC-Warten kann Boost noch stoppen.');
   assert(chargingSource.includes('minimumServicePlan.preserveAll && !isBoost'), 'Boost reserviert weiterhin Mindestleistung fuer spaetere Ladepunkte statt den maximalen Hard-Grant zu nutzen.');
   assert(chargingSource.includes('applyChargingModeRamp(prevCmdA, cmdA, wbMaxDeltaA, effMode)'), 'Boost-Strom wird weiterhin durch die weiche Hochlauframpe verzoegert.');
