@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:b239f95312388b77cc0518d504d8576e3b7dcc3ac67abf3ac196555c8fe7c353
+ * Quell-Hash: sha256:7fa9da50e9038b26297c12481b0d1b5a59904125203392811b0df3442c5cadbc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -163,6 +163,58 @@ function normalizeUserMode(raw) {
     if (s === 'manual3' || s === 'stufe3' || s === 'level3') return 'manual3';
     if (s === 'off' || s === 'aus' || s === '0') return 'off';
     return 'inherit';
+}
+
+/**
+ * Normalisiert eine lokale Uhrzeit im Format HH:MM. Die Heizstab-Nachtsperre
+ * arbeitet absichtlich ohne Wetter-/Cloud-Abhängigkeit und folgt der lokalen
+ * Systemzeit des EOS-Controllers.
+ */
+function normalizeHeatingRodTimeOfDay(raw, fallback = '00:00') {
+    const source = String(raw ?? '').trim();
+    const match = /^(\d{1,2}):(\d{1,2})$/.exec(source);
+    if (!match) return String(fallback || '00:00');
+    const hour = Math.max(0, Math.min(23, Math.round(Number(match[1]) || 0)));
+    const minute = Math.max(0, Math.min(59, Math.round(Number(match[2]) || 0)));
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function heatingRodTimeOfDayMinutes(value) {
+    const normalized = normalizeHeatingRodTimeOfDay(value, '00:00');
+    const [hour, minute] = normalized.split(':').map(Number);
+    return (hour * 60) + minute;
+}
+
+/**
+ * Liefert den konfigurierten Nachtzeitraum. Ein Fenster über Mitternacht wird
+ * korrekt behandelt. Start == Ende bedeutet bei aktivierter Sperre bewusst
+ * 24 Stunden manuelle Freigabe, damit eine Fehlkonfiguration nicht heimlich
+ * PV-Auto einschaltet.
+ */
+function resolveHeatingRodNightPvAutoLock(cfg = {}, timestamp = Date.now()) {
+    const enabled = cfg.blockPvAutoAtNight !== false;
+    const startTime = normalizeHeatingRodTimeOfDay(cfg.nightStartTime, '20:00');
+    const endTime = normalizeHeatingRodTimeOfDay(cfg.nightEndTime, '06:00');
+    const startMinute = heatingRodTimeOfDayMinutes(startTime);
+    const endMinute = heatingRodTimeOfDayMinutes(endTime);
+    const date = new Date(Number.isFinite(Number(timestamp)) ? Number(timestamp) : Date.now());
+    const currentMinute = (date.getHours() * 60) + date.getMinutes();
+    let active = false;
+    if (enabled) {
+        if (startMinute === endMinute) active = true;
+        else if (startMinute < endMinute) active = currentMinute >= startMinute && currentMinute < endMinute;
+        else active = currentMinute >= startMinute || currentMinute < endMinute;
+    }
+    return {
+        enabled,
+        active,
+        startTime,
+        endTime,
+        currentMinute,
+        reason: !enabled
+            ? 'night-lock-disabled'
+            : (active ? 'night-window-manual-release-only' : 'outside-night-window'),
+    };
 }
 /**
  * Code-Teil: normalizeHeatingRodAutoMode
@@ -673,6 +725,12 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.pvAutomationMinW', 'PV-Auto minimum PV power (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.pvAutomationPvNowW', 'PV-Auto current PV power used for gate (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.pvAutomationAllowed', 'PV-Auto allowed by minimum PV power', 'boolean', 'indicator');
+        await mk('heatingRod.summary.nightPvAutoBlockEnabled', 'PV-Auto nachts gesperrt', 'boolean', 'indicator');
+        await mk('heatingRod.summary.nightWindowActive', 'Nachtfenster aktiv', 'boolean', 'indicator');
+        await mk('heatingRod.summary.nightStartTime', 'Nachtfenster Beginn', 'string', 'text');
+        await mk('heatingRod.summary.nightEndTime', 'Nachtfenster Ende', 'string', 'text');
+        await mk('heatingRod.summary.nightManualOnly', 'Nachts nur manuelle Freigabe', 'boolean', 'indicator');
+        await mk('heatingRod.summary.nightBlockReason', 'Nachtfreigabe Status', 'string', 'text');
         await mk('heatingRod.summary.lastUpdate', 'Last update', 'number', 'value.time');
         await mk('heatingRod.summary.status', 'Status', 'string', 'text');
 
@@ -750,6 +808,9 @@ class HeatingRodControlModule extends BaseModule {
             await mk(`heatingRod.devices.${d.id}.zeroExportReason`, 'Zero/minus feed-in reason', 'string', 'text');
             await mk(`heatingRod.devices.${d.id}.zeroExportCanProbe`, 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
             await mk(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, 'Zero/minus feed-in next probe at', 'number', 'value.time');
+            await mk(`heatingRod.devices.${d.id}.nightWindowActive`, 'Nachtfenster aktiv', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.nightPvAutoBlocked`, 'PV-Auto durch Nachtfenster gesperrt', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.nightManualReleaseAllowed`, 'Manuelle Nachtfreigabe zulässig', 'boolean', 'indicator');
 
             if (this.dp && d.powerId) {
                 const k = `hr.${d.id}.pW`;
@@ -4591,6 +4652,7 @@ class HeatingRodControlModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const now = nowMs();
+        const nightPvAutoLock = resolveHeatingRodNightPvAutoLock(this._getCfg(), now);
 
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
@@ -4684,6 +4746,9 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportCanProbe`, !!(zeroExportStrategyActive && zeroExportInfo.canProbe));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroExportInfo.reason || ''));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num((this._stageCtl.get(d.id) || {}).zeroCooldownUntilMs, 0)));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.nightWindowActive`, !!nightPvAutoLock.active);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.nightPvAutoBlocked`, false);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.nightManualReleaseAllowed`, !!nightPvAutoLock.active);
 
             let userEnabled = true;
             try {
@@ -5126,6 +5191,45 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
+            // Nachtbetrieb: PV-Auto darf im konfigurierten Zeitfenster niemals
+            // selbstständig laufen. Explizite Kundenfreigaben (Manual 1/2/3,
+            // Boost oder eine klar erkannte externe KNX-/Relais-Schaltung) wurden
+            // bereits in den vorherigen Zweigen behandelt und bleiben erlaubt.
+            // Damit wird nur die automatische Eigentümerschaft aktiv auf 0 gesetzt.
+            if (pvAutomationActive && nightPvAutoLock.active) {
+                this._para14aHeldStages.delete(String(d.id));
+                const res = await this._applyStageState(d, 0, feedback, {
+                    force: true,
+                    manual: false,
+                    owner: this._deviceOwner(d, false),
+                    enforceAuthority: true,
+                    releaseAuthority: true,
+                    kind: 'heating-rod-night-pv-auto-lock',
+                    reason: `Heizstab PV-Auto Nachtblock ${nightPvAutoLock.startTime}-${nightPvAutoLock.endTime}`,
+                });
+                const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW || this._sumStagePowerModel(d, observedStage, observedStage, measuredW));
+                this._recordAcceptedHeatingEffect(d, res, baselineW, 0, 'Heizstab PV-Auto Nachtblock');
+                if (res.accepted) this._setStageCtlTarget(d.id, 0, observedStage);
+                this._markAutoOwnership(d, false, 0, 'night_pv_auto_blocked');
+                const observedUsedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePowerModel(d, observedStage, observedStage, measuredW),
+                );
+                const usedW = consumeHeatingRodW(observedUsedW, d.enabled === true);
+                appliedTotalW += Math.round(usedW);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.nightPvAutoBlocked`, true);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `night_pv_auto_blocked_${String(res.status || '')}`);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_release_required');
+                continue;
+            }
+
             this._para14aHeldStages.delete(String(d.id));
             const strategyAction = String(strategyOverlay.action || 'standard').toLowerCase();
             const strategyPause = strategyOverlay.fallbackPause === true
@@ -5524,6 +5628,12 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAutomationMinW', Math.round(num(minPvAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationPvNowW', Math.round(num(pvNowForAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
+        await this._setStateIfChanged('heatingRod.summary.nightPvAutoBlockEnabled', !!nightPvAutoLock.enabled);
+        await this._setStateIfChanged('heatingRod.summary.nightWindowActive', !!nightPvAutoLock.active);
+        await this._setStateIfChanged('heatingRod.summary.nightStartTime', String(nightPvAutoLock.startTime || '20:00'));
+        await this._setStateIfChanged('heatingRod.summary.nightEndTime', String(nightPvAutoLock.endTime || '06:00'));
+        await this._setStateIfChanged('heatingRod.summary.nightManualOnly', !!nightPvAutoLock.active);
+        await this._setStateIfChanged('heatingRod.summary.nightBlockReason', String(nightPvAutoLock.reason || ''));
         await this._setStateIfChanged('heatingRod.summary.tsShadowJson', JSON.stringify(heatingRodTsShadow || {}));
         await this._setStateIfChanged('heatingRod.summary.source', heatingRodTsProductive && heatingRodTsProductive.effectiveSource ? heatingRodTsProductive.effectiveSource : (heatingRodTsProductive && heatingRodTsProductive.active ? 'ts-heating-rod' : 'js-runtime'));
         await this._setStateIfChanged('heatingRod.summary.jsFallbackMode', String(heatingRodTsNormalSource && heatingRodTsNormalSource.jsFallbackMode || heatingRodTsProductive && heatingRodTsProductive.jsFallbackMode || 'normal-safety-fallback'));
@@ -5558,6 +5668,7 @@ class HeatingRodControlModule extends BaseModule {
             pvAutomationMinW: Math.round(num(minPvAutomationW, 0)),
             pvAutomationPvNowW: Math.round(num(pvNowForAutomationW, 0)),
             pvAutomationAllowed: !!pvAutomationAllowedByMin,
+            nightPvAutoLock,
             gridKnown: !!pvBase.gridKnown,
             gridW: pvBase.gridW,
             importW: Math.round(num(pvBase.importW, 0)),
@@ -5635,4 +5746,4 @@ class HeatingRodControlModule extends BaseModule {
     }
 }
 
-module.exports = { HeatingRodControlModule };
+module.exports = { HeatingRodControlModule, resolveHeatingRodNightPvAutoLock };

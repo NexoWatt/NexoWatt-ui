@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f7f0cf05871daada6627243dc3bbb8acfad1926b8e295c9d4411d75326f55375
+ * Original-Hash: 8783f7d01a6b4aacb4dd189fae3492f57fe08ce9b6a4a9a4f3fdd98e302683db
  */
 
 /**
@@ -41,6 +41,7 @@ const {
   isOcppVolatileOnlineObjectId,
   resolveOcppOnlineObjectId,
   resolveEvcsEffectivePower,
+  resolveEvcsSetpointRefreshMs,
 } = require('../ems/modules/charging-management');
 
 const OCPP = 'ocpp-1.6-event-driven';
@@ -196,7 +197,7 @@ assert.strictEqual(isOcppDataFreshObjectId('mqtt.0.wallbox.dataFresh', native), 
     'function belongsToOcppConnectorContext(',
     'function isOcppVolatileOnlineObjectId(objectId, ocppContext = null)',
     'function resolveOcppOnlineObjectId(configuredOnlineId, ocppContext)',
-    "const setpointRefreshMs = 45000;",
+    'const setpointRefreshMs = resolveEvcsSetpointRefreshMs(',
     "const ocppStartResponseTimeoutMs = clamp(num(cfg.ocppStartResponseTimeoutSec, 75)",
     "const ocppStartSettleMs = clamp(num(cfg.ocppStartSettleSec, 60)",
     "mappingIssues.push('ocpp_online_source_migrated')",
@@ -205,7 +206,7 @@ assert.strictEqual(isOcppDataFreshObjectId('mqtt.0.wallbox.dataFresh', native), 
   ]) {
     assert.ok(source.includes(marker), `Charging runtime marker missing: ${marker}`);
   }
-  assert.ok(!source.includes('ocppSetpointRefreshSec'), 'OCPP must keep the proven 45-second write refresh contract');
+  assert.strictEqual(resolveEvcsSetpointRefreshMs({}, OCPP), 45000, 'OCPP must keep the proven 45-second write refresh contract');
   assert.ok(mainSource.includes("setNumber('chargingManagement.ocppStartResponseTimeoutSec', 75);"));
   assert.ok(mainSource.includes("setNumber('chargingManagement.ocppStartSettleSec', 60);"));
   assert.ok(mainSource.includes("setNumber('schedulerIntervalMs', 1000);"), 'Global EMS tick must stay unchanged');

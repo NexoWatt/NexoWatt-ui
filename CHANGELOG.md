@@ -1,3 +1,13 @@
+## 0.8.186 - 2026-08-15
+
+- Heizstab-PV-Auto um eine standardmäßig aktive, frei konfigurierbare Nachtsperre ergänzt. Im Nachtfenster (Standard 20:00–06:00) setzt das EOS ausschließlich automatisch übernommene Heizstab-Stufen auf 0; Manual 1/2/3, Boost und eine eindeutig erkannte externe KNX-/Relais-Handfreigabe bleiben zulässig. Start und Ende arbeiten mit lokaler Controllerzeit und unterstützen Fenster über Mitternacht.
+- Heizstab-Diagnose um Nachtfenster, Sperrstatus, Zeitgrenzen und erforderliche Handfreigabe ergänzt. Die Oberfläche zeigt die Nachtfunktion direkt in der Heizstab-App; Start gleich Ende wird fail-safe als ganztägige Handfreigabe-Pflicht behandelt.
+- Gerätespezifische EVCS-Sollwert-Keepalives eingeführt: Alfen 15 s, Modbus/NexoWatt Devices 20 s, generische Treiber 30 s und OCPP21 45 s. Ein expliziter Installerwert bleibt möglich und verhindert insbesondere das Auslaufen externer Alfen-/Modbus-Sollwerte.
+- Direkte OCPP21-Aktorbestätigung in das Lademanagement aufgenommen. `control.requestedChargeLimit`, `appliedChargeLimit`, `chargeLimitReason`, `chargeLimitClamped`, `lastSuccess`, `lastError` und `lastCommandAt` werden getrennt diagnostiziert; ein gehaltenes altes Profil kann nicht mehr als bestätigter 0-W-Stopp gelten.
+- Safety-Domänen feiner getrennt: Ein fehlgeschlagener positiver EVCS-Start oder eine Leistungserhöhung bleibt ladepunktlokal und verriegelt die Speicherfarm nicht. Nur ein nicht erreichbarer oder nicht bestätigter erforderlicher EVCS-Sicherheitsstopp invalidiert weiterhin das globale Safety-Envelope fail-closed.
+- OCPP-0-W-Vertrag für NexoWatt OCPP 0.4.1 vorbereitet: Eine explizite Pause wird anhand des tatsächlich angeforderten und angewendeten Limits bestätigt. Netz-, Stations-, Phasen-, §14a-, Parkregler-, Speicher- und Single-Writer-Grenzen bleiben unverändert übergeordnet.
+- Neue Regressionen prüfen Nachtfenster und Handfreigabe, Alfen-/Device-/OCPP-Keepalives, positive Startfehler-Isolierung, erforderliche Stop-Eskalation, OCPP-Befehlsbestätigung sowie die bestehenden Universal-Auto-, Speicherfarm-, Heizstab- und Safety-Pfade.
+
 ## 0.8.185 - 2026-08-13
 
 - Universellen Auto-Orchestrator für NexoWatt Devices, NexoWatt OCPP21 und frei/manuell zugeordnete Ladepunkte ergänzt. Alle Protokolle verwenden dieselbe Fahrzeugkontakt-, Startbereitschafts- und Ladebedarfssemantik.

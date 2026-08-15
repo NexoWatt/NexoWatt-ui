@@ -11,6 +11,7 @@ const {
   isOcppVolatileOnlineObjectId,
   resolveOcppOnlineObjectId,
   resolveEvcsEffectivePower,
+  resolveEvcsSetpointRefreshMs,
 } = require('../ems/modules/charging-management');
 
 const OCPP = 'ocpp-1.6-event-driven';
@@ -166,7 +167,7 @@ assert.strictEqual(isOcppDataFreshObjectId('mqtt.0.wallbox.dataFresh', native), 
     'function belongsToOcppConnectorContext(',
     'function isOcppVolatileOnlineObjectId(objectId, ocppContext = null)',
     'function resolveOcppOnlineObjectId(configuredOnlineId, ocppContext)',
-    "const setpointRefreshMs = 45000;",
+    'const setpointRefreshMs = resolveEvcsSetpointRefreshMs(',
     "const ocppStartResponseTimeoutMs = clamp(num(cfg.ocppStartResponseTimeoutSec, 75)",
     "const ocppStartSettleMs = clamp(num(cfg.ocppStartSettleSec, 60)",
     "mappingIssues.push('ocpp_online_source_migrated')",
@@ -175,7 +176,7 @@ assert.strictEqual(isOcppDataFreshObjectId('mqtt.0.wallbox.dataFresh', native), 
   ]) {
     assert.ok(source.includes(marker), `Charging runtime marker missing: ${marker}`);
   }
-  assert.ok(!source.includes('ocppSetpointRefreshSec'), 'OCPP must keep the proven 45-second write refresh contract');
+  assert.strictEqual(resolveEvcsSetpointRefreshMs({}, OCPP), 45000, 'OCPP must keep the proven 45-second write refresh contract');
   assert.ok(mainSource.includes("setNumber('chargingManagement.ocppStartResponseTimeoutSec', 75);"));
   assert.ok(mainSource.includes("setNumber('chargingManagement.ocppStartSettleSec', 60);"));
   assert.ok(mainSource.includes("setNumber('schedulerIntervalMs', 1000);"), 'Global EMS tick must stay unchanged');

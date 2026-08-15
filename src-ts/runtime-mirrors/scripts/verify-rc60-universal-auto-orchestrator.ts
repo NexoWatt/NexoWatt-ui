@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2095b70ac9bad48ac233a2f8018303373b6e85aba2ab94334a4804a7a6935b45
+ * Original-Hash: 5a1e3015f44703aae7260e7426cda10505c00645850629a209288c3916196dc0
  */
 
 /**
@@ -511,10 +511,13 @@ function assertTechnicalStart(result, name, basis = 'currentA') {
   assertTechnicalStart(afterCooldown, 'Cooldown retry probe');
   cooldownHarness.module.stop();
 
-  // Alfen Modbus default validity is 60 s; the runtime must refresh unchanged
-  // setpoints before that fallback can fire.
+  // Alfen Modbus default validity is 60 s; RC61 resolves a device-specific
+  // keepalive and refreshes Alfen setpoints every 15 s while OCPP/generic
+  // profiles retain their own safe cadence.
   const source = require('fs').readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
-  assert(source.includes('const setpointRefreshMs = 45000;'), 'EVCS setpoint keepalive must remain below Alfen 60 s validity.');
+  assert(source.includes('resolveEvcsSetpointRefreshMs('), 'Universal EVCS keepalive resolver is missing.');
+  const { resolveEvcsSetpointRefreshMs } = require(path.join(root, 'ems/modules/charging-management'));
+  assert.strictEqual(resolveEvcsSetpointRefreshMs({ vendor: 'Alfen' }, 'generic'), 15000, 'Alfen keepalive must stay well below the 60 s validity.');
   for (const needle of [
     'vehicleStartResponseTimeoutSec',
     'vehicleStartRetryCooldownSec',

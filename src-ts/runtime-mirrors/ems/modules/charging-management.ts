@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6d09c70032e434202ecf52ab0a7117045fb20cb55881564cc0213ee7bd3eb335
+ * Original-Hash: bbc55f8cc13020f8212b7ae2532d083ea7b0d3799faec7cb6e7a816f99346111
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:d7fa25ee8f80f78fc6c0ee4fec1941517a16c37677686399e52a62b3721842ca
+ * Quell-Hash: sha256:1104af1da5f7dbd825798748760acfe5ed6a2a4295b34b98fe83cf614cdf6943
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1762,6 +1762,10 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
             lastCommandAtId: `${nativeDeviceRoot}.control.lastCommandAt`,
             lastCommandSuccessId: `${nativeDeviceRoot}.control.lastSuccess`,
             lastCommandErrorId: `${nativeDeviceRoot}.control.lastError`,
+            requestedChargeLimitId: `${nativeDeviceRoot}.control.requestedChargeLimit`,
+            appliedChargeLimitId: `${nativeDeviceRoot}.control.appliedChargeLimit`,
+            chargeLimitReasonId: `${nativeDeviceRoot}.control.chargeLimitReason`,
+            chargeLimitClampedId: `${nativeDeviceRoot}.control.chargeLimitClamped`,
             adapterAliveId: `system.adapter.ocpp21.${instance}.alive`,
         };
     };
@@ -2036,6 +2040,118 @@ function resolveEvcsTelemetryProfile(configuredProfile, ocppContext) {
     if (['iobrokerocpp', 'iobrokerocpp16', 'ocpp', 'ocpp16', 'ocpp20', 'ocpp201', 'ocpp21', 'nexowattocpp'].includes(token)) return 'ocpp-1.6-event-driven';
     if (['generic', 'polling', 'modbus', 'http', 'mqtt', 'udp'].includes(token)) return 'generic';
     return ocppContext && ocppContext.detected ? 'ocpp-1.6-event-driven' : 'generic';
+}
+
+/**
+ * Gerätespezifischer Sollwert-Keepalive. Lokale Modbus-/Device-Wallboxen wie
+ * Alfen erwarten typischerweise deutlich häufiger einen gültigen Sollwert als
+ * OCPP-Ladestationen. Ein expliziter Installerwert gewinnt immer.
+ */
+function resolveEvcsSetpointRefreshMs(wb = {}, telemetryProfile = 'generic', ...objectIds) {
+    const explicitSec = Number(
+        wb.setpointKeepaliveSec
+        ?? wb.setpointRefreshSec
+        ?? wb.commandKeepaliveSec
+        ?? wb.refreshSetpointSec,
+    );
+    if (Number.isFinite(explicitSec) && explicitSec > 0) {
+        return Math.max(5000, Math.min(300000, Math.round(explicitSec * 1000)));
+    }
+    if (String(telemetryProfile || '') === 'ocpp-1.6-event-driven') return 45000;
+    const fingerprint = [
+        wb.name,
+        wb.manufacturer,
+        wb.vendor,
+        wb.model,
+        wb.deviceType,
+        wb.template,
+        wb.profile,
+        wb.adapter,
+        ...objectIds,
+    ].map(value => String(value || '').trim().toLowerCase()).filter(Boolean).join('|');
+    if (fingerprint.includes('alfen')) return 15000;
+    if (
+        fingerprint.includes('modbus')
+        || fingerprint.includes('nexowatt-devices')
+        || fingerprint.includes('nexowatt.devices')
+        || fingerprint.includes('device-adapter')
+        || fingerprint.includes('devices.')
+    ) return 20000;
+    return 30000;
+}
+
+/**
+ * Code-Teil: parseEvcsCommandTimestamp
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function parseEvcsCommandTimestamp(value) {
+    if (value === null || value === undefined || value === '') return 0;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric < 100000000000 ? numeric * 1000 : numeric;
+    const parsed = Date.parse(String(value));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Code-Teil: evaluateOcppCommandConfirmation
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function evaluateOcppCommandConfirmation({
+    targetW = null,
+    requestedW = null,
+    appliedW = null,
+    lastSuccess = null,
+    lastError = '',
+    reason = '',
+    commandAt = 0,
+    now = Date.now(),
+} = {}) {
+    const target = strictFiniteEvcsNumber(targetW);
+    const requested = strictFiniteEvcsNumber(requestedW);
+    const applied = strictFiniteEvcsNumber(appliedW);
+    const successKnown = typeof lastSuccess === 'boolean';
+    const reasonText = String(reason || '').trim();
+    const errorText = String(lastError || '').trim();
+    const ageMs = commandAt > 0 ? Math.max(0, now - commandAt) : null;
+    const toleranceW = target !== null && target <= 0 ? 1 : 150;
+    const requestMatches = target !== null && requested !== null && Math.abs(target - requested) <= toleranceW;
+    const appliedMatches = target !== null && applied !== null && Math.abs(target - applied) <= toleranceW;
+    const zeroHeld = target !== null && target <= 0 && reasonText === 'zero-held-to-prevent-unintended-interruption';
+    const confirmed = successKnown && lastSuccess === true && requestMatches && appliedMatches && !zeroHeld;
+    let state = 'unknown';
+    if (zeroHeld) state = 'zero-held-not-applied';
+    else if (successKnown && lastSuccess === false) state = errorText ? `failed:${errorText}` : 'failed';
+    else if (confirmed) state = 'confirmed';
+    else if (target !== null && commandAt > 0 && ageMs !== null && ageMs <= 30000) state = 'pending';
+    else if (target !== null && requestMatches && !appliedMatches) state = 'requested-not-applied';
+    return {
+        known: successKnown || requested !== null || applied !== null || !!reasonText,
+        confirmed,
+        state,
+        targetW: target,
+        requestedW: requested,
+        appliedW: applied,
+        requestMatches,
+        appliedMatches,
+        zeroHeld,
+        ageMs,
+        reason: reasonText,
+        error: errorText,
+    };
 }
 
 /** OCPP-Zustände, bei denen physikalisch aktuell keine Fahrzeugleistung fließen darf. */
@@ -3991,6 +4107,10 @@ class ChargingManagementModule extends BaseModule {
                 && (isPhaseSwitchEntry ? w.controlAvailable === true : (w.controlAvailable === true || (targetW <= 0 && targetA <= 0 && safeStopAllowed)))
             );
             let applied = false;
+            let hardwareConfirmed = isPhaseSwitchEntry ? false : w.telemetryProfile !== 'ocpp-1.6-event-driven';
+            let hardwareCommandState = isPhaseSwitchEntry ? 'phase-switch' : (w.telemetryProfile === 'ocpp-1.6-event-driven' ? 'pending' : 'not-applicable');
+            let hardwareCommandAgeMs = 0;
+            let hardwareCommandFailure = false;
             let applyStatus = positiveCommandBlocked
                 ? (w.faultActive ? 'fault-safe-stop' : (w.unavailableActive ? 'unavailable-safe-stop' : 'blocked-safe-stop'))
                 : (safetyCommandBlocked
@@ -4101,6 +4221,38 @@ class ChargingManagementModule extends BaseModule {
                     result.ok = false;
                 }
             }
+            if (!isPhaseSwitchEntry && w.telemetryProfile === 'ocpp-1.6-event-driven') {
+                const confirmation = evaluateOcppCommandConfirmation({
+                    targetW,
+                    requestedW: w.ocppRequestedChargeLimitW,
+                    appliedW: w.ocppAppliedChargeLimitW,
+                    lastSuccess: w.ocppLastCommandSuccess,
+                    lastError: w.ocppLastCommandError,
+                    reason: w.ocppChargeLimitReason,
+                    commandAt: w.ocppLastCommandAtMs,
+                    now: Date.now(),
+                });
+                hardwareConfirmed = confirmation.confirmed === true;
+                hardwareCommandAgeMs = confirmation.ageMs === null ? 0 : Math.round(confirmation.ageMs);
+                hardwareCommandState = hardwareConfirmed
+                    ? 'confirmed'
+                    : (applied ? 'pending-after-write' : String(confirmation.state || 'not-written'));
+                const confirmationMatchesTarget = confirmation.requestMatches === true;
+                hardwareCommandFailure = confirmation.zeroHeld === true
+                    || (confirmationMatchesTarget && String(confirmation.state || '').startsWith('failed'))
+                    || (confirmationMatchesTarget && confirmation.ageMs !== null && confirmation.ageMs > 30000 && confirmation.confirmed !== true);
+                if (hardwareCommandFailure) {
+                    hardwareCommandState = String(confirmation.state || 'ocpp-command-not-confirmed');
+                    applyStatus = targetW <= 0 && confirmation.zeroHeld
+                        ? 'ocpp-zero-held-not-stopped'
+                        : `ocpp-command-not-confirmed:${hardwareCommandState}`;
+                    result.ok = false;
+                    if (applied) result.failedCount += 1;
+                }
+            } else if (!isPhaseSwitchEntry) {
+                hardwareConfirmed = applied;
+                hardwareCommandState = applied ? 'write-confirmed-by-local-driver' : 'write-not-confirmed';
+            }
             if (!isPhaseSwitchEntry && safetyDecision) {
                 const acceptedWithoutWrite = !shouldWrite
                     && !safetyStopExisting
@@ -4108,10 +4260,24 @@ class ChargingManagementModule extends BaseModule {
                     && entry.blocked !== true
                     && w.online
                     && w.controlAvailable === true;
-                const safetyAccepted = applied || acceptedWithoutWrite;
+                const safetyAccepted = (applied && !hardwareCommandFailure) || acceptedWithoutWrite;
                 commitFlexibleLoadDecision(this.adapter, safetyDecision, safetyAccepted);
                 if (safetyAccepted && stationKey) stationTargetsW.set(stationKey, stationUsedW + Math.max(0, targetW));
-                if ((!shouldWrite || !applied) && (requestedFlexibleW > 0 || safetyStopExisting)) {
+                const safetyStopCommandRequired = !!(
+                    safetyStopExisting
+                    || (
+                        targetW <= 0
+                        && targetA <= 0
+                        && (currentActualW > 0.5 || previousCommandForSafetyW > 0.5)
+                        && safetyDecision
+                        && (safetyDecision.forceZero === true || safetyDecision.blocked === true)
+                    )
+                );
+                // Fehler beim Starten/Erhöhen eines Ladepunkts bleiben lokal in
+                // der EVCS-Domäne. Nur ein nicht bestätigter notwendiger STOPP
+                // darf das globale Safety-Envelope und damit weitere flexible
+                // Verbraucher/Speicher verriegeln.
+                if (safetyStopCommandRequired && (!shouldWrite || !applied || hardwareCommandFailure)) {
                     invalidateSafetyEnvelope(this.adapter, `evcs-write-not-confirmed:${safe}:${applyStatus}`, {
                         generation: this.adapter?._emsSafetyCycle?.generation,
                         now: Date.now(),
@@ -4138,6 +4304,9 @@ class ChargingManagementModule extends BaseModule {
             }
             try { await this._queueState(`${w.ch}.applied`, applied, true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.applyStatus`, applyStatus, true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.hardwareCommandConfirmed`, !!hardwareConfirmed, true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.hardwareCommandState`, String(hardwareCommandState || ''), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.hardwareCommandAgeMs`, Math.max(0, Math.round(Number(hardwareCommandAgeMs) || 0)), true); } catch { /* ignore */ }
             try {
                 await this._queueState(`${w.ch}.applyWrites`, applyWrites ? JSON.stringify(applyWrites) : '', true);
             } catch {
@@ -4158,7 +4327,7 @@ class ChargingManagementModule extends BaseModule {
                     targetW,
                     baselineW: measuredBaselineW,
                     baselineFresh: measuredBaselineW !== null,
-                    accepted: applied,
+                    accepted: applied && !hardwareCommandFailure,
                     commandChanged,
                     kind: 'load',
                     source: 'chargingManagement',
@@ -4178,6 +4347,9 @@ class ChargingManagementModule extends BaseModule {
             if (dbg && typeof dbg === 'object') {
                 dbg.applied = applied;
                 dbg.applyStatus = applyStatus;
+                dbg.hardwareCommandConfirmed = hardwareConfirmed;
+                dbg.hardwareCommandState = hardwareCommandState;
+                dbg.hardwareCommandAgeMs = hardwareCommandAgeMs;
                 dbg.applyWrites = applyWrites;
                 dbg.executorSource = executorSource || '';
                 dbg.writePlanFallbackReason = fallbackReason || '';
@@ -4213,6 +4385,9 @@ class ChargingManagementModule extends BaseModule {
                 basis: isPhaseSwitchEntry ? 'phase' : plannedBasis,
                 setpointKey: plannedSetpointKey || '',
                 applied,
+                hardwareConfirmed,
+                hardwareCommandState,
+                hardwareCommandAgeMs,
                 status: applyStatus,
                 source: executorSource || '',
                 reason: String((safetyDecision && safetyDecision.clamped ? safetyDecision.reason : applyStatus) || entry.reason || ''),
@@ -5253,6 +5428,18 @@ class ChargingManagementModule extends BaseModule {
         await mk('ocppDatapointContract', 'Erkannter OCPP-Datenpunktvertrag', 'string', 'text');
         await mk('ocppDatapointMappingMigrated', 'Alte OCPP-/Alias-Zuordnung auf nativen OCPP21-Vertrag migriert', 'boolean', 'indicator');
         await mk('ocppDatapointMappingMigrations', 'OCPP-Datenpunktmigrationen (json)', 'string', 'json');
+        await mk('setpointRefreshMs', 'Sollwert-Keepalive (ms)', 'number', 'value.interval');
+        await mk('ocppLastCommand', 'Letzter OCPP-Befehl', 'string', 'text');
+        await mk('ocppLastCommandAt', 'Letzter OCPP-Befehl Zeitpunkt', 'number', 'value.time');
+        await mk('ocppLastCommandSuccess', 'Letzter OCPP-Befehl erfolgreich', 'boolean', 'indicator');
+        await mk('ocppLastCommandError', 'Letzter OCPP-Befehlsfehler', 'string', 'text');
+        await mk('ocppRequestedChargeLimitW', 'OCPP angeforderte Ladegrenze (W)', 'number', 'value.power');
+        await mk('ocppAppliedChargeLimitW', 'OCPP angewendete Ladegrenze (W)', 'number', 'value.power');
+        await mk('ocppChargeLimitReason', 'OCPP Ladegrenzenentscheidung', 'string', 'text');
+        await mk('ocppChargeLimitClamped', 'OCPP Ladegrenze abweichend/begrenzt', 'boolean', 'indicator');
+        await mk('hardwareCommandConfirmed', 'Hardwarebefehl bestätigt', 'boolean', 'indicator');
+        await mk('hardwareCommandState', 'Hardwarebefehl Status', 'string', 'text');
+        await mk('hardwareCommandAgeMs', 'Hardwarebefehl Alter (ms)', 'number', 'value.time');
         await mk('onlineSourceId', 'Verwendeter Online-/Verbindungs-Datenpunkt', 'string', 'text');
         await mk('onlineIdWasDataFresh', 'Fehlzuordnung dataFresh als Online automatisch getrennt', 'boolean', 'indicator');
         await mk('onlineSourceMigrated', 'Volatilen OCPP-Online-Datenpunkt automatisch auf WebSocket-Verbindung migriert', 'boolean', 'indicator');
@@ -6085,6 +6272,30 @@ class ChargingManagementModule extends BaseModule {
             const ocppAdapterAliveId = telemetryProfile === 'ocpp-1.6-event-driven'
                 ? String(ocppContext.adapterAliveId || '').trim()
                 : '';
+            const ocppLastCommandId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.lastCommandId || '').trim()
+                : '';
+            const ocppLastCommandAtId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.lastCommandAtId || '').trim()
+                : '';
+            const ocppLastCommandSuccessId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.lastCommandSuccessId || '').trim()
+                : '';
+            const ocppLastCommandErrorId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.lastCommandErrorId || '').trim()
+                : '';
+            const ocppRequestedChargeLimitId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.requestedChargeLimitId || '').trim()
+                : '';
+            const ocppAppliedChargeLimitId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.appliedChargeLimitId || '').trim()
+                : '';
+            const ocppChargeLimitReasonId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.chargeLimitReasonId || '').trim()
+                : '';
+            const ocppChargeLimitClampedId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.chargeLimitClampedId || '').trim()
+                : '';
             const vehicleConnectedId = String(wb.vehicleConnectedId || '').trim();
             const configuredChargeDemandId = String(wb.chargeDemandId || '').trim();
             const chargeDemandObservationOnly = isObservationOnlyEvcsDemandObjectId(configuredChargeDemandId);
@@ -6128,15 +6339,20 @@ class ChargingManagementModule extends BaseModule {
             const l1Id = String(wb.phaseL1AId || '').trim();
             const l2Id = String(wb.phaseL2AId || '').trim();
             const l3Id = String(wb.phaseL3AId || '').trim();
+            const setpointRefreshMs = resolveEvcsSetpointRefreshMs(
+                wb,
+                telemetryProfile,
+                actualPowerWId,
+                actualCurrentAId,
+                setCurrentAId,
+                setPowerWId,
+                statusId,
+            );
 
             // Register dp mappings
             if (this.dp) {
                 if (actualPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.pW`, objectId: actualPowerWId, dataType: 'number', direction: 'in', unit: 'W' });
                 if (actualCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.iA`, objectId: actualCurrentAId, dataType: 'number', direction: 'in', unit: 'A' });
-                // Der bewährte 45-s-Keepalive bleibt für alle Geräte erhalten.
-                // Er hält kurzlebige EVCS-Sollwerte stabil, ohne den schnellen EMS-
-                // Regelzyklus oder die bestehende Single-Writer-Logik zu verändern.
-                const setpointRefreshMs = 45000;
                 if (setCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.setA`, objectId: setCurrentAId, dataType: 'number', direction: 'out', unit: 'A', deadband: 0.1, maxWriteIntervalMs: setpointRefreshMs });
                 if (setPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.setW`, objectId: setPowerWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25, maxWriteIntervalMs: setpointRefreshMs });
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
@@ -6146,6 +6362,14 @@ class ChargingManagementModule extends BaseModule {
                 if (chargingStateId) await this.dp.upsert({ key: `cm.wb.${safe}.chargingStateRaw`, objectId: chargingStateId, dataType: 'mixed', direction: 'in' });
                 if (transactionActiveId) await this.dp.upsert({ key: `cm.wb.${safe}.transactionActiveRaw`, objectId: transactionActiveId, dataType: 'mixed', direction: 'in' });
                 if (ocppAdapterAliveId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppAdapterAliveRaw`, objectId: ocppAdapterAliveId, dataType: 'mixed', direction: 'in' });
+                if (ocppLastCommandId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppLastCommandRaw`, objectId: ocppLastCommandId, dataType: 'mixed', direction: 'in' });
+                if (ocppLastCommandAtId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppLastCommandAtRaw`, objectId: ocppLastCommandAtId, dataType: 'mixed', direction: 'in' });
+                if (ocppLastCommandSuccessId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppLastCommandSuccessRaw`, objectId: ocppLastCommandSuccessId, dataType: 'mixed', direction: 'in' });
+                if (ocppLastCommandErrorId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppLastCommandErrorRaw`, objectId: ocppLastCommandErrorId, dataType: 'mixed', direction: 'in' });
+                if (ocppRequestedChargeLimitId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppRequestedChargeLimitRaw`, objectId: ocppRequestedChargeLimitId, dataType: 'mixed', direction: 'in' });
+                if (ocppAppliedChargeLimitId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppAppliedChargeLimitRaw`, objectId: ocppAppliedChargeLimitId, dataType: 'mixed', direction: 'in' });
+                if (ocppChargeLimitReasonId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppChargeLimitReasonRaw`, objectId: ocppChargeLimitReasonId, dataType: 'mixed', direction: 'in' });
+                if (ocppChargeLimitClampedId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppChargeLimitClampedRaw`, objectId: ocppChargeLimitClampedId, dataType: 'mixed', direction: 'in' });
                 if (vehicleConnectedId) await this.dp.upsert({ key: `cm.wb.${safe}.vehicleConnectedRaw`, objectId: vehicleConnectedId, dataType: 'mixed', direction: 'in' });
                 if (chargeDemandId) await this.dp.upsert({ key: `cm.wb.${safe}.chargeDemandRaw`, objectId: chargeDemandId, dataType: 'mixed', direction: 'in' });
                 if (heartbeatId) await this.dp.upsert({ key: `cm.wb.${safe}.heartbeatRaw`, objectId: heartbeatId, dataType: 'mixed', direction: 'in' });
@@ -6166,9 +6390,25 @@ class ChargingManagementModule extends BaseModule {
             const chargingStateRaw = (chargingStateId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.chargingStateRaw`) : null;
             const transactionActiveRaw = (transactionActiveId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.transactionActiveRaw`) : null;
             const ocppAdapterAliveRaw = (ocppAdapterAliveId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppAdapterAliveRaw`) : null;
+            const ocppLastCommandRaw = (ocppLastCommandId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppLastCommandRaw`) : null;
+            const ocppLastCommandAtRaw = (ocppLastCommandAtId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppLastCommandAtRaw`) : null;
+            const ocppLastCommandSuccessRaw = (ocppLastCommandSuccessId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppLastCommandSuccessRaw`) : null;
+            const ocppLastCommandErrorRaw = (ocppLastCommandErrorId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppLastCommandErrorRaw`) : null;
+            const ocppRequestedChargeLimitRaw = (ocppRequestedChargeLimitId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppRequestedChargeLimitRaw`) : null;
+            const ocppAppliedChargeLimitRaw = (ocppAppliedChargeLimitId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppAppliedChargeLimitRaw`) : null;
+            const ocppChargeLimitReasonRaw = (ocppChargeLimitReasonId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppChargeLimitReasonRaw`) : null;
+            const ocppChargeLimitClampedRaw = (ocppChargeLimitClampedId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppChargeLimitClampedRaw`) : null;
             const vehicleConnectedRaw = (vehicleConnectedId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.vehicleConnectedRaw`) : null;
             const chargeDemandRaw = (chargeDemandId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.chargeDemandRaw`) : null;
             const heartbeatRaw = (heartbeatId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.heartbeatRaw`) : null;
+            const ocppLastCommand = ocppLastCommandRaw === null || ocppLastCommandRaw === undefined ? '' : String(ocppLastCommandRaw);
+            const ocppLastCommandAtMs = parseEvcsCommandTimestamp(ocppLastCommandAtRaw);
+            const ocppLastCommandSuccess = ocppLastCommandSuccessId ? toBool(ocppLastCommandSuccessRaw) : null;
+            const ocppLastCommandError = ocppLastCommandErrorRaw === null || ocppLastCommandErrorRaw === undefined ? '' : String(ocppLastCommandErrorRaw);
+            const ocppRequestedChargeLimitW = strictFiniteEvcsNumber(ocppRequestedChargeLimitRaw);
+            const ocppAppliedChargeLimitW = strictFiniteEvcsNumber(ocppAppliedChargeLimitRaw);
+            const ocppChargeLimitReason = ocppChargeLimitReasonRaw === null || ocppChargeLimitReasonRaw === undefined ? '' : String(ocppChargeLimitReasonRaw);
+            const ocppChargeLimitClamped = ocppChargeLimitClampedId ? toBool(ocppChargeLimitClampedRaw) : null;
 
 /**
  * Code-Teil: normalizePhaseFeedbackRuntime
@@ -6484,6 +6724,21 @@ class ChargingManagementModule extends BaseModule {
             // Diagnose, aber kein Messwert-Failsafe. Für OCPP kann ein Status oder
             // StopTransaction einen effektiven 0-W-Wert autoritativ bestätigen.
             const staleAny = !!effectiveMeterStale;
+            const priorOcppTargetW = Number.isFinite(Number(previousCommandW))
+                ? Number(previousCommandW)
+                : ocppRequestedChargeLimitW;
+            const ocppCommandConfirmation = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? evaluateOcppCommandConfirmation({
+                    targetW: priorOcppTargetW,
+                    requestedW: ocppRequestedChargeLimitW,
+                    appliedW: ocppAppliedChargeLimitW,
+                    lastSuccess: ocppLastCommandSuccess,
+                    lastError: ocppLastCommandError,
+                    reason: ocppChargeLimitReason,
+                    commandAt: ocppLastCommandAtMs,
+                    now,
+                })
+                : { known: false, confirmed: true, state: 'not-applicable', ageMs: null, zeroHeld: false };
 
             // Publish diagnostics (UI)
             try {
@@ -6497,6 +6752,18 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.ocppDatapointContract`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.contractVersion || '') : '', true);
                 await this._queueState(`${ch}.ocppDatapointMappingMigrated`, ocppDatapointMappingMigrated, true);
                 await this._queueState(`${ch}.ocppDatapointMappingMigrations`, JSON.stringify(ocppDatapointMigrations), true);
+                await this._queueState(`${ch}.setpointRefreshMs`, setpointRefreshMs, true);
+                await this._queueState(`${ch}.ocppLastCommand`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppLastCommand : '', true);
+                await this._queueState(`${ch}.ocppLastCommandAt`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppLastCommandAtMs : 0, true);
+                await this._queueState(`${ch}.ocppLastCommandSuccess`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppLastCommandSuccess === true : true, true);
+                await this._queueState(`${ch}.ocppLastCommandError`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppLastCommandError : '', true);
+                await this._queueState(`${ch}.ocppRequestedChargeLimitW`, telemetryProfile === 'ocpp-1.6-event-driven' && ocppRequestedChargeLimitW !== null ? ocppRequestedChargeLimitW : 0, true);
+                await this._queueState(`${ch}.ocppAppliedChargeLimitW`, telemetryProfile === 'ocpp-1.6-event-driven' && ocppAppliedChargeLimitW !== null ? ocppAppliedChargeLimitW : 0, true);
+                await this._queueState(`${ch}.ocppChargeLimitReason`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppChargeLimitReason : '', true);
+                await this._queueState(`${ch}.ocppChargeLimitClamped`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppChargeLimitClamped === true : false, true);
+                await this._queueState(`${ch}.hardwareCommandConfirmed`, telemetryProfile === 'ocpp-1.6-event-driven' ? ocppCommandConfirmation.confirmed === true : true, true);
+                await this._queueState(`${ch}.hardwareCommandState`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppCommandConfirmation.state || 'unknown') : 'not-applicable', true);
+                await this._queueState(`${ch}.hardwareCommandAgeMs`, telemetryProfile === 'ocpp-1.6-event-driven' && ocppCommandConfirmation.ageMs !== null ? Math.round(ocppCommandConfirmation.ageMs) : 0, true);
                 await this._queueState(`${ch}.onlineSourceId`, onlineId, true);
                 await this._queueState(`${ch}.onlineIdWasDataFresh`, onlineIdWasDataFresh, true);
                 await this._queueState(`${ch}.onlineSourceMigrated`, onlineSourceMigrated, true);
@@ -7233,6 +7500,16 @@ class ChargingManagementModule extends BaseModule {
                 ocppDatapointContract: telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.contractVersion || '') : '',
                 ocppDatapointMappingMigrated,
                 ocppDatapointMappingMigrations: Array.isArray(ocppDatapointMigrations) ? ocppDatapointMigrations : [],
+                setpointRefreshMs,
+                ocppLastCommand,
+                ocppLastCommandAtMs,
+                ocppLastCommandSuccess,
+                ocppLastCommandError,
+                ocppRequestedChargeLimitW,
+                ocppAppliedChargeLimitW,
+                ocppChargeLimitReason,
+                ocppChargeLimitClamped,
+                ocppCommandConfirmation,
                 dataFreshId,
                 dataFreshKnown,
                 dataFresh,
@@ -11920,6 +12197,8 @@ module.exports = {
     isKnownOcppSemanticObjectId,
     resolveOcppCanonicalObjectId,
     resolveEvcsTelemetryProfile,
+    resolveEvcsSetpointRefreshMs,
+    evaluateOcppCommandConfirmation,
     resolveEvcsEffectivePower,
     reconcileOcppTransactionDemand,
     isOcppAuthoritativeZeroState,

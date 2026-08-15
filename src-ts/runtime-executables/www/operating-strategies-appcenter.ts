@@ -14,7 +14,7 @@
 
   const FOUNDATION_VERSION = '0.8.177';
   const RULE_BUILDER_VERSION = '0.8.178';
-  const LIVE_CONTROL_VERSION = '0.8.185';
+  const LIVE_CONTROL_VERSION = '0.8.186';
   const APP_ID = 'operatingStrategies';
   const ROOT_ID = 'nwOperatingStrategiesRoot';
 

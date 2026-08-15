@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:7c3f3b0e85b0cdd25948e999ed45f1f4e424e4b63f0ee91dd5cc72e273d21817
+ * Quell-Hash: sha256:c1c1cf5ad57c2b99d23356b81726db5524396c5875aedb39ce4507306eb57e70
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4887,6 +4887,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       : 'PV-Überschuss am NVP';
   }
 
+  function _normalizeHeatingRodClockTime(raw, fallback = '00:00') {
+    const source = String(raw ?? '').trim();
+    const match = /^(\d{1,2}):(\d{1,2})$/.exec(source);
+    if (!match) return String(fallback || '00:00');
+    const hour = Math.max(0, Math.min(23, Math.round(Number(match[1]) || 0)));
+    const minute = Math.max(0, Math.min(59, Math.round(Number(match[2]) || 0)));
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
   /**
    * Code-Teil: _ensureHeatingRodCfg
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -4904,6 +4913,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number.isFinite(_hrSocRaw) ? _hrSocRaw : 90)));
     const hMinPvRaw = Number(h.minPvPowerW ?? h.pvAutoMinPvPowerW ?? h.minCurrentPvW);
     h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
+    h.blockPvAutoAtNight = (typeof h.blockPvAutoAtNight === 'boolean') ? !!h.blockPvAutoAtNight : true;
+    h.nightStartTime = _normalizeHeatingRodClockTime(h.nightStartTime, '20:00');
+    h.nightEndTime = _normalizeHeatingRodClockTime(h.nightEndTime, '06:00');
     h.useBudgetGates = true;
     const legacyZeroForBudget = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     // Das alte Detail-Flag `zeroExport.enabled` wird nur zur Migration verwendet.
@@ -5611,6 +5623,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       ? 'Auto arbeitet im 0-W-/Forecast-Modus: Forecast gibt frei, Probe-Stufen testen PV-Nachregelung, Netzpunkt und Speicher schützen live.'
       : 'Auto arbeitet im klassischen PV-Überschussmodus: Zentrale EMS-Budget-Gates lesen, NVP-Überschuss verfolgen und eigene Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
     grpAuto.body.appendChild(autoInfo);
+    grpAuto.body.appendChild(_mkCfgField('PV-Auto nachts sperren', _mkCfgToggle(cfg.blockPvAutoAtNight !== false, (v) => {
+      cfg.blockPvAutoAtNight = !!v;
+      setDirty();
+    }), 'Im Nachtfenster werden nur automatisch gesetzte Heizstab-Stufen aktiv ausgeschaltet. Manual 1/2/3, Boost und eine erkannte externe manuelle KNX-/Relais-Freigabe bleiben möglich.'));
+    grpAuto.body.appendChild(_mkCfgField('Nacht beginnt', _mkCfgInput('time', cfg.nightStartTime || '20:00', (v) => {
+      cfg.nightStartTime = _normalizeHeatingRodClockTime(v, '20:00');
+      setDirty();
+    }, { width: '135px' }), 'Lokale Uhrzeit des EOS-Controllers. Das Fenster darf über Mitternacht laufen.'));
+    grpAuto.body.appendChild(_mkCfgField('Nacht endet', _mkCfgInput('time', cfg.nightEndTime || '06:00', (v) => {
+      cfg.nightEndTime = _normalizeHeatingRodClockTime(v, '06:00');
+      setDirty();
+    }, { width: '135px' }), 'Ab dieser Uhrzeit darf PV-Auto wieder selbstständig regeln.'));
     grpAuto.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkHeatingRodNumberInput('storageReserveW', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bleibt für Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
     grpAuto.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkHeatingRodNumberInput('storageTargetSocPct', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem SoC darf der Heizstab den Überschuss ohne Speicherreserve nutzen.'));
     grpAuto.body.appendChild(_mkCfgField('Auto ab PV (W)', _mkHeatingRodNumberInput('minPvPowerW', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));

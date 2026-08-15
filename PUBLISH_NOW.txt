@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.185 RC60 – direkter npm-Publish
+NexoWatt EOS 0.8.186 RC61 – direkter npm-Publish
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. In PowerShell in diesen Ordner wechseln.
@@ -6,9 +6,9 @@ NexoWatt EOS 0.8.185 RC60 – direkter npm-Publish
 4. Veröffentlichen: npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.185 auf npm noch frei ist,
+- ob Version 0.8.186 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob alle freigegebenen Produktdateien unverändert enthalten sind.
 
-RC60 vereinheitlicht Auto, PV, Min+PV, Zeit-Ziel und Tarifladen für NexoWatt Devices, NexoWatt OCPP21 und frei zugeordnete Ladepunkte.
+RC61 härtet den anlagenweiten Feldtest: gerätespezifische EVCS-Keepalives, direkte OCPP21-Befehlsbestätigung, explizite 0-W-Pause, isolierte EVCS-Startfehler und eine konfigurierbare Heizstab-Nachtsperre für PV-Auto.
