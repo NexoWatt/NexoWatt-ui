@@ -3982,7 +3982,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.186',
+        liveControlVersion: '0.8.187',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -22138,7 +22138,7 @@ app.post('/api/mesh/command/receive', async (req, res) => {
     await _nwMeshWriteState('meshMicrogrid.receiver.processedCommandIdsJson', JSON.stringify(newProcessed), true);
     await _nwMeshWriteState('meshMicrogrid.receiver.lastLocalWriteStatus', localWriteStatus, true);
     await _nwMeshWriteState('meshMicrogrid.receiver.lastLocalWriteError', localWriteError, true);
-    await _nwMeshWriteState('meshMicrogrid.receiver.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-command-receiver-summary.v1', ts: now, status: ack.status, acceptedCount: acceptedCommands.length, replayBlockedCount: replayCommands.length, senderNodeId, localCommandStateDp: cfg.localCommandStateDp, directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] }), true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-command-receiver-summary.v1', ts: now, status: ack.status, acceptedCount: acceptedCommands.length, replayBlockedCount: replayCommands.length, senderNodeId, localCommandStateDp: cfg.localCommandStateDp, directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: cfg.allowedPeerNodeIds || [] }), true);
     return res.status(localWriteStatus === 'error' ? 500 : 202).json(ack);
   } catch (e) {
     const msg = String(e && e.message ? e.message : e);
@@ -22154,6 +22154,7 @@ app.post('/api/mesh/peer/fieldtest', requireInstaller, async (req, res) => {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
     const cfg = _nwMeshTailscaleCfg();
+    const receiver = _nwMeshReceiverCfg();
     const meshCfg = _nwMeshMicrogridCfg();
     const payload = _nwMeshMicrogridBuildPayload();
     const clusterId = String((payload && payload.cluster && payload.cluster.id) || meshCfg.clusterId || 'cluster_01');
@@ -22176,7 +22177,23 @@ app.post('/api/mesh/peer/fieldtest', requireInstaller, async (req, res) => {
       const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_e) {} }, cfg.timeoutMs) : null;
       const headers = {};
       if (cfg.peerToken) headers['x-nexowatt-mesh-token'] = cfg.peerToken;
-      const peer = { url: base, ok: false, handshakeOk: false, statusOk: false, commandAckOk: false, ms: 0, errors: [] };
+      const peer = {
+        url: base,
+        ok: false,
+        handshakeOk: false,
+        statusOk: false,
+        commandAckOk: false,
+        handshake: null,
+        status: null,
+        commandAck: null,
+        ms: 0,
+        errors: [],
+        errorClass: 'unknown',
+        roundtripStatus: 'unknown',
+        roundtripLevel: 'unknown',
+        errorLabel: '',
+        operatorHint: '',
+      };
       try {
         const hsRes = await fetch(`${base}/api/mesh/handshake`, { cache: 'no-store', headers, signal: ctrl ? ctrl.signal : undefined });
         const handshake = await hsRes.json().catch(() => null);
@@ -22222,14 +22239,14 @@ app.post('/api/mesh/peer/fieldtest', requireInstaller, async (req, res) => {
       peer.errorLabel = peer.errorClass === 'ok' ? 'OK' : (peer.errorClass === 'token' ? 'Token prüfen' : (peer.errorClass === 'cluster' ? 'Cluster-ID prüfen' : (peer.errorClass === 'receiver' ? 'Receiver-Freigabe prüfen' : (peer.errorClass === 'timeout' ? 'Tailscale/Timeout prüfen' : peer.errorClass))));
       peers.push(peer);
     }
-    const remoteNodeMatrix = _nwMeshRemoteNodeMatrix(peers);
-    const errorClasses = peers.reduce((acc, p) => { const k = p.errorClass || 'unknown'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     for (const p of peers) {
       p.errorClass = _nwMeshClassifyPeerError([p.errors, p.status, p.commandAck && (p.commandAck.error || p.commandAck.status || p.commandAck.message)]);
       p.roundtripLevel = _nwMeshRoundtripLevel(p.ms, p.ok);
       p.operatorHint = p.errorClass === 'ok' ? 'Peer-Feldtest erfolgreich.' : (p.errorClass === 'token' ? 'Peer Token prüfen.' : (p.errorClass === 'cluster' ? 'Cluster-ID prüfen.' : (p.errorClass === 'receiver' ? 'Command Receiver / lokalen Receiver-Command-State prüfen.' : (p.errorClass === 'timeout' ? 'Mesh-Tailscale-Verbindung/Port prüfen.' : 'Peer-Fehlerdetails prüfen.'))));
     }
-    const errorClassCounts = peers.reduce((acc, p) => { const k = p.errorClass || 'unknown'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+    const remoteNodeMatrix = _nwMeshRemoteNodeMatrix(peers);
+    const errorClasses = peers.reduce((acc, p) => { const k = p.errorClass || 'unknown'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+    const errorClassCounts = { ...errorClasses };
     const okPeerCount = peers.filter(p => p.ok).length;
     const commandOkCount = peers.filter(p => p.commandAckOk).length;
     const result = {
@@ -22245,7 +22262,7 @@ app.post('/api/mesh/peer/fieldtest', requireInstaller, async (req, res) => {
       failedPeerCount: Math.max(0, peers.length - okPeerCount),
       commandOkCount,
       errorClassCounts,
-      roundtripStatus: _nwMeshRoundtripLevel(peers.reduce((max, p) => Math.max(max, Number(p.ms || 0)), 0), okPeerCount > 0),
+      roundtripLevel: _nwMeshRoundtripLevel(peers.reduce((max, p) => Math.max(max, Number(p.ms || 0)), 0), okPeerCount > 0),
       probeRequested,
       totalMs: Date.now() - startedAll,
       errorClasses,
@@ -22290,7 +22307,23 @@ app.get('/api/mesh/peer/fieldtest', requireInstaller, (req, res) => {
   try {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
-    return res.json({ ok: true, schema: 'nexowatt.mesh-two-instance-fieldtest-state.v2', generatedAt: Date.now(), state: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastManualTestJson', {}), summary: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.summaryJson', {}), peerMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerMatrixJson', []), remoteNodeMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.remoteNodeMatrixJson', []), errorClasses: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.errorClassesJson', {}), roundtripStatus: _nwDisplayStateVal('meshMicrogrid.fieldTest.roundtripStatus', 'unknown'), lastAck: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastAckJson', {}), errorClasses: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.errorClassesJson', {}), roundtripStatus: _nwDisplayStateVal('meshMicrogrid.fieldTest.roundtripStatus', 'unknown'), peerRoundtripMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerRoundtripMatrixJson', []), remoteNodeMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.remoteNodeMatrixJson', []), directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] });
+    const receiver = _nwMeshReceiverCfg();
+    return res.json({
+      ok: true,
+      schema: 'nexowatt.mesh-two-instance-fieldtest-state.v2',
+      generatedAt: Date.now(),
+      state: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastManualTestJson', {}),
+      summary: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.summaryJson', {}),
+      peerMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerMatrixJson', []),
+      peerRoundtripMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerRoundtripMatrixJson', []),
+      remoteNodeMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.remoteNodeMatrixJson', []),
+      errorClasses: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.errorClassesJson', {}),
+      roundtripStatus: _nwDisplayStateVal('meshMicrogrid.fieldTest.roundtripStatus', 'unknown'),
+      lastAck: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastAckJson', {}),
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      allowedPeerNodeIds: receiver.allowedPeerNodeIds || [],
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }

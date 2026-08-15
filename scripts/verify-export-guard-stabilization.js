@@ -20,7 +20,10 @@ const apps = 'src-ts/runtime-executables/www/ems-apps.ts';
   'gridConstraints.exportLimit.installerChecklistJson',
   'diagnostic_only',
   'Diagnose/Testmodus aktiv',
-  'wird bewusst nicht aufgerufen',
+  'const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady',
+  'if (cfg.zeroExportEnabled && exportGuardDiagnosticOnly)',
+  "action: 'diagnostic_only'",
+  'applied: false',
 ].forEach(t => has(grid, t));
 [
   'gc.exportLimitRunMode',

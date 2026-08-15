@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 16ac5444dab1e2661881968b8a5e5e5dd0f0430da6c61320d3222be3c532eb10
+ * Original-Hash: 885a4eda9796ab20de0a86a4d3d1b131c0d58c137c53afcdfdaa837897cf1e64
  */
 
 /**
@@ -209,10 +209,12 @@ for (const [state, sessionEnded] of [
 }
 
 
-// OCPP Preparing kann vor StartTransaction auftreten. Min+PV/Auto müssen dann
-// den vom Status bestätigten Ladebedarf behalten, damit EOS die Transaktion
-// überhaupt starten kann. Ein widersprüchliches Charging bei inaktiver
-// Transaktion wird dagegen sicher beendet.
+// OCPP Preparing kann vor StartTransaction auftreten. Der Zustand bestätigt
+// noch keine reale Fahrzeug-Leistungsanforderung, muss aber als verbunden und
+// kontrolliert startfähig erhalten bleiben. So darf Auto/PV/Min+PV über den
+// zeitlich begrenzten Start-Handshake die Mindestleistung anbieten, ohne eine
+// bereits laufende Transaktion zu halluzinieren. Ein widersprüchliches Charging
+// bei inaktiver Transaktion wird dagegen sicher zurückgestuft.
 {
   const preparing = reconcileOcppTransactionDemand({
     telemetryProfile: OCPP,
@@ -221,7 +223,9 @@ for (const [state, sessionEnded] of [
     vehicleDemand: classifyUniversalEvcsVehicleStatus({ status: 'Preparing', statusFresh: true }),
   });
   assert.strictEqual(preparing.state, 'ready_to_charge');
-  assert.strictEqual(preparing.demandConfirmed, true, 'Preparing muss Min+PV/Auto vor Transaktionsstart freigeben');
+  assert.strictEqual(preparing.plugged, true);
+  assert.strictEqual(preparing.startEligible, true, 'Preparing muss den kontrollierten Auto-/PV-/Min+PV-Start erlauben');
+  assert.strictEqual(preparing.demandConfirmed, false, 'Preparing darf vor Transaktionsstart keinen bereits bestätigten Ladebedarf vortäuschen');
 
   const suspendedEvse = reconcileOcppTransactionDemand({
     telemetryProfile: OCPP,
@@ -231,14 +235,15 @@ for (const [state, sessionEnded] of [
   });
   assert.strictEqual(suspendedEvse.demandConfirmed, true, 'SuspendedEVSE darf Ladebedarf behalten');
 
-  const inconsistentCharging = reconcileOcppTransactionDemand({
+  const earlyCharging = reconcileOcppTransactionDemand({
     telemetryProfile: OCPP,
     transactionKnown: true,
     transactionActive: false,
     vehicleDemand: classifyUniversalEvcsVehicleStatus({ status: 'Charging', statusFresh: true }),
   });
-  assert.strictEqual(inconsistentCharging.demandConfirmed, false);
-  assert.strictEqual(inconsistentCharging.state, 'finishing');
+  assert.strictEqual(earlyCharging.demandConfirmed, false);
+  assert.strictEqual(earlyCharging.startEligible, true, 'Charging darf bei verzögertem TransactionEvent kontrolliert startfähig bleiben');
+  assert.strictEqual(earlyCharging.state, 'ready_to_charge');
 }
 
 assert.strictEqual(isOcppAuthoritativeZeroState('finishing'), true);

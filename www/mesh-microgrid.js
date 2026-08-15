@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/mesh-microgrid.ts
- * Quell-Hash: sha256:672ff8e0d85aeb555a5500a388405e705f46f7c183be70cedd1b122a89f095ec
+ * Quell-Hash: sha256:72dd974baef6cc8037c45d60f383ff9b79c35c22f408cd4fee99ecc0ec5fa254
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -142,16 +142,26 @@
     if (rows) {
       const all = limited.concat(blocked);
       if (!all.length) rows.innerHTML = '<tr><td colspan="8" class="muted">Keine aktuell gekürzten oder blockierten Commands.</td></tr>';
-      else rows.innerHTML = all.map(row => `<tr>` +
-        `<td>${esc(row.commandId || '')}</td>` +
-        `<td>${esc(row.nodeId || row.targetNodeId || '')}</td>` +
-        `<td>${fmtW(row.requestedPowerW || 0)}</td>` +
-        `<td>${fmtW(row.allowedPowerW || 0)}</td>` +
-        `<td class="${row.allowedPowerW > 0 ? 'severity-warn' : 'severity-critical'}">${row.allowedPowerW > 0 ? 'gekürzt' : 'blockiert'}</td>` +
-        `<td>${esc((row.reasons || []).map(r => `${r.id}:${r.limitW}W`).join(' · '))}</td>` +
-        `<td>${esc(row.reason || '')}</td>` +
-        `<td>${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.budgetW || 0)} / ${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.remainingW || 0)}<br><span class="muted">Fairness Budget / Rest</span></td>` +
-      `</tr>`).join('');
+      else rows.innerHTML = all.map(row => {
+        const reasons = Array.isArray(row.reasons) ? row.reasons : [];
+        const reasonLimits = reasons.map(r => Number(r && r.limitW)).filter(v => Number.isFinite(v) && v > 0);
+        const effectiveMin = reasons.find(r => String(r && r.id || '') === 'effectiveMinPowerW');
+        const boundaryW = Number(row.allowedPowerW) > 0
+          ? Number(row.allowedPowerW)
+          : (effectiveMin && Number(effectiveMin.limitW) > 0
+            ? Number(effectiveMin.limitW)
+            : (reasonLimits.length ? Math.min(...reasonLimits) : 0));
+        return `<tr>` +
+          `<td>${esc(row.commandId || '')}</td>` +
+          `<td>${esc(row.nodeId || row.targetNodeId || '')}</td>` +
+          `<td>${fmtW(row.requestedPowerW || 0)}</td>` +
+          `<td>${fmtW(row.allowedPowerW || 0)}</td>` +
+          `<td class="${row.allowedPowerW > 0 ? 'severity-warn' : 'severity-critical'}">${row.allowedPowerW > 0 ? 'gekürzt' : 'blockiert'}</td>` +
+          `<td>${esc(reasons.map(r => `${r.id}:${r.limitW}W`).join(' · '))}</td>` +
+          `<td>${esc(row.reason || '')}</td>` +
+          `<td>${boundaryW > 0 ? fmtW(boundaryW) : '--'}</td>` +
+        `</tr>`;
+      }).join('');
     }
   }
 

@@ -25,7 +25,7 @@ has(main, 'keine zweite Clusterlogik', 'Architekturkommentar');
 has(mod, 'meshMicrogrid.export.snapshotJson', 'Export Snapshot State');
 has(mod, 'meshMicrogrid.operator.viewUrl', 'Operator View State');
 has(mod, 'Keine weitere Berechnungsschicht zählt Werte erneut', 'keine doppelte Logik Kommentar');
-has(html, 'NexoWatt Mesh/Microgrid', 'HTML Titel');
+has(html, 'NexoWatt EOS – Mesh/Microgrid', 'HTML Titel');
 has(html, '/api/mesh/microgrid.csv', 'CSV Link');
 has(pageTs, "fetch('/api/mesh/microgrid'", 'Frontend API Fetch');
 has(pageTs, 'keine eigene Mesh-Logik', 'Frontend Architekturkommentar');

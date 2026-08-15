@@ -1,3 +1,13 @@
+## 0.8.187 - 2026-08-15
+
+- Anlagenweiten Cross-App-Stabilitätsaudit durchgeführt. Alle ausführbaren TypeScript-Runtimequellen werden zusätzlich ohne den temporären `@ts-nocheck`-Schutz auf ungelöste Bezeichner geprüft; reale `ReferenceError`-Kandidaten blockieren den Release künftig fail-closed.
+- Lademanagement-Diagnose gehärtet: Der TypeScript-Normalquellenpfad übergibt dem finalen Handover-/Removal-Status nun immer einen expliziten Diagnosevertrag. Ein fehlender lokaler Bezeichner kann die Diagnoseveröffentlichung nicht mehr still in einem Catch-Block ausfallen lassen.
+- EOS Mesh/Microgrid stabilisiert: Receiver-Allowlist in Command-Receive sowie POST/GET-Feldtest sauber aus der jeweiligen Receiver-Konfiguration geladen, Peer-Ergebnisstruktur vollständig initialisiert, Fehlerklassen erst nach der finalen Klassifizierung gebildet und doppelte Roundtrip-Felder getrennt. Die Limitansicht leitet Grenzwerte ausschließlich aus der aktuellen Zeile ab und verwendet keine fremden Gruppen-/Fairness-Variablen mehr.
+- AppCenter-Konfiguration für thermische Geräte und Heizstäbe repariert: Änderungen markieren die Konfiguration zuverlässig als ungespeichert; Laden und Speichern setzen den Status zurück. Die zuvor aufgerufene, aber nicht definierte Dirty-Funktion kann keine Bedienaktion mehr abbrechen.
+- SmartHome-Konfiguration und Kundenansicht stabilisiert: Veraltete Typ-/Validator-Helfer auf die aktuellen Funktionen umgestellt, Typ-Icon-Tabelle vervollständigt und debouncten Geräte-Refresh nach Player-, Sender- und Playlistbefehlen ergänzt.
+- Release-Prüfungen auf die aktuellen OCPP-Startsemantiken und den produktiven Betriebsstrategien-Vertrag aktualisiert. Veraltete RC53/RC54-Observe-only-Annahmen wurden aus dem aktuellen Publish-Gate entfernt; stattdessen werden Auto-Arbitrierung, Fail-Closed-Vertrag, RC56-Feldtest, kompakte Ressourcenansicht und der neue RC62-Cross-App-Audit geprüft.
+- Multi-App-Regressionsmatrix für Speicher/Storagefarm, FENECON/Sungrow/E3DC, Peak-Shaving, Export Guard, Tarife, §14a, Thermik, Heizstab, MultiUse, KI-Berater, Energie-Wertkonto/Ledger, Mesh/Microgrid, Netzbetreiber-Schnittstelle, Energiefluss, AppCenter, SmartHome/NexoLogic und Betriebsstrategien erneut ausgeführt.
+
 ## 0.8.186 - 2026-08-15
 
 - Heizstab-PV-Auto um eine standardmäßig aktive, frei konfigurierbare Nachtsperre ergänzt. Im Nachtfenster (Standard 20:00–06:00) setzt das EOS ausschließlich automatisch übernommene Heizstab-Stufen auf 0; Manual 1/2/3, Boost und eine eindeutig erkannte externe KNX-/Relais-Handfreigabe bleiben zulässig. Start und Ende arbeiten mit lokaler Controllerzeit und unterstützen Fenster über Mitternacht.

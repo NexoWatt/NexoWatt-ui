@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:c1c1cf5ad57c2b99d23356b81726db5524396c5875aedb39ce4507306eb57e70
+ * Quell-Hash: sha256:5cb2a6842c2e8942fc3fdeeefef5f69f6d7b8afeef52ea309d0fcebfd6a9f85c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1733,7 +1733,25 @@ function _collectFlowPowerDpIsWFromUI() {
     if (!els.status) return;
     els.status.textContent = msg || '';
     els.status.style.opacity = msg ? '1' : '0.65';
-    els.status.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : '');
+    els.status.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : (kind === 'warn' ? '#fde68a' : ''));
+  }
+
+  let appCenterConfigDirty = false;
+  function setDirty() {
+    appCenterConfigDirty = true;
+    if (els.save) {
+      els.save.dataset.dirty = 'true';
+      els.save.title = 'Ungespeicherte Änderungen – Konfiguration speichern';
+      els.save.setAttribute('aria-label', 'Konfiguration speichern – ungespeicherte Änderungen');
+    }
+  }
+  function clearDirty() {
+    appCenterConfigDirty = false;
+    if (els.save) {
+      delete els.save.dataset.dirty;
+      els.save.title = '';
+      els.save.setAttribute('aria-label', 'Konfiguration speichern');
+    }
   }
   /**
    * Code-Teil: setBackupStatus
@@ -13103,6 +13121,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     await hydrateStorageFarmConfigFromRuntimeState(cfg);
     applyConfigToUI(cfg);
+    clearDirty();
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }
@@ -14068,6 +14087,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const payload = { patch, restartEms: true };
     const data = await fetchJson('/api/installer/config', { method: 'POST', body: JSON.stringify(payload) });
     applyConfigToUI(data.config || {});
+    clearDirty();
     setStatus('Gespeichert. EMS wurde neu gestartet.', 'ok');
   }
 

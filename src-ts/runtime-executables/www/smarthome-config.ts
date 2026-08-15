@@ -3463,7 +3463,7 @@ function nwRenderShcfgDetector() {
 
       const headRight = document.createElement('div');
       headRight.className = 'nw-shcfg-detect-card__badges';
-      headRight.appendChild(mkBadge('nw-config-badge--auto', `${nwShTypeLabel(suggestion.targetType || '')} · ${suggestion.detectorType || '?'}`));
+      headRight.appendChild(mkBadge('nw-config-badge--auto', `${nwGetTypeLabel(suggestion.targetType || '')} · ${suggestion.detectorType || '?'}`));
       if (suggestion.imported) headRight.appendChild(mkBadge('nw-config-badge--ok', 'übernommen'));
       else if (suggestion.alreadyConfigured) headRight.appendChild(mkBadge('nw-config-badge--warn', 'bereits im Projekt'));
       else if (!suggestion.importable) headRight.appendChild(mkBadge('nw-config-badge--warn', 'manuell prüfen'));
@@ -8948,7 +8948,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].stations = Array.isArray(nwShcState.config.devices[index].stations) ? nwShcState.config.devices[index].stations : [];
         nwShcState.config.devices[index].stations.push({ name: 'Neuer Sender', value: '' });
         nwMarkDirty(true);
-        nwRunValidatorSoon();
+        nwScheduleValidation();
         renderStations();
       });
 
@@ -8987,7 +8987,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
           nameIn.addEventListener('input', () => {
             stations[si].name = nameIn.value;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
           });
 
           const valIn = document.createElement('input');
@@ -8998,7 +8998,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
           valIn.addEventListener('input', () => {
             stations[si].value = valIn.value;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
           });
 
           const del = document.createElement('button');
@@ -9010,7 +9010,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
             stations.splice(si, 1);
             nwShcState.config.devices[index].stations = stations;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
             renderStations();
           });
 
@@ -9044,7 +9044,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].playlists = Array.isArray(nwShcState.config.devices[index].playlists) ? nwShcState.config.devices[index].playlists : [];
         nwShcState.config.devices[index].playlists.push({ name: 'Neue Playlist', value: '' });
         nwMarkDirty(true);
-        nwRunValidatorSoon();
+        nwScheduleValidation();
         renderPlaylists();
       });
 
@@ -9083,7 +9083,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
           nameIn.addEventListener('input', () => {
             playlists[pi].name = nameIn.value;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
           });
 
           const valIn = document.createElement('input');
@@ -9094,7 +9094,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
           valIn.addEventListener('input', () => {
             playlists[pi].value = valIn.value;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
           });
 
           const del = document.createElement('button');
@@ -9106,7 +9106,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
             playlists.splice(pi, 1);
             nwShcState.config.devices[index].playlists = playlists;
             nwMarkDirty(true);
-            nwRunValidatorSoon();
+            nwScheduleValidation();
             renderPlaylists();
           });
 

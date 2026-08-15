@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.186",
+  "version": "0.8.187",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -41,7 +41,7 @@
     {
       "path": "admin/react/index.html",
       "size": 4431,
-      "sha256": "7460c5cf5982fe2007fc59c94d0a073d8e71ab0ce67e201e02678602980800bd"
+      "sha256": "e4903e3a95b155af920d6c7c2eee39ceeb1900980f54f583fbaf98925963b309"
     },
     {
       "path": "admin/simulation.html",
@@ -255,8 +255,8 @@
     },
     {
       "path": "ems/modules/charging-management.js",
-      "size": 695955,
-      "sha256": "bbc55f8cc13020f8212b7ae2532d083ea7b0d3799faec7cb6e7a816f99346111"
+      "size": 696736,
+      "sha256": "a814440ad732ac7e807f0e694a18d6043f4e4522620a1c4dc46310464874fe4b"
     },
     {
       "path": "ems/modules/core-limits.js",
@@ -596,12 +596,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "524e14b83da341685add189011580c189f8aed99edeac1663d4c86a2b47008f9"
+      "sha256": "e1f63c36c9361124d7d95711cd5f653f58cdb4881575a7fb986a0e3432c7ce58"
     },
     {
       "path": "io-package.json",
-      "size": 24541,
-      "sha256": "d935729d01ba9c308b609a833fee0da2242bae66af9ec065c6e8515160a1e056"
+      "size": 24778,
+      "sha256": "aa39136881c0ac048e239c0e59a9507d18eec88bc888544495e08dbe22dbe9a9"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -840,8 +840,8 @@
     },
     {
       "path": "main.js",
-      "size": 1709707,
-      "sha256": "dadb2a1bf94cf84523358889007033cc536d34849ea295265c8e293501396dd1"
+      "size": 1709808,
+      "sha256": "bf9d2a07f3c817df586c386ca210b79bc9b7d1201ff6b6b2fb85c0404457fa8e"
     },
     {
       "path": "README.md",
@@ -985,8 +985,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 959162,
-      "sha256": "a573d4a6a00814c7fe94d8cdf72b42267414e36c870d237dca592de0bb4c2f41"
+      "size": 959799,
+      "sha256": "95e665ae6eaca1812d2d7d4a878678bdbf93abe89f129ae19c016f6d2134dad6"
     },
     {
       "path": "www/energy-ledger.html",
@@ -1111,7 +1111,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "9acde8bc71a0d02e9d9d6695bd5a2992d829cc9ffb8b0f592d832a60c7a866a9"
+      "sha256": "65f1faea51db949a200a5d7163ba4c7535126137a09d0f80658bf92fae518ad4"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1120,8 +1120,8 @@
     },
     {
       "path": "www/mesh-microgrid.js",
-      "size": 29263,
-      "sha256": "840b66dd3e5d90832f0ce974e8f89d8c6931a1467da42544fbdf6151584f151e"
+      "size": 29672,
+      "sha256": "2f9938ffbd3373d150c30fde8466317958316712994f91cb17cc7442cacd3cd4"
     },
     {
       "path": "www/netoperator-appcenter.js",
@@ -1146,7 +1146,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "9c0af5e126a05ac8e56b5312e7f2dc311f635b6908df23b82ad486b9aefcfc37"
+      "sha256": "ceef2272bd0c0c6db1c85ac8868c8d76364dc65a077df7ecb1b6a65a0fcef960"
     },
     {
       "path": "www/nw-shell.js",
@@ -1156,7 +1156,7 @@
     {
       "path": "www/operating-strategies-appcenter.js",
       "size": 93113,
-      "sha256": "c95832801caaa66cf180754cd80dc940b82cc0819ce07bceac146245e6e39cd6"
+      "sha256": "fba5d1dfe02b10faca30f6cd7b1bffb11f6ea2736b36189a5e35c7b2afbac2ac"
     },
     {
       "path": "www/operating-strategies-rule-builder.js",
@@ -1215,8 +1215,8 @@
     },
     {
       "path": "www/smarthome-config.js",
-      "size": 515801,
-      "sha256": "2bebf6b0de03db58e8d037e7e5bc310ccea352a340bd7cc12c6874358efbd427"
+      "size": 515818,
+      "sha256": "2ea6f140144ed575552afe5cbdf38fde64f177bc0d85fcdfa68bd51ece83e766"
     },
     {
       "path": "www/smarthome.html",
@@ -1225,8 +1225,8 @@
     },
     {
       "path": "www/smarthome.js",
-      "size": 547183,
-      "sha256": "2523bf8769efc263854d995f72fe288c4861ecda6c85eeb6817204dc3ddaf739"
+      "size": 548024,
+      "sha256": "af2b74d067242b52d6a92933a699d16958ba68ae6e010bb9c0bf8190dece8be0"
     },
     {
       "path": "www/static/ts-mirrors/frontend/customer-feature-visibility.mjs",

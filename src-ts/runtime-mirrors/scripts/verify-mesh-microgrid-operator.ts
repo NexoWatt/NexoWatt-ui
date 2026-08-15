@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2a7a0127673e48c4528cb80b5345b660271fbc7bd6b0e6c97ffd2c46f747368e
+ * Original-Hash: 528e66db34c85bf9b74c1c41c6773ed980c63e74feb029c5a76f8838f53eb019
  */
 
 /**
@@ -88,7 +88,7 @@ has(main, 'keine zweite Clusterlogik', 'Architekturkommentar');
 has(mod, 'meshMicrogrid.export.snapshotJson', 'Export Snapshot State');
 has(mod, 'meshMicrogrid.operator.viewUrl', 'Operator View State');
 has(mod, 'Keine weitere Berechnungsschicht zählt Werte erneut', 'keine doppelte Logik Kommentar');
-has(html, 'NexoWatt Mesh/Microgrid', 'HTML Titel');
+has(html, 'NexoWatt EOS – Mesh/Microgrid', 'HTML Titel');
 has(html, '/api/mesh/microgrid.csv', 'CSV Link');
 has(pageTs, "fetch('/api/mesh/microgrid'", 'Frontend API Fetch');
 has(pageTs, 'keine eigene Mesh-Logik', 'Frontend Architekturkommentar');

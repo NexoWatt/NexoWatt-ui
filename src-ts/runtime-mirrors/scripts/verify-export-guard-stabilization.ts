@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7999775e4e96b769c0bb21b098c8221400e83e6d2db9427b92ba504cec6a4cad
+ * Original-Hash: 38bb102734a1531169074aec4a3e1bdd337778912e3c52c7e528cc9e5ce67bd5
  */
 
 /**
@@ -83,7 +83,10 @@ const apps = 'src-ts/runtime-executables/www/ems-apps.ts';
   'gridConstraints.exportLimit.installerChecklistJson',
   'diagnostic_only',
   'Diagnose/Testmodus aktiv',
-  'wird bewusst nicht aufgerufen',
+  'const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady',
+  'if (cfg.zeroExportEnabled && exportGuardDiagnosticOnly)',
+  "action: 'diagnostic_only'",
+  'applied: false',
 ].forEach(t => has(grid, t));
 [
   'gc.exportLimitRunMode',

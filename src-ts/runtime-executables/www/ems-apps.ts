@@ -1735,7 +1735,25 @@ function _collectFlowPowerDpIsWFromUI() {
     if (!els.status) return;
     els.status.textContent = msg || '';
     els.status.style.opacity = msg ? '1' : '0.65';
-    els.status.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : '');
+    els.status.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : (kind === 'warn' ? '#fde68a' : ''));
+  }
+
+  let appCenterConfigDirty = false;
+  function setDirty() {
+    appCenterConfigDirty = true;
+    if (els.save) {
+      els.save.dataset.dirty = 'true';
+      els.save.title = 'Ungespeicherte Änderungen – Konfiguration speichern';
+      els.save.setAttribute('aria-label', 'Konfiguration speichern – ungespeicherte Änderungen');
+    }
+  }
+  function clearDirty() {
+    appCenterConfigDirty = false;
+    if (els.save) {
+      delete els.save.dataset.dirty;
+      els.save.title = '';
+      els.save.setAttribute('aria-label', 'Konfiguration speichern');
+    }
   }
   /**
    * Code-Teil: setBackupStatus
@@ -13105,6 +13123,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     await hydrateStorageFarmConfigFromRuntimeState(cfg);
     applyConfigToUI(cfg);
+    clearDirty();
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }
@@ -14070,6 +14089,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const payload = { patch, restartEms: true };
     const data = await fetchJson('/api/installer/config', { method: 'POST', body: JSON.stringify(payload) });
     applyConfigToUI(data.config || {});
+    clearDirty();
     setStatus('Gespeichert. EMS wurde neu gestartet.', 'ok');
   }
 

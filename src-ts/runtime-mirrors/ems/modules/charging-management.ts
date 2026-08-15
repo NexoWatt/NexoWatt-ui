@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bbc55f8cc13020f8212b7ae2532d083ea7b0d3799faec7cb6e7a816f99346111
+ * Original-Hash: a814440ad732ac7e807f0e694a18d6043f4e4522620a1c4dc46310464874fe4b
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:1104af1da5f7dbd825798748760acfe5ed6a2a4295b34b98fe83cf614cdf6943
+ * Quell-Hash: sha256:7dd6563710225d20700a3b0a68999791332df9c8a8af689e19e414e6c66118f7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3902,7 +3902,19 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
         } catch (_eNormalSource) {}
         try {
-            await this._publishChargingEvcsJavascriptRemovalState(payload, input);
+            await this._publishChargingEvcsJavascriptRemovalState(payload, {
+                context: String(context || 'normal'),
+                control: this._chargingControlTsProductiveLast || null,
+                budget: this._chargingBudgetTsProductiveLast || null,
+                allocation: (tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision))
+                    || this._chargingAllocationTsNormalSourceLast
+                    || this._chargingAllocationTsProductiveLast
+                    || null,
+                writePlan: tsWritePlanProductive || this._chargingWritePlanTsProductiveLast || null,
+                executor: this._chargingWritePlanExecutorLast || null,
+                legacy: this._chargingLegacyDecisionTreeLast || null,
+                safetyStop: !!safetyStop,
+            });
         } catch (_eRemovalState) {}
         return payload;
     }

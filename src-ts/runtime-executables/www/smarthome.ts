@@ -68,6 +68,7 @@ let nwAllDevices = [];
 let nwLastDevicesSignature = '';
 let nwReloadInFlight = false;
 let nwAutoRefreshTimer = null;
+let nwRefreshDevicesTimer = null;
 
 // Endkunden-Favoriten: pro Browser (LocalStorage) – überschreibt optionale Installer-Defaults.
 // Map: { [deviceId]: boolean }
@@ -3274,6 +3275,17 @@ const NW_SH_TYPE_LABELS = {
   motion: 'Bewegung',
   energy: 'Energie',
   meter: 'Zähler',
+  player: 'Audio',
+  media: 'Audio',
+};
+const NW_SH_TYPE_ICONS = {
+  light: '💡', lamp: '💡', dimmer: '💡',
+  shutter: '🪟', blind: '🪟',
+  rtr: '🌡️', thermostat: '🌡️', heating: '♨️',
+  plug: '🔌', socket: '🔌', switch: '⏻', relay: '⏻',
+  sensor: '◉', camera: '📷', door: '🚪', window: '🪟',
+  presence: '👤', motion: '🏃', energy: '⚡', meter: '⚡',
+  player: '🔊', media: '🔊',
 };
 /**
  * Code-Teil: nwTypeLabel
@@ -3334,7 +3346,7 @@ function nwGroupDevicesByType(devices) {
   const groups = Array.from(map.entries()).map(([type, list]) => ({
     type,
     title: nwTypeLabel(type),
-    icon: (NW_SH_TYPE_ICON && NW_SH_TYPE_ICON[type]) ? NW_SH_TYPE_ICON[type] : null,
+    icon: NW_SH_TYPE_ICONS[type] || null,
     devices: list,
   }));
 
@@ -10880,6 +10892,20 @@ async function nwReloadDevices(opts) {
     nwReloadInFlight = false;
   }
 }
+
+function nwRefreshDevicesSoon(delayMs = 150) {
+  const delay = Math.max(0, Number(delayMs) || 0);
+  if (nwRefreshDevicesTimer) {
+    try { clearTimeout(nwRefreshDevicesTimer); } catch (_e) {}
+  }
+  nwRefreshDevicesTimer = setTimeout(() => {
+    nwRefreshDevicesTimer = null;
+    nwReloadDevices({ force: true }).catch((error) => {
+      console.warn('SmartHome delayed refresh failed:', error);
+    });
+  }, delay);
+}
+
 /**
  * Code-Teil: nwStartAutoRefresh
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.

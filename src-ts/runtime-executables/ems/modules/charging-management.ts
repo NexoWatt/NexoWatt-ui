@@ -3767,7 +3767,19 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
         } catch (_eNormalSource) {}
         try {
-            await this._publishChargingEvcsJavascriptRemovalState(payload, input);
+            await this._publishChargingEvcsJavascriptRemovalState(payload, {
+                context: String(context || 'normal'),
+                control: this._chargingControlTsProductiveLast || null,
+                budget: this._chargingBudgetTsProductiveLast || null,
+                allocation: (tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision))
+                    || this._chargingAllocationTsNormalSourceLast
+                    || this._chargingAllocationTsProductiveLast
+                    || null,
+                writePlan: tsWritePlanProductive || this._chargingWritePlanTsProductiveLast || null,
+                executor: this._chargingWritePlanExecutorLast || null,
+                legacy: this._chargingLegacyDecisionTreeLast || null,
+                safetyStop: !!safetyStop,
+            });
         } catch (_eRemovalState) {}
         return payload;
     }
