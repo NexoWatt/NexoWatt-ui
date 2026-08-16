@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e78da8861ec0ce9a85845a7fd3fbaa358dd78294745d8ac54a99180c96da9d07
+ * Original-Hash: 0a239238fad3e015d560f1d141a7f7a4d80c37612c3acdab66388fe2d3cdb0f7
  */
 
 /**
@@ -182,7 +182,10 @@ class FakeDp {
 
 (async () => {
   // 1) Charging cold start: Modul ist bereits AUS, Hardware steht aber noch auf
-  // positivem Sollwert. deactivate() muss ohne vorherigen tick alle drei Pfade stoppen.
+  // positivem Sollwert. deactivate() muss ohne vorherigen Tick die Ladeleistung
+  // sicher auf 0 setzen, darf die getrennte Stationsverfügbarkeit aber nicht auf
+  // Inoperative schalten. Nur Kundenschalter oder aktive RFID-Whitelist besitzen
+  // die Zugangs-/Availability-Hoheit.
   {
     const adapter = new FakeAdapter({
       enableChargingManagement: false,
@@ -199,7 +202,8 @@ class FakeDp {
     assert.strictEqual(result.ok, true);
     assert.strictEqual(adapter.foreign.get('wb.setA'), 0);
     assert.strictEqual(adapter.foreign.get('wb.setW'), 0);
-    assert.strictEqual(adapter.foreign.get('wb.enable'), false);
+    assert.strictEqual(adapter.foreign.get('wb.enable'), true);
+    assert.strictEqual(adapter.writes.some((write) => write.id === 'wb.enable' && write.value === false), false);
   }
 
   // 2) Thermik cold start: Installer-Ausgaenge werden aus flowSlots aufgebaut.

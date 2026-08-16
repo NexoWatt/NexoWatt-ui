@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:90a0bb1dddda4a030ed5ab311a12080dd3be31c736d1527f01037d8c31ccf354
+ * Quell-Hash: sha256:ce6f689c761e0036f5a10616ff412f3a96c7d0ac522f0265ebda7e46886023ad
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -16,13 +16,29 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 /**
+ * Executable TypeScript source: main.js
+ *
+ * Zweck:
+ * Diese Datei ist ab 0.7.131 die kanonische TypeScript-Quelle der produktiven
+ * Adapter-/Frontend-Runtime-Datei `main.js`.
+ *
+ * Build-Regel:
+ * `npm run sync:ts-runtime-executables` erzeugt daraus die auslieferbare
+ * JavaScript-Datei. Änderungen an der Runtime sollen hier vorgenommen werden;
+ * die JS-Datei ist nur noch Build-Artefakt für Node.js/ioBroker bzw. den Browser.
+ *
+ * Sicherheit:
+ * Der Inhalt basiert auf der bisher produktiven JavaScript-Runtime und bleibt
+ * vorübergehend mit `@ts-nocheck` ausführbar. Fachliche TS-Helfer wie EVCS,
+ * Energiefluss, Core-Limits und Heizstab bleiben die bereits typisierten Quellen.
+ */
+/**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
  * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
  * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
  * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
  */
-
 /**
  * Datei: main.js
  * Rolle im Projekt: Adapter-Kernlaufzeit.
@@ -42,11 +58,7 @@
  * - Änderungen an State-Namen, API-Antworten oder Mapping-Keys können Dashboard, History, Heizstab, KI-Berater und SmartHome direkt beeinflussen.
  * - Webserver, Timer und SSE-Verbindungen müssen im unload sauber beendet werden.
  */
-
-
 'use strict';
-
-
 /**
  * Datenvertrag: AdapterStateCacheEntry
  * Zweck: Beschreibt die Struktur, die main.js intern für gelesene ioBroker-States verwendet.
@@ -54,7 +66,6 @@
  * TypeScript-Ziel:
  * interface AdapterStateCacheEntry { value: unknown; ts?: number; lc?: number; ack?: boolean; }
  */
-
 /**
  * Datenvertrag: ApiStateResponse
  * Zweck: Beschreibt die Antwort von /api/state für www/app.js, history.js und weitere Frontendbereiche.
@@ -62,15 +73,12 @@
  * TypeScript-Ziel:
  * interface ApiStateResponse { states: Record<string, AdapterStateCacheEntry>; config?: AdapterConfig; ts?: number; }
  */
-
 /**
  * Vertragsstelle: Mapping- und State-Namen
  * Zweck: main.js normalisiert externe Datenpunkte in interne States.
  * Wichtig: State-Namen sind ein Vertrag mit www/app.js, www/history.js und ems/modules/*.
  * Nicht ändern ohne Migration: Speicher-, Netz-, PV-, Heizstab-, EVCS-, Speicherfarm- und aiAdvisor.* Namen.
  */
-
-
 const utils = require('@iobroker/adapter-core');
 const express = require('express');
 const path = require('path');
@@ -85,7 +93,6 @@ const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/en
 const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
-
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
  * Zweck: Lädt den ersten echten TypeScript-Helfer für kleine main.js-Aufgaben.
@@ -97,7 +104,6 @@ try {
 } catch (_eMainRuntimeTsHelpers) {
   nwMainRuntimeTsHelpers = null;
 }
-
 /**
  * Code-Teil: API-TypeScript-Helfer laden
  *
@@ -197,10 +203,6 @@ function parseCookies(req) {
 function createToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
-
-
-
-
 
 // Abschnitt: Hauptklasse des ioBroker-Adapters. Hier laufen Lifecycle, Webserver, State-Anlage, EMS-Engine und APIs zusammen.
 // Klassen-Kommentar: Klasse: NexoWattVis. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Adapter-Lifecycle, Webserver, REST-/SSE-APIs, Lizenz, States und EMS-Startlogik.
@@ -303,8 +305,6 @@ class NexoWattVis extends utils.Adapter {
     // License gate (UI/Adapter unlock)
     this._nwLicenseOk = true;
     this._nwSystemUuid = '';
-
-    
 
     // EVCS session logger (RFID accounting)
     this._evcsSessionMaxEntries = 2000;
@@ -501,8 +501,6 @@ class NexoWattVis extends utils.Adapter {
       try { this.updateValue('info.connection', val, ts, { raw: false }); } catch (_eUpd) {}
     }
   }
-
-
   /**
    * Code-Teil: _nwRunApiStateTsShadowComparison
    *
@@ -535,7 +533,6 @@ class NexoWattVis extends utils.Adapter {
       return null;
     }
   }
-
   /**
    * Code-Teil: _nwRunApiSetTsShadowPlan
    *
@@ -568,8 +565,6 @@ class NexoWattVis extends utils.Adapter {
       return null;
     }
   }
-
-
   /**
    * Code-Teil: _nwBuildApiStateTsRuntimeResponse
    *
@@ -612,7 +607,6 @@ class NexoWattVis extends utils.Adapter {
       return null;
     }
   }
-
   /**
    * Code-Teil: _nwTryApplyApiSetTsSettingsPlan
    *
@@ -667,7 +661,6 @@ class NexoWattVis extends utils.Adapter {
       return { handled: false, reason: 'ts-exception' };
     }
   }
-
   /** Code-Teil: _nwStartConnectionHeartbeat – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwStartConnectionHeartbeat() {
     if (this._nwShuttingDown || this._nwConnectionHeartbeatTimer) return;
@@ -709,7 +702,6 @@ class NexoWattVis extends utils.Adapter {
       await this.setObjectNotExistsAsync(id, { type:'state', common:{ name:id, type:c.type, role:c.role, read:true, write:true, def:c.def }, native:{} });
     }
   }
-
 
   // --- SmartHome: Zeitschaltuhren (Endkunde) ---
   /** Code-Teil: ensureSmartHomeUserStates – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
@@ -1129,7 +1121,6 @@ class NexoWattVis extends utils.Adapter {
     return false;
   }
 
-
   // --- SmartHome Logik-Uhren (Installer / Logic editor inputs) ---
   /** Code-Teil: _nwNormalizeSmartHomeLogicClocksConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwNormalizeSmartHomeLogicClocksConfig(rawCfg) {
@@ -1460,7 +1451,6 @@ class NexoWattVis extends utils.Adapter {
     try { await this._nwRefreshLogicClockStatesNow('event'); } catch (_e2) {}
     this._nwScheduleNextSmartHomeLogicClock('executed');
   }
-
 
   // --- SmartHome Scenes (Adapter-executed) ---
   /**
@@ -1971,7 +1961,6 @@ class NexoWattVis extends utils.Adapter {
 
     return false;
   }
-
   /**
    * Code-Teil: ensureLicenseStates
    * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
@@ -2215,7 +2204,6 @@ class NexoWattVis extends utils.Adapter {
     const groups = core.match(/.{1,4}/g) || [core];
     return `NW1-${groups.join('-')}`;
   }
-
   /**
    * Lizenz-Editionen ab 0.8.3:
    * - EOS ist das große Vollprodukt und erhält alle aktuellen und künftigen Features.
@@ -2728,7 +2716,6 @@ class NexoWattVis extends utils.Adapter {
     }
     return info;
   }
-
   /**
    * Code-Teil: _nwInitLicense
    * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
@@ -2738,8 +2725,6 @@ class NexoWattVis extends utils.Adapter {
   async _nwInitLicense() {
     return await this._nwRefreshLicenseFromConfiguredKey(true);
   }
-
-
 
   // Abschnitt: Anlage der kunden- und installerbezogenen Settings-States. Neue data-scope="settings"-Felder aus der UI müssen hier als State bekannt sein.
   /**
@@ -2934,7 +2919,6 @@ class NexoWattVis extends utils.Adapter {
       // Non-fatal: simulation is optional
     }
   }
-
 
   // ---------------------------------------------------------------------------
   // Weather (Plug&Play)
@@ -3416,8 +3400,6 @@ class NexoWattVis extends utils.Adapter {
       } catch (_e) {}
     }
   }
-
-
   /**
    * Deep merge helper used for App‑Center config patches.
    *
@@ -3466,9 +3448,6 @@ class NexoWattVis extends utils.Adapter {
 
     return target;
   }
-
-
-
   /**
    * Keys that are managed via the App‑Center (installer.configJson) and should be treated
    * as installer single source of truth (SoT).
@@ -3589,8 +3568,6 @@ class NexoWattVis extends utils.Adapter {
 
     return score;
   }
-
-
   /**
    * Normalisiert die AppCenter-Konfiguration der EOS-Betriebsstrategien.
    *
@@ -3980,13 +3957,11 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.187',
+        liveControlVersion: '0.8.188',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
   }
-
-
   /**
    * Normalize/complete an installer patch:
    * - Ensure all managed keys exist (filled from base native config or defaults).
@@ -4008,7 +3983,6 @@ class NexoWattVis extends utils.Adapter {
     // Clone to avoid mutating caller
     const out = this._nwDeepClone(patch) || {};
     let changed = false;
-
     /**
      * Code-Teil: ensurePlainObj
      * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
@@ -4461,7 +4435,6 @@ class NexoWattVis extends utils.Adapter {
 
     return { patch: out, changed };
   }
-
   /**
    * Apply an installer patch to a runtime config:
    * - baseConfig is usually the adapter instance native config (or the current runtime config).
@@ -4508,8 +4481,6 @@ class NexoWattVis extends utils.Adapter {
 
     return out;
   }
-
-
   /**
    * Normalize EMS App installation/enabled state into a canonical structure.
    *
@@ -4626,8 +4597,6 @@ class NexoWattVis extends utils.Adapter {
 
     try { return this._nwApplyLicenseLimitsToEmsApps(out); } catch (_e) { return out; }
   }
-
-
   /**
    * Apply emsApps installation state to legacy boolean flags.
    *
@@ -4695,10 +4664,6 @@ class NexoWattVis extends utils.Adapter {
 
     return n;
   }
-
-
-
-
   /**
    * Load persisted App‑Center configuration patch from `installer.configJson`.
    *
@@ -4706,7 +4671,6 @@ class NexoWattVis extends utils.Adapter {
    * Saving into system.adapter.<instance>.native triggers an ioBroker instance
    * restart, which broke the frontend "Speichern" flow (Failed to fetch, SSE drop).
    */
-
   /**
    * Installer-only MultiUse policy marker.
    *
@@ -4792,7 +4756,6 @@ class NexoWattVis extends utils.Adapter {
       return nativeObj;
     }
   }
-
   /**
    * Code-Teil: loadInstallerConfigFromState
    * Zweck: Lädt Daten aus API, States oder Konfiguration.
@@ -4834,7 +4797,6 @@ class NexoWattVis extends utils.Adapter {
         needPersist = true;
       }
 
-      
       // Extra safety: even if the state contains *valid* JSON (e.g. an empty patch), it may still be
       // a reset after an update. In that case, prefer the uninstall-proof userdata backup when it
       // contains a more complete configuration (e.g. mapped datapoints).
@@ -4907,8 +4869,6 @@ class NexoWattVis extends utils.Adapter {
       this.log.warn('persistInstallerConfigToState failed: ' + (e && e.message ? e.message : e));
     }
   }
-
-
 
   // --- App‑Center Backup (Export/Import) ---
   // Stores a persistent copy of the installer configuration in 0_userdata.0 so that
@@ -4985,7 +4945,6 @@ class NexoWattVis extends utils.Adapter {
       write: true,
       def: 0,
     });
-
 
     return true;
   }
@@ -5090,7 +5049,6 @@ class NexoWattVis extends utils.Adapter {
 
     return best;
   }
-
 
   // ---------------------------------------------------------------------------
   // Simulation helper (nexowatt-sim adapter)
@@ -5462,7 +5420,6 @@ class NexoWattVis extends utils.Adapter {
     }
     const backupSettingsJson = JSON.stringify(backupSettings);
 
-
     // Backup current App-Center patch so we can restore after simulation.
     const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
     const backupJson = JSON.stringify(basePatch);
@@ -5515,8 +5472,6 @@ class NexoWattVis extends utils.Adapter {
         await this.setStateAsync('settings.storagePower', { val: storagePowerW, ack: true });
       }
     } catch (_e) {}
-
-
 
     // Restart EMS engine (best-effort)
     try {
@@ -5606,7 +5561,6 @@ class NexoWattVis extends utils.Adapter {
 
     return { ok: true };
   }
-
   /**
    * Normalisiert die frei zugeordneten Einzel-Speicher-DPs aus aktuellen und
    * älteren Installer-Strukturen. Die aktuelle storage.datapoints-Struktur hat
@@ -5768,7 +5722,6 @@ class NexoWattVis extends utils.Adapter {
       .filter((row) => row && typeof row === 'object' && !Array.isArray(row))
       .map((row, index) => this._nwNormalizeStorageFarmRow(row, index));
   }
-
   /**
    * Code-Teil: _nwStorageFarmRowHasRealDatapoint
    * Zweck: Erkennt eine echte Speicherzeile unabhängig davon, ob der Hersteller
@@ -5784,7 +5737,6 @@ class NexoWattVis extends utils.Adapter {
       'availableId', 'faultId', 'chargeAllowedId', 'dischargeAllowedId',
     ].some((key) => String(r[key] || '').trim());
   }
-
   /**
    * Code-Teil: _nwStorageFarmRowHasWritableDatapoint
    * Zweck: Trennt reine Farm-Aggregation von einer tatsächlich beschreibbaren
@@ -5797,7 +5749,6 @@ class NexoWattVis extends utils.Adapter {
     return ['setChargePowerId', 'setDischargePowerId', 'setSignedPowerId', 'feneconGridSetpointId']
       .some((key) => String(r[key] || '').trim());
   }
-
   /**
    * Code-Teil: _nwGetStorageFarmRuntimeInfo
    * Zweck: Liefert eine einzige, autoritative Aktiv-/Konfigurationsbewertung für
@@ -5879,7 +5830,6 @@ class NexoWattVis extends utils.Adapter {
       };
     }
   }
-
   /**
    * Code-Teil: ensureStorageFarmStates
    * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
@@ -6040,7 +5990,6 @@ class NexoWattVis extends utils.Adapter {
       });
     }
   }
-
   /**
    * Ensure that the storageFarm.* states exist with sane defaults.
    *
@@ -6104,8 +6053,6 @@ class NexoWattVis extends utils.Adapter {
       }
     }
   }
-
-
   /**
    * Synchronisiert die Speicherfarm-Konfiguration aus dem Admin (jsonConfig) in Runtime-States unter storageFarm.*.
    * Hintergrund: Das VIS-Frontend liest über /api/state aus dem stateCache. Ohne diese Spiegelung wären die
@@ -6383,7 +6330,6 @@ class NexoWattVis extends utils.Adapter {
         if (ul === 'gw' || ul.endsWith(' gw') || ul.startsWith('gw ') || ul.includes('gigawatt')) return n * 1000000000;
         return n;
       };
-
       /**
        * Code-Teil: readNumber
        * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
@@ -6444,7 +6390,6 @@ class NexoWattVis extends utils.Adapter {
 
         return n;
       };
-
 
       let totalCharge = 0;
       let totalDischarge = 0;
@@ -7222,7 +7167,6 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
-
   // ---------------------------------------------------------------------------
   // StorageFarm: Sollwert-Verteilung (Pool/Gruppen)
   // ---------------------------------------------------------------------------
@@ -7300,7 +7244,6 @@ class NexoWattVis extends utils.Adapter {
     if (name) return `name:${name}`;
     return `row:${Math.max(0, Number(index) || 0)}`;
   }
-
   /**
    * Code-Teil: _sfGetDischargeFloorSocPct
    * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
@@ -7348,7 +7291,6 @@ class NexoWattVis extends utils.Adapter {
 
     return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor, lskFloor)));
   }
-
   /**
    * Code-Teil: _sfGetResponseLimitFactor
    * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
@@ -7475,7 +7417,6 @@ class NexoWattVis extends utils.Adapter {
     }
     return last || { supported: true, ok: false, status: 'value-missing', objectId: id, expected, actual: null, attempts };
   }
-
   /**
    * Code-Teil: _sfWriteIfChanged
    * Zweck: Schreibt Farm-Sollwerte mit Keepalive und bestaetigt den konkreten
@@ -8073,7 +8014,6 @@ class NexoWattVis extends utils.Adapter {
       this._sfFeneconDirectReleaseUntilMs = 0;
       this._sfFeneconDirectReleaseKey = '';
     }
-
     /**
      * Code-Teil: getLimitW
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -8793,7 +8733,6 @@ class NexoWattVis extends utils.Adapter {
       }
     };
 
-
     // derive evcs list (names) from config; keep it stable and only as long as explicitly configured
     const configuredActiveEvcsCount = Array.from({ length: evcsCount }, (_unused, index) => rawList[index] || {})
       .filter((row) => row && row.enabled !== false).length;
@@ -8964,8 +8903,6 @@ class NexoWattVis extends utils.Adapter {
     this.stationGroups = stationGroups;
     this.stationGroupMap = stationGroupMap;
 
-
-
     // quick lookup for RFID reader datapoints (used by learning backend + access control)
     this.evcsRfidReadIds = new Set();
     this.evcsRfidReadIdToIndex = {};
@@ -8997,7 +8934,6 @@ class NexoWattVis extends utils.Adapter {
       this.log.warn('syncSettingsConfigToStates: ' + e.message);
     }
   }
-
   /**
    * Liefert alle lesenden EVCS-Zuordnungen eines Ladepunkts. Die Liste ist die
    * einzige Quelle für Subscription, Initial-Read, stateChange und 3-s-Fallback,
@@ -9027,7 +8963,6 @@ class NexoWattVis extends utils.Adapter {
       configuredId: (typeof entry.configuredId === 'string') ? entry.configuredId.trim() : '',
     })).filter((entry) => !!entry.configuredId);
   }
-
   /**
    * Liest die Read-Quelle eines ioBroker-Aliasobjekts. Unterstützt sowohl den
    * üblichen Stringvertrag als auch read/write-getrennte Alias-ID-Objekte.
@@ -9045,7 +8980,6 @@ class NexoWattVis extends utils.Adapter {
     }
     return '';
   }
-
   /**
    * Erstellt Multi-Bindings für direkte DPs und deren Alias-Quellen. Anders als
    * evcsIdToKey kann diese Struktur mehrere Ladepunkte pro Quell-ID abbilden.
@@ -9132,7 +9066,6 @@ class NexoWattVis extends utils.Adapter {
     }
     return value;
   }
-
   /**
    * Aktualisiert Cache und lokalen EVCS-Spiegel atomar aus derselben Quellprobe.
    * Der Quellzeitstempel bleibt im stateCache erhalten; eigene ack=true-Spiegel-
@@ -9206,7 +9139,6 @@ class NexoWattVis extends utils.Adapter {
     this._nwEvcsAliasRefreshPending.set(sid, pending);
     return pending;
   }
-
   /**
    * Verarbeitet ein direktes stateChange-Ereignis für alle betroffenen
    * Ladepunkte. Alias-Zielereignisse lesen den konfigurierten Alias sofort neu,
@@ -9230,7 +9162,6 @@ class NexoWattVis extends utils.Adapter {
     }
     return handledKeys;
   }
-
   /**
    * Code-Teil: ensureEvcsStates
    * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
@@ -9804,8 +9735,6 @@ class NexoWattVis extends utils.Adapter {
       }
     }
   }
-
-
   /**
    * Subscribe + prime embedded EMS runtime states so the web UI can work without
    * requiring any additional "Modus-DP" mappings per Ladepunkt.
@@ -9950,8 +9879,6 @@ class NexoWattVis extends utils.Adapter {
       // never fail adapter startup due to UI convenience
     }
   }
-
-
   /**
  * Returns the SmartHomeConfig structure from adapter config.
  * This is the future generic model for rooms, functions and devices.
@@ -11356,7 +11283,6 @@ async migrateNativeConfig() {
     }
 }
 
-
   /**
    * Remove stale/orphaned objects that were created dynamically in older configurations
    * (e.g. Verbraucher/Erzeuger history channels that are no longer mapped).
@@ -11473,7 +11399,6 @@ async migrateNativeConfig() {
     }
   }
 
-
   // Abschnitt: Startablauf. Reihenfolge beachten: States anlegen, Lizenz/Config laden, Webserver starten, EMS initialisieren, Live-State veröffentlichen.
 /**
  * Code-Teil: onReady
@@ -11535,7 +11460,6 @@ async onReady() {
         }
       } catch (_e) {}
 
-
       await this.ensureStorageFarmStates();
       await this.syncStorageFarmDefaultsToStates();
       await this.syncStorageFarmConfigFromAdmin();
@@ -11552,7 +11476,6 @@ async onReady() {
       await this.seedEvcsDayBaseCache();
       await this.subscribeEvcsMappedStates();
       try { this.scheduleRfidPolicyApply('startup'); } catch(_e) {}
-
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
@@ -11578,7 +11501,6 @@ async onReady() {
         this.log.debug('Historie export init failed: ' + (e && e.message ? e.message : e));
       }
 
-
       // Speicherfarm: abgeleitete Summenwerte (SoC/Leistung) regelmäßig aktualisieren
       try {
         const sfEnabled = !!(typeof this._nwGetStorageFarmRuntimeInfo === 'function' && this._nwGetStorageFarmRuntimeInfo().active);
@@ -11595,7 +11517,6 @@ async onReady() {
           }, interval);
         }
       } catch (_eSF) {}
-
 
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
@@ -11629,7 +11550,6 @@ async onReady() {
           this.updateEnergyTotalsFromInflux('timer').catch(() => {});
         }, 60 * 60 * 1000);
       } catch (_e2) {}
-
 
       this.buildSmartHomeDevicesFromConfig();
 
@@ -11786,8 +11706,6 @@ async onReady() {
       throw error;
     }
   }
-
-
 
   /**
    * Subscribe to internal EMS runtime states (chargingManagement.* and ems.*)
@@ -12489,7 +12407,6 @@ app.get('/favicon.ico', (_req, res) => {
 // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/assets', express.static(path.join(__dirname, 'www', 'assets')));
 app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
-
     // JSON body parser
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: bodyParser);
     app.use(bodyParser);
@@ -12505,7 +12422,6 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       } catch (_e) {}
       return next(err);
     });
-
 
     // --- EOS Access Control / Rollen & Rechte ---------------------------
     // Quelle der Berechtigungen sind die EOS/ioBroker-Benutzer und Gruppen.
@@ -13070,7 +12986,6 @@ document.addEventListener('DOMContentLoaded', function(){
       res.json({ ok: true });
     });
 
-
     // --- SmartHome page & API (erste Switch-Kachel) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome.html', '/smarthome'], (_req, res) => {
     app.get(['/smarthome.html', '/smarthome'], (_req, res) => {
@@ -13089,7 +13004,6 @@ app.get('/api/smarthome/devices', async (_req, res) => {
       }
     });
 
-    
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/toggle', requireAuth, async (req, res) => {
 app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
   try {
@@ -13280,7 +13194,6 @@ app.post('/api/smarthome/level', requireAuth, async (req, res) => {
   }
 });
 
-
 // Color-API für Farblicht (RGB)
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/color', requireAuth, async (req, res) => {
 app.post('/api/smarthome/color', requireAuth, async (req, res) => {
@@ -13376,7 +13289,6 @@ app.post('/api/smarthome/color', requireAuth, async (req, res) => {
   }
 });
 
-
 // Cover-API für Jalousie/Rollladen (Auf/Ab/Stop)
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/cover', requireAuth, async (req, res) => {
 app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
@@ -13458,7 +13370,6 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });
-
 
 // Player-API (Transport + Volume + Radiosender)
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/player', requireAuth, async (req, res) => {
@@ -13607,7 +13518,6 @@ app.post('/api/smarthome/player', requireAuth, async (req, res) => {
   }
 });
 
-
 // Gemeinsame, serverseitige Klima-Sperrprüfung. Die UI zeigt diese Zustände
 // ebenfalls an, aber nur die erneute Prüfung direkt vor dem Write verhindert,
 // dass ein alter Browserzustand Fenster-/Fehler-Sperren umgehen kann.
@@ -13655,7 +13565,6 @@ const checkSmartHomeClimateSafety = async (dev) => {
   return { ok: true };
 };
 
-
 // RTR-Setpoint-API (Solltemperatur einstellen)
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
@@ -13702,7 +13611,6 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });
-
 
 // Erweiterte Klima-Steuerung: Power, Modus, Lüfter und Swing.
 app.post('/api/smarthome/climate', requireAuth, async (req, res) => {
@@ -13792,7 +13700,6 @@ app.post('/api/smarthome/value', requireAuth, async (req, res) => {
   }
 });
 
-
 // --- SmartHome Szenen (Adapter-executed) ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/scenes', requireAuth, async (_req, res) => {
 app.get('/api/smarthome/scenes', requireAuth, async (_req, res) => {
@@ -13819,7 +13726,6 @@ app.post('/api/smarthome/scene/run', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });
-
 
 // --- SmartHome Zeitschaltuhren (Endkunde) ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/timers', requireAuth, async (_req, res) => {
@@ -13881,7 +13787,6 @@ app.post('/api/smarthome/timers', requireAuth, async (req, res) => {
   }
 });
 
-
 // --- SmartHome Logik-Uhren (Installer) ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/logic-clocks', requireInstaller, async (_req, res) => {
 app.get('/api/smarthome/logic-clocks', requireCustomerNexoLogic, async (_req, res) => {
@@ -13939,8 +13844,6 @@ app.post('/api/smarthome/logic-clocks', requireCustomerNexoLogic, async (req, re
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });
-
-
 
 const NW_SHCFG_TD_TYPE_MAP = Object.freeze({
   light: 'switch',
@@ -14570,7 +14473,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
   }
 });
 
-
 // --- SmartHomeConfig API (VIS-Konfig & Editor) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/config', (req, res) => {
     app.get('/api/smarthome/config', requireCustomerSmartHome, (req, res) => {
@@ -14821,7 +14723,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       }
     });
 
-    
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
     app.get('/api/smarthome/dpsearch', requireCustomerDpDiscovery, async (req, res) => {
       try {
@@ -14841,96 +14742,61 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         // Cache all state objects for a short period to avoid heavy DB reads while typing
 
-
         const now = Date.now();
-
 
         const ttlMs = 15000;
 
-
         if (!this._nwDpCache || !this._nwDpCache.ts || (now - this._nwDpCache.ts) > ttlMs) {
-
 
           const all = await this.getForeignObjectsAsync('*', 'state');
 
-
           const items = [];
-
-
 
           for (const id of Object.keys(all || {})) {
 
-
             const obj = all[id];
-
 
             if (!obj || !obj.common) continue;
 
-
-
             const nameRaw = obj.common.name || '';
-
 
             const name = typeof nameRaw === 'string' ? nameRaw : JSON.stringify(nameRaw);
 
-
-
             items.push({
-
 
               id,
 
-
               name,
-
 
               role: obj.common.role || '',
 
-
               type: obj.common.type || '',
-
 
               unit: obj.common.unit || '',
 
-
               idLower: String(id).toLowerCase(),
-
 
               nameLower: String(name).toLowerCase(),
 
-
             });
 
-
           }
-
-
 
           // Stable, user-friendly order
 
-
           items.sort((a, b) => a.idLower.localeCompare(b.idLower));
-
-
 
           // Build byId map (plain object) for fast lookup
 
-
           const byId = {};
-
 
           for (const it of items) {
 
-
             if (!it || !it.id) continue;
-
 
             byId[it.id] = it;
 
-
           }
-
-
 
           // Build a lightweight trie for folder-like browsing (dot-separated IDs)
           /**
@@ -14941,50 +14807,33 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
            */
           const makeNode = () => ({ children: Object.create(null), item: null });
 
-
           const root = makeNode();
-
 
           for (const it of items) {
 
-
             const sid = String(it.id || '');
-
 
             if (!sid) continue;
 
-
             const parts = sid.split('.').filter(Boolean);
-
 
             let node = root;
 
-
             for (const seg of parts) {
-
 
               if (!node.children[seg]) node.children[seg] = makeNode();
 
-
               node = node.children[seg];
-
 
             }
 
-
             node.item = it;
-
 
           }
 
-
-
           this._nwDpCache = { ts: now, items, byId, trie: root };
 
-
         }
-
-
 
         const items = (this._nwDpCache && this._nwDpCache.items) ? this._nwDpCache.items : [];
 
@@ -15043,7 +14892,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
-
 
     // --- SmartHomeConfig DP-Test (Installer): read/write a datapoint quickly ---
     // Read current foreign state
@@ -15111,8 +14959,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
-
-
 
     // --- Installer / EMS Apps API ---
     // Diese API dient dazu, die Konfiguration (native) auch direkt über die Installer-Webseite
@@ -15521,7 +15367,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       }
     };
 
-
     /**
      * 0.8.59 Release-Schutz / Regression Safety Gate.
      *
@@ -15882,7 +15727,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       }
     });
 
-
     // --- App‑Center Backup / Export / Import ---
     // Export creates a portable JSON file containing the full installer config patch.
     // Import restores the patch (optionally replacing or merging) and re-syncs runtime states.
@@ -16125,8 +15969,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
       }
     });
-
-
 
     // --- Simulation Scenarios (nexowatt-sim v0.4.x) ---
     // Exposes scenario catalog + start/stop/reset convenience endpoints for the Simulation UI.
@@ -16759,7 +16601,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       }
     });
 
-    
     // --- NexoWatt-Devices discovery (Installer → Schnell‑Inbetriebnahme) ---
     // Scans foreign objects under `nexowatt-devices.*.devices.*` and returns a compact
     // device list with known alias datapoints (aliases.*). The frontend can use this to
@@ -17042,11 +16883,6 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
-
-
-
-
-
 
     // --- Object validation (Phase 3.3) ---
     // Used by the Installer UI to quickly verify datapoint existence + freshness.
@@ -18039,13 +17875,11 @@ app.get(['/logic.html','/logic'], async (_req, res) => {
   }
 });
 
-
 // --- History page & API ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/history.html','/history'], (req, res) => {
     app.get(['/history.html','/history'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'history.html'));
     });
-
 
     // --- Settings page ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/settings.html','/settings'], (_req, res) => {
@@ -18053,13 +17887,11 @@ app.get(['/logic.html','/logic'], async (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'settings.html'));
     });
 
-    
     // --- EVCS page ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/evcs', '/evcs.html', '/history/evcs', '/history/evcs.html'], (_req, res) => {
     app.get(['/evcs', '/evcs.html', '/history/evcs', '/history/evcs.html'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
     });
-
 
     // --- EVCS report page ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/evcs-report.html','/evcs-report'], (req, res) => {
@@ -18554,7 +18386,6 @@ app.get('/api/history', async (req, res) => {
           }))
         ]);
 
-
 // --- Optional: Energy totals from kWh counters (more accurate than integrating W) ---
 // If the customer mapped kWh counters in the App-Center, we can compute exact energy
 // for the selected range by subtracting counter values (first -> last).
@@ -18836,7 +18667,6 @@ try { await buildEnergyExact(); } catch (_e) {}
       return res.json(payload || { ok:false, error: 'history_empty' });
     });
 
-    
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/tariff/report', async (req, res) => {
     app.get('/api/tariff/report', async (req, res) => {
       try {
@@ -19204,8 +19034,6 @@ try { await buildEnergyExact(); } catch (_e) {}
       }
     });
 
-
-
 // --- EVCS Report Builder (shared for JSON + CSV) ---
 /**
  * Code-Teil: nwBuildEvcsReport
@@ -19414,7 +19242,6 @@ const nwBuildEvcsReport = async (query = {}) => {
     }
     const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
 
-    
     // Power -> kWh integration:
     // The Influx history query may return *sparse* buckets (e.g. when the source is logged every 10 minutes
     // but the report requests 2-minute aggregates). In that case, multiplying by the requested step would
@@ -19830,7 +19657,6 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
       }
     })();
 
-
     // Prefer in-memory ring buffer
     let sessions = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf.slice() : [];
 
@@ -19882,9 +19708,6 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
     res.status(500).send('csv_error');
   }
 });
-
-
-
 
 // ---- RFID / Ladekarten Abrechnung ----
 /**
@@ -20146,7 +19969,6 @@ app.get('/api/evcs/rfid/report.csv', async (req, res) => {
     res.status(500).type('text/plain').send('RFID CSV Fehler: ' + String(e));
   }
 });
-
 
 // EOS DC Station Display / Charge Kiosk
 // Zweck: Eine tokenisierte, isolierte Vollbildseite pro physischer DC-Ladestation.
@@ -20440,7 +20262,6 @@ const _nwDisplayLastCompletedSession = (idx) => {
   } catch (_e) {}
   return null;
 };
-
 
 /**
  * Normalisiert eine Session für Betreiberansicht, Display und CSV.
@@ -21221,7 +21042,6 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
   };
 };
 
-
 app.get(['/display/station/:token', '/display/station/:token/'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'www', 'dc-station-display.html'));
 });
@@ -21258,7 +21078,6 @@ app.get('/api/display/station/:token/operator.csv', async (req, res) => {
     return res.status(500).type('text/plain').send('CSV Export Fehler: ' + String(e && e.message ? e.message : e));
   }
 });
-
 
 // -----------------------------------------------------------------------------
 // EOS Local kWh Ledger API / Betreiberansicht
@@ -21411,7 +21230,6 @@ app.get('/api/ledger/local-kwh.csv', (req, res) => {
     return res.status(500).type('text/plain').send('Local kWh Ledger CSV Export Fehler: ' + String(e && e.message ? e.message : e));
   }
 });
-
 
 // -----------------------------------------------------------------------------
 // Energieherkunft & Ladebilanz – 15-Minuten-Journal (Home + Pro)
@@ -21939,7 +21757,6 @@ app.post('/api/mesh/microgrid/command', requireInstaller, (req, res) => {
   }
 });
 
-
 app.post('/api/mesh/local-bridge/release', requireInstaller, async (req, res) => {
   try {
     sendNoStore(res);
@@ -22000,7 +21817,6 @@ app.get(['/api/mesh/handshake', '/api/mesh/status'], (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
-
 
 const _nwMeshClassifyPeerError = (parts) => {
   const text = (Array.isArray(parts) ? parts : [parts]).map(x => String(x || '').toLowerCase()).join(' ');
@@ -22341,7 +22157,6 @@ app.get('/api/mesh/microgrid.csv', (req, res) => {
   }
 });
 
-
 app.post('/api/display/station/:token/heartbeat', async (req, res) => {
   try {
     sendNoStore(res);
@@ -22491,7 +22306,6 @@ app.get('/config', async (req, res) => {
       const storageFarmConfiguredCount = storageRowsFromConfig.filter(storageFarmRowHasRealDatapoint).length;
       const storageFarmConfigured = storageFarmConfiguredCount >= 2;
       const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
-
 
       const smartHomeAdminEnabled = (() => {
         try {
@@ -23053,8 +22867,6 @@ settingsConfig: {
           }
         })(),
 
-
-
         relayControls: (() => {
           try {
             const r = (cfg && cfg.relay && typeof cfg.relay === 'object') ? cfg.relay : {};
@@ -23170,7 +22982,6 @@ settingsConfig: {
           }
         })(),
 
-
         installer: cfg.installer || {},
         adminUrl: cfg.adminUrl || null,
         // Installations-/Aktiv-Status der EMS-Apps (für dynamische VIS-UI)
@@ -23221,7 +23032,6 @@ settingsConfig: {
     });
 
     // snapshot
-
 
     // ---------------------------------------------------------------------------
     // Peak-Shaving / atypische HLZF-Nachkontrolle: Influx-basierter Nachweisexport
@@ -23881,7 +23691,6 @@ settingsConfig: {
           return res.status(403).json({ ok: false, error: 'forbidden' });
         }
 
-
         // Tarif: PV Saisonprofil – KI ist immer aktiv (Endkundenfreundlich).
         // Manuelle Quartalsfaktoren bleiben optional als Basiswerte (Feintuning).
         if (scope === 'settings' && String(key) === 'tariffPvSeasonAiEnabled') {
@@ -23905,7 +23714,6 @@ settingsConfig: {
             return res.status(500).json({ ok: false, error: 'internal error' });
           }
         }
-
 
         // TS-Migration 0.7.100: einfache lokale Kundeneinstellungen produktiv über TS schreiben.
         // Komplexe Scopes und unbekannte Settings fallen weiter auf die alte JS-Route zurück.
@@ -24072,7 +23880,6 @@ settingsConfig: {
               return res.status(409).json({ ok: false, error: 'not_ready' });
             }
           }
-
 
           // Auto-Quelle: Die Betriebsstrategie darf ausschließlich innerhalb
           // des Ladebetriebsmodus Auto übernehmen. Der Default bleibt die
@@ -24267,7 +24074,6 @@ settingsConfig: {
           }
         }
 
-
         // BHKW Steuerung – Schnellsteuerung (Modus + Start/Stop)
         // Keys:
         // - b1.mode (auto|manual|off)
@@ -24327,10 +24133,6 @@ settingsConfig: {
 
           return res.status(400).json({ ok: false, error: 'bad request' });
         }
-
-
-
-
 
         // Generator Steuerung – Schnellsteuerung (Modus + Start/Stop)
         // Keys:
@@ -24392,7 +24194,6 @@ settingsConfig: {
           return res.status(400).json({ ok: false, error: 'bad request' });
         }
 
-
         // Schwellwertsteuerung – sichtbare Endkunden-Overrides ohne Rollen-/Passwortsperre
         // Keys:
         // - r1.enabled
@@ -24433,7 +24234,6 @@ settingsConfig: {
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.minOffSec`, { type: 'state', common: { name: 'MinOff (User)', type: 'number', role: 'value', unit: 's', read: true, write: true, def: 0 }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.mode`, { type: 'state', common: { name: 'Modus (User)', type: 'number', role: 'value', read: true, write: true, def: 1, min: 0, max: 2, states: { 0: 'Aus', 1: 'Auto', 2: 'An' } }, native: {} });
           } catch (_e) {}
-
 
           if (prop === 'mode') {
             const mv = Number(value);
@@ -24492,7 +24292,6 @@ settingsConfig: {
           try { this.updateValue(`threshold.user.r${idx}.threshold`, n, Date.now()); } catch(_e) {}
           return res.json({ ok: true });
         }
-
 
         // Relaissteuerung – sichtbare manuelle Ausgänge ohne Rollen-/Passwortsperre
         // Keys:
@@ -24619,8 +24418,6 @@ settingsConfig: {
             return res.status(409).json({ ok: false, error: 'write_failed' });
           }
         }
-
-
 
         // Legacy-EVCS-Setter. Im aktiven EMS-Lademanagement darf `active`
         // niemals auf den gelesenen Connector-/Fahrzeugstatus (`activeId`)
@@ -25158,14 +24955,11 @@ settingsConfig: {
           return res.json({ ok: true });
         }
 
-
-
         // Speicherfarm: Konfiguration ist Installateur-/Admin-Sache (Admin / jsonConfig).
         // Im VIS-Frontend ist die Speicherfarm bewusst read-only, damit Endkunden keine DP-Zuordnung verändern können.
         if (scope === 'storageFarm') {
           return res.status(403).json({ ok: false, error: 'forbidden' });
         }
-
 
         let map = {};
         if (scope === 'installer') {
@@ -25854,11 +25648,6 @@ return res.json(out);
         return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
       }
     });
-
-
-
-
-
 
     // server-sent events for live updates
     // Abschnitt: SSE-Livekanal. Push für /api/state-Änderungen; Verbindungen im unload sauber schließen.
@@ -26744,7 +26533,6 @@ return res.json(out);
         }
       }
     } catch (_e) {}
-
 
     // Feed NexoLogic engine (node/graph)
     try {
@@ -28663,7 +28451,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
   }
 
-
   /**
    * Code-Teil: _nwValidateEnergyFlowTsCandidate
    *
@@ -28956,7 +28743,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return { available: false, source: 'error', error: e && e.message ? String(e.message) : String(e) };
     }
   }
-
 
   /**
    * Code-Teil: _nwGetEnergyFlowTsSwitchConfig
@@ -29631,7 +29417,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
   }
 
-
   /**
    * Code-Teil: _nwBuildEnergyFlowTsCandidateAudit
    *
@@ -29690,7 +29475,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
   }
 
-
   /**
    * Code-Teil: _nwEnergyFlowTsLiveTestStateFromSwitch
    *
@@ -29724,7 +29508,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (requested === 'js') return 'js-only';
     return 'js-runtime';
   }
-
 
   /**
    * Code-Teil: _nwParseTsShadowJson
@@ -30039,7 +29822,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
     return readiness;
   }
-
 
   /**
    * Code-Teil: _nwRecordAndSummarizeTsShadowEvaluation
@@ -31078,6 +30860,28 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const now = Date.now();
     if (!this._rfidEnforceCache) this._rfidEnforceCache = {};
 
+    // Die ausdrückliche Kundensperre besitzt Vorrang vor einer positiven RFID-
+    // Autorisierung. So kann ein Whitelist-Tag eine bewusst ausgeschaltete
+    // Ladestation nicht kurzzeitig wieder auf Operative setzen.
+    const safeWallboxKey = String(wb.key || `lp${idx}`)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 64) || `lp${idx}`;
+    let customerStationEnabled = true;
+    try {
+      const stationState = await this.getStateAsync(`chargingManagement.wallboxes.${safeWallboxKey}.userStationEnabled`);
+      if (stationState && stationState.val !== null && stationState.val !== undefined && String(stationState.val).trim() !== '') {
+        const raw = stationState.val;
+        customerStationEnabled = raw === true
+          || raw === 1
+          || ['true', '1', 'on', 'an', 'yes', 'ja'].includes(String(raw).trim().toLowerCase());
+      }
+    } catch (_eCustomerStationState) {
+      customerStationEnabled = true;
+    }
+
     // Determine latest RFID code seen
     let code = '';
     if (wb.rfidReadId) {
@@ -31142,8 +30946,39 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             this.log.debug(`[EVCS RFID] lockWriteId failed: ${e && e.message ? e.message : e}`);
           }
         }
+      } else if (wb.enableWriteId) {
+        // OCPP21 und andere Wallboxen ohne separaten Lock-DP nutzen die
+        // Stationsfreigabe als Zugangskontrolle. Nur die RFID-Whitelist darf
+        // diesen Pfad automatisch auf Inoperative setzen.
+        const want = !!authorized && customerStationEnabled;
+        enforced = true;
+        if (prev.enableWanted !== want) {
+          try {
+            const rfidWriteResult = await withActuatorShadowContext(this, {
+              owner: `charging.lp${idx}`,
+              module: 'rfidAccess',
+              priority: 600,
+              reason: customerStationEnabled
+                ? `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`
+                : `Kundensperre Wallbox lp${idx} hat Vorrang vor RFID`,
+              leaseMs: 15000,
+              kind: 'charging-rfid-availability',
+              enforceAuthority: true,
+              releaseAuthority: authorized,
+            }, () => this.setForeignStateAsync(wb.enableWriteId, want));
+            if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
+              this.log.debug(`[EVCS RFID] enableWriteId durch ${rfidWriteResult.blockedByOwner || 'Aktor-Authority'} blockiert`);
+            } else {
+              prev.enableWanted = want;
+            }
+          } catch (e) {
+            this.log.debug(`[EVCS RFID] enableWriteId failed: ${e && e.message ? e.message : e}`);
+          }
+        }
       } else if (wb.activeId) {
-        const want = !!authorized; // enable/disable charging (soft lock)
+        // Legacy-Fallback nur für Installationen ohne separaten Lock- oder
+        // Availability-Datenpunkt.
+        const want = !!authorized;
         enforced = true;
         const cur = this.stateCache[`evcs.${idx}.active`] ? !!this.stateCache[`evcs.${idx}.active`].value : undefined;
         if (prev.activeWanted !== want || (cur !== undefined && cur !== want)) {
@@ -31154,10 +30989,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
               priority: 600,
               reason: `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`,
               leaseMs: 15000,
-              kind: 'charging-rfid-enable',
+              kind: 'charging-rfid-enable-legacy',
               enforceAuthority: true,
-              // Freigabe beendet die RFID-Sperr-Lease; eine aktive Sperre bleibt
-              // dagegen verbindlich, bis ein autorisierter Tag erkannt wird.
               releaseAuthority: authorized,
             }, () => this.setForeignStateAsync(wb.activeId, want));
             if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
@@ -31180,7 +31013,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     prev.ts = now;
     this._rfidEnforceCache[idx] = prev;
   }
-
 
   // --- Energy totals fallback: derive kWh values from history (InfluxDB) when no kWh counters are mapped ---
   /**
@@ -33406,7 +33238,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         this.setStateAsync('evcs.totalPowerW', sum, true).catch(()=>{});
       }
     
-
       const mEnergy = key.match(/^evcs\.(\d+)\.energyTotalKwh$/);
       if (mEnergy) {
         const idx = Number(mEnergy[1]);
@@ -33436,7 +33267,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     // EVCS session logger (start/stop + energy/max + RFID)
     try { this.maybeUpdateEvcsSessionTracker(key, ts); } catch(_e2) {}
-
 
     // Derived / calculated live values (e.g. building consumption fallback for UI)
     try {

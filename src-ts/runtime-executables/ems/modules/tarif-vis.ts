@@ -47,6 +47,43 @@
 const { BaseModule } = require('./base');
 
 /**
+ * Speicher-Netzladen ist nur bei einer vollständigen, frischen Freigabekette
+ * zulässig. Ein günstiger Preis allein, NT allein oder ein Negativpreis außerhalb
+ * des manuell konfigurierten NT-Fensters reichen ausdrücklich nicht aus.
+ */
+function resolveStorageGridChargePermission({
+    appCenterAllowed = false,
+    tariffActive = false,
+    currentPriceFresh = false,
+    tariffState = 'unknown',
+    manualNetFeeEnabled = false,
+    manualNtWindowActive = false,
+    priorityAllowsStorage = false,
+    storageWriterAvailable = false,
+    storagePowerW = 0,
+} = {}) {
+    if (!appCenterAllowed) return { allowed: false, reason: 'Netzladen im AppCenter nicht freigegeben' };
+    if (!storageWriterAvailable) return { allowed: false, reason: 'Kein beschreibbarer Speicher-Ausgang aktiv' };
+    if (!(Number(storagePowerW) > 0)) return { allowed: false, reason: 'Keine Speicher-Netzladeleistung konfiguriert' };
+    if (!tariffActive) return { allowed: false, reason: 'Dynamischer Tarif ist nicht aktiv' };
+    if (!currentPriceFresh) return { allowed: false, reason: 'Aktueller Tarifpreis fehlt oder ist veraltet' };
+    if (String(tariffState || '').trim().toLowerCase() !== 'guenstig') {
+        return { allowed: false, reason: `Tarif ist ${String(tariffState || 'unbekannt')}` };
+    }
+    if (!manualNetFeeEnabled) return { allowed: false, reason: 'Zeitvariables Netzentgelt ist nicht aktiviert' };
+    if (!manualNtWindowActive) return { allowed: false, reason: 'Manuelles NT-/Quartalsfenster ist aktuell nicht aktiv' };
+    if (!priorityAllowsStorage) return { allowed: false, reason: 'Tarif-Priorität gibt den Speicher nicht frei' };
+    return { allowed: true, reason: 'Tarif günstig + manuelles NT-Fenster aktiv + AppCenter-Freigabe' };
+}
+
+function formatStorageNtWindowLabel({ model = 1, quarter = 1, startRaw = '', endRaw = '' } = {}) {
+    const start = String(startRaw ?? '').trim();
+    const end = String(endRaw ?? '').trim();
+    const prefix = Number(model) === 2 ? `Q${Math.max(1, Math.min(4, Number(quarter) || 1))} NT` : 'NT';
+    return start && end ? `${prefix} ${start}–${end}` : `${prefix} nicht konfiguriert`;
+}
+
+/**
  * Liest die Tarif-Einstellungen aus der NexoWatt UI (nexowatt-ui.0.settings.*)
  * und berechnet daraus einen Ladepark-Leistungsdeckel (W), damit Speicher/Ladepark
  * sich nicht gegenseitig aushebeln.
@@ -172,6 +209,11 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.speicherIntentGrund', 'Tarif Speicher-Absicht Grund', 'string', 'text');
         await mk('tarif.netFeeEnabled', 'Zeitvariables Netzentgelt aktiv (VIS)', 'boolean', 'indicator');
         await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/Standard/HT)', 'string', 'text');
+        await mk('tarif.speicherNetzLadenErlaubt', 'Speicher-Netzladen erlaubt', 'boolean', 'indicator');
+        await mk('tarif.speicherNetzLadenSperrgrund', 'Speicher-Netzladen Sperrgrund', 'string', 'text');
+        await mk('tarif.speicherPreisGuensig', 'Speichertarif günstig und frisch', 'boolean', 'indicator');
+        await mk('tarif.speicherZeitfensterAktiv', 'Manuelles Speicher-NT-Zeitfenster aktiv', 'boolean', 'indicator');
+        await mk('tarif.speicherZeitfensterLabel', 'Manuelles Speicher-NT-Zeitfenster', 'string', 'text');
 
         // Gate E – Negativpreis / Tarif-Gewinnoptimierung
         await mk('tarif.negativpreisAktiv', 'Negativpreis aktiv', 'boolean', 'indicator');
@@ -251,6 +293,9 @@ class TarifVisModule extends BaseModule {
 
             if (!this.dp.getEntry || !this.dp.getEntry('cm.dischargeAllowed')) {
                 await this.dp.upsert({ key: 'cm.dischargeAllowed', objectId: `${this.adapter.namespace}.tarif.entladenErlaubt` });
+            }
+            if (!this.dp.getEntry || !this.dp.getEntry('st.tariffGridChargeAllowed')) {
+                await this.dp.upsert({ key: 'st.tariffGridChargeAllowed', objectId: `${this.adapter.namespace}.tarif.speicherNetzLadenErlaubt` });
             }
         }
     }
@@ -463,7 +508,6 @@ class TarifVisModule extends BaseModule {
 		return n;
 	}
 
-
     /**
      * Code-Teil: Methode `_parsePriceCurve`
      * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
@@ -628,7 +672,6 @@ class TarifVisModule extends BaseModule {
         out.sort((a, b) => a.startMs - b.startMs);
         return out;
     }
-
 
     /**
      * Code-Teil: Methode `_clamp`
@@ -834,8 +877,6 @@ class TarifVisModule extends BaseModule {
         }
     }
 
-
-
     /**
      * Code-Teil: Methode `tick`
      * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
@@ -944,14 +985,9 @@ class TarifVisModule extends BaseModule {
 	            const nowMinLocal = this._nowMinutesLocal(nowMs);
 	            const quarterNow = this._currentQuarter(nowMs);
 
-	            // --- Speicher-Netzladen Zeitfenster (Policy) ---
-	            // Ziel: Tagsüber kein Netzladen des Speichers.
-	            // Q1/Q4: 18:00–06:00 | Q2/Q3: 21:00–06:00
-	            // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
-	            const storageChargeStartMin = (quarterNow === 1 || quarterNow === 4) ? (18 * 60) : (21 * 60);
-	            const storageChargeEndMin = 6 * 60;
-	            const storageChargeWindowOk = this._isInTimeWindow(nowMinLocal, storageChargeStartMin, storageChargeEndMin);
-	            const storageChargeWindowLabel = (quarterNow === 1 || quarterNow === 4) ? '18:00–06:00 (Q1/Q4)' : '21:00–06:00 (Q2/Q3)';
+            // Speicher-Netzladen verwendet ausschließlich das manuell
+            // konfigurierte HT/NT-/Quartalsfenster. Es gibt bewusst kein
+            // zusätzliches hardcodiertes Nachtfenster.
 
             // Default: Simple (global)
             let ntStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtStart') : null;
@@ -959,7 +995,9 @@ class TarifVisModule extends BaseModule {
             let htStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtStart') : null;
             let htEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtEnd') : null;
 
-            // Quartale: überschreibt die Simple-Zeiten (wenn gesetzt)
+            // Quartalsmodell: ausschließlich die manuell gepflegten Zeiten des
+            // aktuellen Quartals verwenden. Fehlende Q-Werte fallen bewusst nicht
+            // auf globale Defaults zurück, damit Speicher-Netzladen fail-closed bleibt.
             if (netFeeModelEff === 2 && this.dp && typeof this.dp.getRaw === 'function') {
                 const q = this._currentQuarter(nowMs);
                 const qq = `Q${q}`;
@@ -967,19 +1005,21 @@ class TarifVisModule extends BaseModule {
                 const ntE = this.dp.getRaw(`vis.settings.netFee${qq}NtEnd`);
                 const htS = this.dp.getRaw(`vis.settings.netFee${qq}HtStart`);
                 const htE = this.dp.getRaw(`vis.settings.netFee${qq}HtEnd`);
-                // Wichtig: Leere Werte ("") sollen die Zeitfenster bewusst deaktivieren können.
-                // Daher: nur bei null/undefined fallbacken.
-                if (ntS !== null && ntS !== undefined) ntStartRaw = ntS;
-                if (ntE !== null && ntE !== undefined) ntEndRaw = ntE;
-                if (htS !== null && htS !== undefined) htStartRaw = htS;
-                if (htE !== null && htE !== undefined) htEndRaw = htE;
+                ntStartRaw = (ntS === null || ntS === undefined) ? '' : ntS;
+                ntEndRaw = (ntE === null || ntE === undefined) ? '' : ntE;
+                htStartRaw = (htS === null || htS === undefined) ? '' : htS;
+                htEndRaw = (htE === null || htE === undefined) ? '' : htE;
             }
 
             // NOTE: "" (empty string) should disable the window instead of falling back.
-            const ntStartMin = this._parseTimeToMinutes((ntStartRaw === null || ntStartRaw === undefined) ? '22:00' : ntStartRaw);
-            const ntEndMin = this._parseTimeToMinutes((ntEndRaw === null || ntEndRaw === undefined) ? '06:00' : ntEndRaw);
-            const htStartMin = this._parseTimeToMinutes((htStartRaw === null || htStartRaw === undefined) ? '06:00' : htStartRaw);
-            const htEndMin = this._parseTimeToMinutes((htEndRaw === null || htEndRaw === undefined) ? '22:00' : htEndRaw);
+            // Fehlende Zeiten bedeuten immer: Fenster nicht konfiguriert. Auch
+            // das einfache HT/NT-Modell darf Speicher-Netzladen nicht mit
+            // versteckten Defaultzeiten freigeben; die Freigabe muss aus der
+            // vom Betreiber gespeicherten manuellen Einstellung stammen.
+            const ntStartMin = this._parseTimeToMinutes((ntStartRaw === null || ntStartRaw === undefined) ? '' : ntStartRaw);
+            const ntEndMin = this._parseTimeToMinutes((ntEndRaw === null || ntEndRaw === undefined) ? '' : ntEndRaw);
+            const htStartMin = this._parseTimeToMinutes((htStartRaw === null || htStartRaw === undefined) ? '' : htStartRaw);
+            const htEndMin = this._parseTimeToMinutes((htEndRaw === null || htEndRaw === undefined) ? '' : htEndRaw);
 
             let netFeeMode = 'off'; // off | NT | Standard | HT
             if (netFeeEff) {
@@ -989,6 +1029,13 @@ class TarifVisModule extends BaseModule {
                 // "aushebeln" – nur NT/HT sind echte Overlays.
                 netFeeMode = inNt ? 'NT' : inHt ? 'HT' : 'Standard';
             }
+            const storageChargeWindowOk = !!(netFeeEff && netFeeMode === 'NT');
+            const storageChargeWindowLabel = formatStorageNtWindowLabel({
+                model: netFeeModelEff,
+                quarter: quarterNow,
+                startRaw: ntStartRaw,
+                endRaw: ntEndRaw,
+            });
 
 			// --- Preise (Provider + VIS) ---
                 const preisGrenzeVis = this._normalizePriceEurPerKwh(preisGrenzeVisRaw, null);
@@ -1291,9 +1338,9 @@ class TarifVisModule extends BaseModule {
                 tarifState = next;
             }
 
-            // Negativpreis ist ein Sonderfall von "günstig", aber mit stärkerer
-            // Wirkung: Netzbezug wird bevorzugt, Speicherentladung wird gesperrt und
-            // die Speicher-Netzlade-Zeitfenster/PV-Reserve dürfen nicht blockieren.
+            // Negativpreis ist ein Sonderfall von "günstig" für EVCS und die
+            // Tarifklassifikation. Beim Speicher bleiben AppCenter-Freigabe,
+            // Priorität und das manuelle NT-/Quartalsfenster trotzdem zwingend.
             if (gridImportPreferred) {
                 tarifState = 'guenstig';
                 this._tarifLastState = 'guenstig';
@@ -1303,7 +1350,9 @@ class TarifVisModule extends BaseModule {
             // 1 = Speicher | 2 = Auto | 3 = Ladestation
             const allowStorageCheap = (prioritaet === 1 || prioritaet === 2);
             const allowEvcsCheap = (prioritaet === 2 || prioritaet === 3);
-            const allowStorageCheapEff = gridImportPreferred ? true : allowStorageCheap;
+            // Negativpreise dürfen die Speicher-Priorität oder das manuelle
+            // NT-Fenster nicht umgehen. Für EVCS bleibt das bestehende Verhalten.
+            const allowStorageCheapEff = allowStorageCheap;
             const allowEvcsCheapEff = gridImportPreferred ? true : allowEvcsCheap;
 
             // Speicher-SoC der exklusiv ausgewaehlten Schreibtopologie. Tarif und
@@ -1356,6 +1405,25 @@ class TarifVisModule extends BaseModule {
                 socStopChargePct = tmp;
             }
 
+            const storageConfig = (this.adapter && this.adapter.config && this.adapter.config.storage) || {};
+            const storageFarmConfig = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) || {};
+            const storageGridChargeConfigured = storageTopology === 'farm'
+                ? storageFarmConfig.allowGridCharge !== false
+                : storageConfig.allowGridCharge !== false;
+            const storageGridChargePermission = resolveStorageGridChargePermission({
+                appCenterAllowed: storageGridChargeConfigured,
+                tariffActive: aktivEff,
+                currentPriceFresh: preisAktuellOk,
+                tariffState: tarifState,
+                manualNetFeeEnabled: netFeeEff,
+                manualNtWindowActive: storageChargeWindowOk,
+                priorityAllowsStorage: allowStorageCheapEff,
+                storageWriterAvailable,
+                storagePowerW: storagePowerAbsW,
+            });
+            const storageGridChargeAllowed = storageGridChargePermission.allowed === true;
+            const storageGridChargeBlockReason = storageGridChargeAllowed ? '' : String(storageGridChargePermission.reason || 'Speicher-Netzladen gesperrt');
+
             // Sollleistung Speicher: negativ = Laden, positiv = Entladen
             // Zusätzlich: Im günstigen Tarif-Fenster bei vollem Speicher (SoC=100%) 0 W halten.
             let speicherSollW = 0;
@@ -1380,22 +1448,14 @@ class TarifVisModule extends BaseModule {
                 //   (z. B. in Quartalen ohne HT/NT gilt 24/7 Standard → Verhalten wie vorher.)
                 const netFeeOverlay = !!(netFeeIsNt || netFeeIsHt);
 
-	                // Policy: Speicher soll tagsüber NICHT aus dem Netz geladen werden.
-	                // Q1/Q4: 18:00–06:00 | Q2/Q3: 21:00–06:00
-	                // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
-	                const storageTimeOk = !!storageChargeWindowOk;
-	                const cheapWanted = ((tarifState === 'guenstig' && allowStorageCheapEff) || gridImportPreferred);
-	                // Im Netzentgelt‑NT gilt das Zeitfenster als "kosten-günstig" genug,
-	                // damit Speicher‑Netzladung überhaupt erlaubt ist (abhängig von Priorität + SoC‑Latch).
-	                // Dadurch funktioniert NT auch dann, wenn der Stromtarif selbst nur neutral/teuer ist.
-	                const cheapOrNtWanted = (cheapWanted || (netFeeIsNt && allowStorageCheapEff));
-	                // Speicher darf laden, wenn (Tarif günstig ODER Netzentgelt‑NT) UND Zeitfenster ok.
-	                // Ausnahmen zur Zeitfenster‑Policy:
-	                // - Netzentgelt im NT
-	                // - Negativpreis: Netzbezug ist wirtschaftlich erwünscht und darf tagsüber laden.
-	                const chargeAllowed = (cheapOrNtWanted && (storageTimeOk || netFeeIsNt || gridImportPreferred));
+                // Speicher-Netzladen ist ausschließlich bei der vollständigen
+                // Freigabekette erlaubt: Tarif günstig UND Preis frisch UND
+                // manuelles NT-Fenster aktiv UND AppCenter-/Prioritätsfreigabe.
+                const storageTimeOk = storageChargeWindowOk;
+                const cheapWanted = tarifState === 'guenstig' && allowStorageCheapEff;
+                const chargeAllowed = storageGridChargeAllowed;
 
-	                if (netFeeIsHt) {
+                if (netFeeIsHt) {
                     // In HT: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch
                     this._tariffChargeLatch = false;
                     storageChargeWanted = false;
@@ -1423,9 +1483,10 @@ class TarifVisModule extends BaseModule {
                     }
 
 	                    speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
-	                } else if (cheapWanted && !storageTimeOk && !netFeeIsNt) {
-	                    // Tarif ist günstig, aber Speicher-Netzladen ist tagsüber gesperrt (Policy-Zeitfenster).
-	                    // -> Eigenverbrauchsoptimierung übernimmt.
+                } else if (cheapWanted && !chargeAllowed) {
+                    // Tarif ist günstig, aber mindestens ein Bestandteil der
+                    // vollständigen Speicher-Netzladefreigabe fehlt.
+                    // -> Eigenverbrauchsoptimierung übernimmt.
 	                    this._tariffChargeLatch = false;
 	                    storageChargeWanted = false;
 	                    storageFullHold = false;
@@ -1453,12 +1514,10 @@ class TarifVisModule extends BaseModule {
             }
 
             const dynamicTariffStale = !!(aktivEff && !preisAktuellOk);
-            const netFeeHasIndependentOverlay = !!(netFeeEff && (netFeeMode === 'NT' || netFeeMode === 'HT'));
-            // Stale dynamische Preiswerte dürfen weder Netzladen noch eine eigene
-            // Tarif-Entladung erzwingen. Ohne ein unabhängiges HT/NT-Overlay gibt
-            // TarifVis deshalb keinen Speicher-Sollwert vor; storage-control führt
-            // normal die Eigenverbrauchsoptimierung fort.
-            if (dynamicTariffStale && !netFeeHasIndependentOverlay) {
+            // Ein veralteter dynamischer Preis darf niemals Speicher-Netzladen
+            // freigeben – auch nicht während NT. Die manuelle Zeit ist nur eine
+            // zusätzliche UND-Bedingung, kein Ersatz für einen frischen Preis.
+            if (dynamicTariffStale) {
                 this._tariffChargeLatch = false;
                 storageChargeWanted = false;
                 storageFullHold = false;
@@ -1527,8 +1586,9 @@ class TarifVisModule extends BaseModule {
                 const storageChargingPlanned = Number.isFinite(speicherSollW) && speicherSollW < 0;
                 const forceSelfConsumption = !!storageChargeBlockedByTime || netFeeIsHt;
 
-                if (gridImportPreferred) {
-                    // Bei Negativpreis soll der Speicher nicht gegen den gewünschten Netzbezug entladen.
+                if (gridImportPreferred && storageGridChargeAllowed) {
+                    // Nur wenn die vollständige Speicher-Netzladefreigabe aktiv
+                    // ist, darf ein Negativpreis die Entladung sperren.
                     dischargeAllowed = false;
                 } else if (forceSelfConsumption) {
                     // Eigenverbrauch-Modus (tagsüber Policy oder HT): Entladen erlaubt.
@@ -1549,10 +1609,9 @@ class TarifVisModule extends BaseModule {
                 dischargeAllowed = true;
             }
 
-
             // Ladepark-Limit: Standard = baseW; Reservierung wenn Speicher im Tarif-Fenster lädt
             let limitW = baseW;
-            if (!gridImportPreferred && ((aktivEff && (tarifState === 'guenstig')) || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
+            if (storageGridChargeAllowed && speicherSollW < 0 && baseW > 0) {
                 const reserveW = Math.max(0, -speicherSollW);
                 const storageShare = (prioritaet === 1) ? 1.0 : (prioritaet === 3) ? 0.0 : 0.5;
                 limitW = Math.max(0, Math.round(baseW - (reserveW * storageShare)));
@@ -1595,6 +1654,11 @@ class TarifVisModule extends BaseModule {
 
             await this._setIfChanged('tarif.netFeeEnabled', netFeeEff);
             await this._setIfChanged('tarif.netFeeMode', netFeeMode);
+            await this._setIfChanged('tarif.speicherNetzLadenErlaubt', storageGridChargeAllowed);
+            await this._setIfChanged('tarif.speicherNetzLadenSperrgrund', storageGridChargeBlockReason);
+            await this._setIfChanged('tarif.speicherPreisGuensig', !!(aktivEff && preisAktuellOk && tarifState === 'guenstig'));
+            await this._setIfChanged('tarif.speicherZeitfensterAktiv', storageChargeWindowOk);
+            await this._setIfChanged('tarif.speicherZeitfensterLabel', storageChargeWindowLabel);
 
             await this._setIfChanged('tarif.negativpreisAktiv', !!negativeActive);
             await this._setIfChanged('tarif.netzbezugBevorzugt', !!gridImportPreferred);
@@ -1604,7 +1668,6 @@ class TarifVisModule extends BaseModule {
             await this._setIfChanged('tarif.naechstesNegativBis', nextNegativeToIso || null);
             await this._setIfChanged('tarif.negativpreisStatus', gridImportPreferred ? 'active_grid_import_preferred' : (nextNegativeFromIso ? 'scheduled' : 'inactive'));
 
-            
 // Tarif-Absicht für Diagnose und nachgelagerte Statusfinalisierung.
 // Wichtig: Dieses frühe Modul kennt weder den finalen Resolver-Sollwert noch
 // Gate-, Write- oder Readback-Ergebnis. Deshalb darf es nicht mehr behaupten,
@@ -1638,11 +1701,7 @@ if (aktivEff || netFeeActive) {
 
   if (intentDirection === 'charge') {
     storageIntentStatus = 'charge';
-    storageIntentReason = gridImportPreferred
-      ? 'Negativpreis aktiv – Speicher-Netzladen gewünscht'
-      : (netFeeMode === 'NT'
-        ? 'NT – Speicherladen gewünscht'
-        : 'Tarif-/Netzentgelt-Policy fordert Laden');
+    storageIntentReason = `Speicher-Netzladen freigegeben: ${storageChargeWindowLabel}`;
     parts.push(`Tarifwunsch Speicher laden (${Math.abs(Math.round(speicherSollW))} W)`);
   } else if (intentDirection === 'discharge') {
     storageIntentStatus = 'discharge';
@@ -1659,9 +1718,7 @@ if (aktivEff || netFeeActive) {
     } else if (storageFullHold) {
       storageIntentReason = 'SoC-Ladeziel erreicht';
     } else if (storageChargeBlockedByTime) {
-      storageIntentReason = storageChargeWindowLabel
-        ? `Speicher-Netzladen außerhalb des Zeitfensters (${storageChargeWindowLabel})`
-        : 'Speicher-Netzladen außerhalb des Zeitfensters';
+      storageIntentReason = storageGridChargeBlockReason || `Speicher-Netzladen gesperrt (${storageChargeWindowLabel})`;
     } else if (netFeeMode === 'HT') {
       storageIntentReason = 'HT – Eigenverbrauch und Entladung bleiben freigegeben';
     } else if (gridImportPreferred) {
@@ -1737,10 +1794,16 @@ await this._setIfChanged('tarif.speicherIntentGrund', storageIntentReason);
                 socStopChargePct,
                 storageChargeWanted,
                 storageFullHold,
-	                // Policy: Speicher-Netzladen Zeitfenster (Q1/Q4 18–6, Q2/Q3 21–6)
-	                storageChargeWindowOk: !!storageChargeWindowOk,
-	                storageChargeWindowLabel: String(storageChargeWindowLabel || ''),
-	                storageChargeBlockedByTime: !!storageChargeBlockedByTime,
+                // Speicher-Netzladen: separater fail-closed Vertrag.
+                storageChargeWindowOk: !!storageChargeWindowOk,
+                storageChargeWindowLabel: String(storageChargeWindowLabel || ''),
+                storageChargeBlockedByTime: !!storageChargeBlockedByTime,
+                storageGridChargeConfigured: !!storageGridChargeConfigured,
+                storageGridChargeAllowed: !!storageGridChargeAllowed,
+                storageGridChargeBlockReason: String(storageGridChargeBlockReason || ''),
+                storageTariffCheap: !!(aktivEff && preisAktuellOk && tarifState === 'guenstig'),
+                storageManualWindowActive: !!storageChargeWindowOk,
+                storageManualWindowLabel: String(storageChargeWindowLabel || ''),
                 gridChargeAllowed,
                 dischargeAllowed,
                 ladeparkLimitW: limitW,
@@ -1776,4 +1839,8 @@ await this._setIfChanged('tarif.speicherIntentGrund', storageIntentReason);
     }
 }
 
-module.exports = { TarifVisModule };
+module.exports = {
+    TarifVisModule,
+    resolveStorageGridChargePermission,
+    formatStorageNtWindowLabel,
+};

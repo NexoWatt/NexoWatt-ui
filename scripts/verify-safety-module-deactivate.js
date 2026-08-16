@@ -130,7 +130,10 @@ class FakeDp {
 
 (async () => {
   // 1) Charging cold start: Modul ist bereits AUS, Hardware steht aber noch auf
-  // positivem Sollwert. deactivate() muss ohne vorherigen tick alle drei Pfade stoppen.
+  // positivem Sollwert. deactivate() muss ohne vorherigen Tick die Ladeleistung
+  // sicher auf 0 setzen, darf die getrennte Stationsverfügbarkeit aber nicht auf
+  // Inoperative schalten. Nur Kundenschalter oder aktive RFID-Whitelist besitzen
+  // die Zugangs-/Availability-Hoheit.
   {
     const adapter = new FakeAdapter({
       enableChargingManagement: false,
@@ -147,7 +150,8 @@ class FakeDp {
     assert.strictEqual(result.ok, true);
     assert.strictEqual(adapter.foreign.get('wb.setA'), 0);
     assert.strictEqual(adapter.foreign.get('wb.setW'), 0);
-    assert.strictEqual(adapter.foreign.get('wb.enable'), false);
+    assert.strictEqual(adapter.foreign.get('wb.enable'), true);
+    assert.strictEqual(adapter.writes.some((write) => write.id === 'wb.enable' && write.value === false), false);
   }
 
   // 2) Thermik cold start: Installer-Ausgaenge werden aus flowSlots aufgebaut.

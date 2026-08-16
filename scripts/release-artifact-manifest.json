@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.187",
+  "version": "0.8.188",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -255,8 +255,8 @@
     },
     {
       "path": "ems/modules/charging-management.js",
-      "size": 696736,
-      "sha256": "a814440ad732ac7e807f0e694a18d6043f4e4522620a1c4dc46310464874fe4b"
+      "size": 703306,
+      "sha256": "89e3a2ab26a34badc7d6373f0b2c3a27899bea911bfe3175ade074fdee744b0f"
     },
     {
       "path": "ems/modules/core-limits.js",
@@ -355,8 +355,8 @@
     },
     {
       "path": "ems/modules/storage-control.js",
-      "size": 601684,
-      "sha256": "0dbe2ce5a7ca4f4baa6b5133c45f9ffe18e54c60c7ba86fe865e95b431dff77c"
+      "size": 604034,
+      "sha256": "2fd8cc731283919c192979b676b4e864eba7bef9da8722519e33c70e302dc920"
     },
     {
       "path": "ems/modules/storage-mapping.js",
@@ -365,8 +365,8 @@
     },
     {
       "path": "ems/modules/tarif-vis.js",
-      "size": 102288,
-      "sha256": "e00bfe296f4ae41bde16aa50fa3be50b3db990d6a14896a6475de14d9ff35c44"
+      "size": 106574,
+      "sha256": "42712f3c92249f77c082228fd6e6a4882f6cb714f54bbc9f3e44b2a6b0bc9def"
     },
     {
       "path": "ems/modules/tariff-provider.js",
@@ -596,12 +596,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "e1f63c36c9361124d7d95711cd5f653f58cdb4881575a7fb986a0e3432c7ce58"
+      "sha256": "11888325f0abe8fd84908a027366126843cf00653709958ae8f5fb01783caebf"
     },
     {
       "path": "io-package.json",
-      "size": 24778,
-      "sha256": "aa39136881c0ac048e239c0e59a9507d18eec88bc888544495e08dbe22dbe9a9"
+      "size": 24834,
+      "sha256": "103ab9fb343544c2fa674f0a87479454e0d127452aaaa4443738bf28a9bcaffd"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -840,8 +840,8 @@
     },
     {
       "path": "main.js",
-      "size": 1709808,
-      "sha256": "bf9d2a07f3c817df586c386ca210b79bc9b7d1201ff6b6b2fb85c0404457fa8e"
+      "size": 1712596,
+      "sha256": "02987c2e496e61e9fc216989eea18b09d9080672d9b3daa1e1d5caf3324f6e99"
     },
     {
       "path": "README.md",
@@ -1111,7 +1111,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "65f1faea51db949a200a5d7163ba4c7535126137a09d0f80658bf92fae518ad4"
+      "sha256": "17b93178d1c4e4eea3110787b5ccfbfa5ebbc9a89c6b6d36ad205f2b2c08ac00"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1146,7 +1146,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "ceef2272bd0c0c6db1c85ac8868c8d76364dc65a077df7ecb1b6a65a0fcef960"
+      "sha256": "8ae7f6ed50a5675678c3e7447da875aca698eb34d10313258019211d7f18cbc2"
     },
     {
       "path": "www/nw-shell.js",
@@ -1156,7 +1156,7 @@
     {
       "path": "www/operating-strategies-appcenter.js",
       "size": 93113,
-      "sha256": "fba5d1dfe02b10faca30f6cd7b1bffb11f6ea2736b36189a5e35c7b2afbac2ac"
+      "sha256": "d5bda4ce674b961de5d5b9ab3c3b9252ce5708683e7595cc9ff11be4099ee35a"
     },
     {
       "path": "www/operating-strategies-rule-builder.js",
@@ -1312,6 +1312,11 @@
       "path": "www/year-report.js",
       "size": 44701,
       "sha256": "3fe55d569dc423055075ddb3d71ee8179d45f40761d03a96d0f8669343afaf96"
+    },
+    {
+      "path": "docs/RC63_EVCS_AVAILABILITY_STORAGE_GRID_GATE_DE.md",
+      "size": 3701,
+      "sha256": "fd352d08a510b33996aeb8edef44d801eb474ec029519adde996585708498d77"
     }
   ]
 }

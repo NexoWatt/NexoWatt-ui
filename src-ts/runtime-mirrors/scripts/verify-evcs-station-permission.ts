@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: eae6638f68a5b275aa36dd8ce27684830ea14432442170054362284e722a1acb
+ * Original-Hash: 66bd34d3327eb83ce26358631c1c94a887cfad3fbd191626503b2a4d4e6384dc
  */
 
 /**
@@ -208,11 +208,11 @@ async function main() {
   for (const [text, label] of [[chargingTs, 'charging-management.ts'], [chargingJs, 'charging-management.js']]) {
     contains(text, "await mk('userStationEnabled'", `${label} state`);
     contains(text, "await mk('stationEnabled'", `${label} effective state`);
-    contains(text, 'const stationEnabled = cfgEnabled && userStationEnabled;', `${label} station permission`);
+    contains(text, 'const stationEnabled = cfgEnabled && userStationEnabled && !rfidLockActive;', `${label} station permission`);
     contains(text, 'const enabled = stationEnabled && userEnabled;', `${label} effective control`);
-    contains(text, 'setpointTarget.enable = safetyForcedStop', `${label} safety-aware hardware enable override`);
-    contains(text, ': (!!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked)', `${label} hardware enable permission`);
-    contains(text, '!w.userStationEnabled || !w.userEnabled', `${label} safe stop`);
+    contains(text, 'setpointTarget.enable = availability.requested === true;', `${label} access-only hardware enable request`);
+    contains(text, 'resolveEvcsAvailabilityRequest({', `${label} dedicated availability owner`);
+    contains(text, '!w.userStationEnabled || !w.userEnabled || w.rfidLockActive', `${label} safe stop`);
     contains(text, 'let online = cfgEnabled;', `${label} disable-write reachability`);
   }
 

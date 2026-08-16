@@ -91,6 +91,38 @@ function strictFiniteNumber(value, fallback = null) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/** Netzladequellen, die niemals ohne den separaten Tarif+NT-Vertrag schreiben dürfen. */
+function isCentralStorageGridChargeSource(src, signedTargetW) {
+    if (!(Number(signedTargetW) < 0)) return false;
+    const normalized = String(src || '').trim().toLowerCase();
+    return normalized === 'tarif'
+        || normalized === 'tarif_grid_charge'
+        || normalized === 'tarif-netzladen'
+        || normalized === 'reserve'
+        || normalized === 'reserve_grid'
+        || normalized === 'reserve-netzladen'
+        || normalized === 'lastspitze_refill'
+        || normalized === 'lsk_refill'
+        || normalized === 'grid_charge';
+}
+
+function resolveStorageGridChargeFinalGate({
+    targetW = 0,
+    source = '',
+    configured = false,
+    allowed = false,
+    blockReason = '',
+} = {}) {
+    const gridChargeSource = isCentralStorageGridChargeSource(source, targetW);
+    if (!gridChargeSource || allowed === true) {
+        return { blocked: false, targetW: Number(targetW) || 0, reason: '', gridChargeSource };
+    }
+    const reason = configured === true
+        ? (String(blockReason || '').trim() || 'Speicher-Netzladen nur bei günstigem Tarif und aktivem manuellem NT-Fenster erlaubt')
+        : 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
+    return { blocked: true, targetW: 0, reason, gridChargeSource: true };
+}
+
 /**
  * Ermittelt die interne Lizenzedition. `eos` bleibt der Legacy-/Key-Name für
  * das Pro-Profil. Isolierte Modultests ohne Lizenzobjekt laufen weiterhin mit
@@ -693,7 +725,6 @@ function resolveStorageAntiExportTarget(input = {}) {
     };
 }
 
-
 /**
  */
 /**
@@ -769,7 +800,6 @@ class RollingWindow {
     }
 }
 
-
 /**
  * Hysterese-Schalter: "eins" erst oberhalb onAbove, "aus" erst unterhalb offBelow.
  * Dazwischen bleibt der vorherige Zustand (prev) erhalten.
@@ -811,7 +841,6 @@ function hystBelow(prev, x, onBelow, offAbove) {
     if (x >= offAbove) return false;
     return p;
 }
-
 
 /**
  * Speicher-Regelung (Schritt 2)
@@ -908,7 +937,6 @@ class SpeicherRegelungModule extends BaseModule {
 
         // Zeitpunkt, wann zuletzt Peak/LSK aktiv entladen hat (für „Refill“/Nachladen-Delay)
         this._lastPeakActiveMs = 0;
-
 
         /** @type {number|null} */
         this._lskRefillHeadroomFilteredW = null;
@@ -1980,20 +2008,21 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.netzLeistungW', Math.round((typeof gridRawW === 'number') ? gridRawW : gridW));
         await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
 
-
-        // Tarif-Freigaben (aus Tarif-Modul)
-        // - gridChargeAllowed: Netzladen erlaubt (z. B. Tarif sperrt Netzladen)
-        // - dischargeAllowed: Entladen erlaubt (Tarif günstig => Entladen sperren, um Batterie nicht leerzufahren)
-        //
-        // WICHTIG (Bugfix):
-        // Diese Flags ändern sich u. U. nur selten. Wenn man sie mit einem kurzen Freshness-Timeout bewertet
-        // (z. B. 15s), werden sie nach kurzer Zeit als "stale" behandelt und fälschlich gesperrt.
-        // Für die Regelung ist deshalb der "last known value" relevant (fail-open):
-        // - fehlt der DP oder ist er ungültig => true (keine Tarif-Sperre)
-        // - sonst: nutze den gespeicherten Wert (auch wenn er lange unverändert ist)
-        let gridChargeAllowedRaw = true;
-        if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('cm.gridChargeAllowed')) {
-            gridChargeAllowedRaw = this.dp.getBoolean('cm.gridChargeAllowed', true);
+        // Speicher-Netzladen besitzt ab RC63 einen eigenen fail-closed Vertrag.
+        // Das EVCS-Gate `cm.gridChargeAllowed` darf niemals mehr als Speicher-
+        // Freigabe interpretiert werden. Fehlt TarifVis oder ist die Freigabe
+        // unbekannt, bleibt Netzladen gesperrt; PV-/NVP-Laden bleibt unberührt.
+        const tariffSnapshot = (this.adapter && this.adapter._tarifVis && typeof this.adapter._tarifVis === 'object')
+            ? this.adapter._tarifVis
+            : null;
+        let gridChargeAllowedRaw = false;
+        let gridChargeBlockReason = 'Tarif-/NT-Freigabe fehlt';
+        if (tariffSnapshot && typeof tariffSnapshot.storageGridChargeAllowed === 'boolean') {
+            gridChargeAllowedRaw = tariffSnapshot.storageGridChargeAllowed === true;
+            gridChargeBlockReason = String(tariffSnapshot.storageGridChargeBlockReason || '');
+        } else if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('st.tariffGridChargeAllowed')) {
+            gridChargeAllowedRaw = this.dp.getBoolean('st.tariffGridChargeAllowed', false) === true;
+            gridChargeBlockReason = gridChargeAllowedRaw ? '' : 'Tarif-/NT-Freigabe ist nicht aktiv';
         }
 
         let dischargeAllowedRaw = true;
@@ -2042,7 +2071,17 @@ class SpeicherRegelungModule extends BaseModule {
         // entfernten Installateur-Haken wieder freigeben. PV-/Eigenverbrauchsladen
         // und Entladung werden von diesem Gate nicht beruehrt.
         gridChargeAllowed = !!gridChargeConfigured && !!gridChargeAllowed;
+        if (!gridChargeConfigured) {
+            gridChargeBlockReason = 'Netzladen im AppCenter nicht freigegeben';
+        } else if (!gridChargeAllowed && !gridChargeBlockReason) {
+            gridChargeBlockReason = gridChargeAllowedRaw
+                ? 'Speicher-Netzladefreigabe wird stabilisiert'
+                : 'Tarif günstig und manuelles NT-Fenster müssen gleichzeitig aktiv sein';
+        } else if (gridChargeAllowed) {
+            gridChargeBlockReason = '';
+        }
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
+        await this._setIfChanged('speicher.regelung.netzLadenSperrgrund', String(gridChargeBlockReason || ''));
         await this._setIfChanged('speicher.regelung.entladenErlaubt', !!dischargeAllowed);
 
         // Default-Zielwert (W): Ohne Initialisierung kann es – je nach aktivierten Teil-Logiken –
@@ -2136,19 +2175,7 @@ class SpeicherRegelungModule extends BaseModule {
          * PV-/NVP-Laden bleibt davon getrennt und verbraucht ausschliesslich das
          * zentrale PV-Restbudget.
          */
-        const isCentralGridChargeSource = (src, signedTargetW) => {
-            if (!(Number(signedTargetW) < 0)) return false;
-            const normalized = String(src || '').trim().toLowerCase();
-            return normalized === 'tarif'
-                || normalized === 'tarif_grid_charge'
-                || normalized === 'tarif-netzladen'
-                || normalized === 'reserve'
-                || normalized === 'reserve_grid'
-                || normalized === 'reserve-netzladen'
-                || normalized === 'lastspitze_refill'
-                || normalized === 'lsk_refill'
-                || normalized === 'grid_charge';
-        };
+        const isCentralGridChargeSource = isCentralStorageGridChargeSource;
 
         /**
          * Sungrow-Herstellerberechnung entstehen. Diese Caps duerfen den spaeteren
@@ -2171,7 +2198,6 @@ class SpeicherRegelungModule extends BaseModule {
                 || text.includes('sungrow nvp-balancing-lade-cap')
                 || text.includes('sungrow direkter pv-/last-feed-forward-cap');
         };
-
 
         /**
          * Vorlaeufige generische NVP-Entlade-Caps werden vor der eigentlichen
@@ -2500,7 +2526,6 @@ class SpeicherRegelungModule extends BaseModule {
                 dischargeThresholdW: sungrowHybridCtx.dischargeThresholdW,
             });
         }
-
 
         // ------------------------------------------------------------
         // Phase 4: Gemeinsame Netzbezug-Caps (Grid-Constraints / Peak-Shaving / Installer)
@@ -3084,7 +3109,6 @@ if (typeof soc === 'number') {
 							const headroomW = Math.max(0, psLimitW - realImportW);
 							chargeW = Math.min(chargeW, headroomW);
 						}
-
 
 						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt.
 						// Hinweis: Dadurch wird bei Einspeisung kein zusätzliches Netzladen erzwungen.
@@ -4119,7 +4143,6 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
             }
         }
 
-        
         // 6b) Diagnose: LSK-Refill gewünscht, aber kein Grenzwert/Headroom vorhanden
         // Damit ist im Betrieb sofort sichtbar, warum kein Netzladen erfolgt.
         if (
@@ -5502,16 +5525,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason: storageLicensePowerLimited ? String(reason || '') : '',
         }));
 
-        // Defense-in-depth: Selbst wenn ein Herstellerprofil, ein Hold-Pfad oder
-        // eine spaetere Policy einen negativen Sollwert weitertraegt, darf eine
-        // als Netzladen klassifizierte Quelle den allgemeinen Installateur-Haken
-        // nicht umgehen. PV-/NVP-Laden bleibt absichtlich unangetastet.
-        const gridChargeBlockedByConfig = !gridChargeConfigured
-            && targetW < 0
-            && isCentralGridChargeSource(policySourceBeforeVendor || source, targetW);
-        if (gridChargeBlockedByConfig) {
+        // Defense-in-depth: Selbst wenn ein Herstellerprofil, Hold-Pfad,
+        // Reserve- oder Refill-Modul einen negativen Netzlade-Sollwert weiterträgt,
+        // muss unmittelbar vor dem Writer erneut die vollständige Tarif+NT-
+        // Freigabe gelten. PV-/NVP-Laden bleibt absichtlich unangetastet.
+        const gridChargeFinalGate = resolveStorageGridChargeFinalGate({
+            targetW,
+            source: policySourceBeforeVendor || source,
+            configured: gridChargeConfigured,
+            allowed: gridChargeAllowed,
+            blockReason: gridChargeBlockReason,
+        });
+        const gridChargeBlockedByConfig = gridChargeFinalGate.blocked && !gridChargeConfigured;
+        const gridChargeBlockedByTariffGate = gridChargeFinalGate.blocked && gridChargeConfigured;
+        if (gridChargeFinalGate.blocked) {
             targetW = 0;
-            reason = 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
+            reason = gridChargeFinalGate.reason;
             source = 'policy';
             chargeDemandHardCapW = 0;
             chargeDemandHardCapReason = reason;
@@ -5528,9 +5557,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             storageNvpBalanceDiag = {
                 ...(storageNvpBalanceDiag || {}),
                 targetW: 0,
-                gridChargeConfigured: false,
-                gridChargeBlockedByConfig: true,
-                mode: 'grid-charge-config-stop',
+                gridChargeConfigured: !!gridChargeConfigured,
+                gridChargeAllowed: !!gridChargeAllowed,
+                gridChargeBlockedByConfig: !!gridChargeBlockedByConfig,
+                gridChargeBlockedByTariffGate: !!gridChargeBlockedByTariffGate,
+                gridChargeBlockReason: String(gridChargeBlockReason || ''),
+                mode: gridChargeBlockedByConfig ? 'grid-charge-config-stop' : 'grid-charge-tariff-window-stop',
             };
         }
 
@@ -7209,8 +7241,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             lskRefillAvgSeconds: storage.lskRefillAvgSeconds,
             lskRefillDeadbandW: storage.lskRefillDeadbandW,
 
-
-
             selfDischargeEnabled: storage.selfDischargeEnabled,
             // Getrennte Standalone-Snapshot-Felder verhindern, dass eine spaeter
             // deaktivierte MultiUse-Policy ihre frueheren SoC-Zonen weiterverwendet.
@@ -7319,7 +7349,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             tariffPvReserveCaptureFactor: storage.tariffPvReserveCaptureFactor,
             tariffPvReserveConfidence: storage.tariffPvReserveConfidence,
             tariffPvReserveMinSocPct: storage.tariffPvReserveMinSocPct,
-
 
             // Tarif-Entladung (NVP-Regelung)
             tariffTargetGridImportW: storage.tariffTargetGridImportW,
@@ -8293,7 +8322,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
     }
 
-
     /**
      * Berechnet den Rohwert, den der DatapointRegistry-Writer fuer einen
      * physischen Speicherbefehl tatsaechlich auf den Fremd-DP schreibt.
@@ -8679,7 +8707,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 source = String(source || 'safety') || 'safety';
             }
         }
-
 
         await this._setIfChanged('speicher.regelung.safetyRequestedW', requestedStorageTargetW);
         await this._setIfChanged('speicher.regelung.safetyAllowedW', w);
@@ -9849,11 +9876,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.feneconHybridPvUnterSchwelleDauerMs', 'FENECON PV unter Schwelle Dauer', 'number', 'value.interval', 0);
         await mk('speicher.regelung.feneconHybridHandoverZeroPending', 'FENECON 0-W-Uebergabestopp ausstehend', 'boolean', 'indicator', false);
 
-
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
         await mk('speicher.regelung.netzLadenKonfiguriert', 'Netzladen im App-Center freigegeben', 'boolean', 'indicator', true);
-        await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
+        await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.netzLadenSperrgrund', 'Netzladen Sperrgrund', 'string', 'text', '');
         await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');
         await mk('speicher.regelung.tarifPvBlock', 'Tarif-Netzladen durch PV-Forecast gesperrt', 'boolean', 'indicator', false);
@@ -10190,4 +10217,6 @@ module.exports = {
     resolveStorageLicensePowerProfile,
     applyStorageLicensePowerLimit,
     resolveNvpBandTarget,
+    isCentralStorageGridChargeSource,
+    resolveStorageGridChargeFinalGate,
 };

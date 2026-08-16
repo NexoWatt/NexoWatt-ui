@@ -1,3 +1,12 @@
+## 0.8.188 - 2026-08-16
+
+- OCPP21-Stationsfreigabe von der Ladeleistungsregelung getrennt: Ladeende, Steckerziehen, PV-/Tarifpause, §14a, Netz-, Stations- und Safety-0-Werte setzen `availability` nicht mehr auf `false`. Eine Sperre darf nur der ausdrückliche Kundenschalter oder die aktive RFID-Whitelist auslösen; vorhandene Inoperative-Verriegelungen werden bei erlaubtem Zugang wieder auf Operative angefordert.
+- RFID-Zugangspfad gehärtet: dedizierter Lock-Datenpunkt hat Vorrang, danach wird der direkte Enable-/Availability-Datenpunkt verwendet; `activeId` bleibt nur Legacy-Fallback. Neue Diagnosewerte zeigen RFID-Sperre, Availability-Eigentümer, gewünschte Freigabe und Grund.
+- Speicher-Netzladen mit separatem fail-closed Vertrag versehen. Zulässig ist es nur bei AppCenter-Freigabe, aktivem dynamischem Tarif, frischem ausdrücklich günstigem Preis, aktivem manuell gepflegtem NT-/Quartalsfenster, Speicherpriorität und aktivem Speicher-Writer. NT allein, Negativpreise außerhalb NT und fehlende Quartalszeiten können keine Netzladung mehr freigeben.
+- Hardcodierte Q1/Q4- und Q2/Q3-Speicherladezeiten entfernt. Im Quartalsmodell gelten ausschließlich die manuell eingestellten Q1–Q4-Zeiten; fehlende Werte bleiben sicher gesperrt.
+- Speicherregelung vom EVCS-Netzlade-Gate entkoppelt und unmittelbar vor dem Hardware-Writer um eine zweite Firewall für Tarif-, Reserve- und Refill-Netzladequellen ergänzt. PV-/NVP-Laden bleibt ausdrücklich unberührt.
+- Regressionstest für Kundensperre, RFID-Freigabe, OCPP-Operative-Selbstheilung, günstigen Tarif + manuelles NT, NT ohne günstigen Tarif, günstigen Tarif außerhalb NT, Negativpreis außerhalb NT, stale Preis, fehlende Quartalszeiten, AppCenter-Sperre und PV-Ausnahme ergänzt.
+
 ## 0.8.187 - 2026-08-15
 
 - Anlagenweiten Cross-App-Stabilitätsaudit durchgeführt. Alle ausführbaren TypeScript-Runtimequellen werden zusätzlich ohne den temporären `@ts-nocheck`-Schutz auf ungelöste Bezeichner geprüft; reale `ReferenceError`-Kandidaten blockieren den Release künftig fail-closed.

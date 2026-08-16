@@ -41,7 +41,6 @@ function requireChargingControlTsMirror() {
     }
 }
 
-
 /** Code-Teil: requireChargingAllocationTsMirror – Lädt den TS-Shadow für Wallbox-Allocation. Der Spiegel berechnet in diesem */
 function requireChargingAllocationTsMirror() {
     try {
@@ -50,7 +49,6 @@ function requireChargingAllocationTsMirror() {
         return null;
     }
 }
-
 
 /** Code-Teil: requireChargingPhaseSelectionTsMirror – Lädt die TS-Entscheidungsschicht für AC-1p/3p-Auto-Phasenwahl im PV-Überschussladen. */
 function requireChargingPhaseSelectionTsMirror() {
@@ -143,7 +141,6 @@ function computeEvcsPvBudgetReservationW({
         : totalDemandW;
     return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));
 }
-
 
 /** Freie Herstellerwerte aus AppCenter in stabile Vergleichstokens zerlegen. */
 function parseEvcsSemanticValues(raw) {
@@ -778,7 +775,6 @@ function computeMinPvAllocationW({
     };
 }
 
-
 /**
  * Code-Teil: computeGoalPowerCapW
  * Zweck: Uebersetzt die Zeit-/Zielladeleistung in einen technisch fahrbaren
@@ -1412,13 +1408,54 @@ function choosePositiveMin(...values) {
     return best > 0 ? best : 0;
 }
 /** Code-Teil: availabilityReason – trennt Erreichbarkeit von einem frischen Betriebsfehler. */
-function availabilityReason(cfgEnabled, userStationEnabled, userEnabled, online, faultActive = false, unavailableActive = false) {
-    if (!cfgEnabled || !userStationEnabled) return ReasonCodes.DISABLED;
+function availabilityReason(cfgEnabled, userStationEnabled, userEnabled, online, faultActive = false, unavailableActive = false, rfidLockActive = false) {
+    if (!cfgEnabled || !userStationEnabled || rfidLockActive) return ReasonCodes.DISABLED;
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
     if (!online) return ReasonCodes.OFFLINE;
     if (faultActive) return ReasonCodes.FAULTED;
     if (unavailableActive) return ReasonCodes.UNAVAILABLE;
     return ReasonCodes.SKIPPED;
+}
+
+/**
+ * Hardware-Verfügbarkeit einer Wallbox ist eine Zugangsentscheidung – keine
+ * Leistungsentscheidung. Normale 0-W-Situationen (Ladeende, Stecker gezogen,
+ * PV-/Tarifpause, §14a, Netz-/Safety-Gate oder Regelung aus) dürfen die OCPP-
+ * Station deshalb niemals auf Inoperative setzen. Gesperrt wird ausschließlich
+ * durch die ausdrückliche Kundensperre oder eine aktive RFID-Whitelist-Sperre.
+ */
+function resolveEvcsAvailabilityRequest({
+    userStationEnabled = true,
+    rfidEnforced = false,
+    rfidAuthorized = true,
+} = {}) {
+    const customerLockActive = userStationEnabled === false;
+    const rfidLockActive = rfidEnforced === true && rfidAuthorized !== true;
+    if (customerLockActive) {
+        return {
+            requested: false,
+            owner: 'customer',
+            reason: 'customer-station-lock',
+            customerLockActive: true,
+            rfidLockActive: false,
+        };
+    }
+    if (rfidLockActive) {
+        return {
+            requested: false,
+            owner: 'rfid',
+            reason: 'rfid-not-authorized',
+            customerLockActive: false,
+            rfidLockActive: true,
+        };
+    }
+    return {
+        requested: true,
+        owner: 'charging-management',
+        reason: 'station-operative',
+        customerLockActive: false,
+        rfidLockActive: false,
+    };
 }
 
 /** Code-Teil: normalizeEvcsOnlineFlag – Normalisiert echte Wallbox-Erreichbarkeit aus bool/number/string Datenpunkten. */
@@ -1875,7 +1912,6 @@ function resolveOcppOnlineObjectId(configuredOnlineId, ocppContext) {
     if (!configured || isOcppVolatileOnlineObjectId(configured, ocppContext)) return socketId;
     return configured;
 }
-
 
 /**
  * Erkennt ausschließlich bekannte OCPP-Datenpunktverträge derselben Station.
@@ -2406,7 +2442,6 @@ function applyChargingModeRamp(prevValue, targetValue, maxDeltaUp, effectiveMode
     return rampUp(prevValue, targetValue, maxDeltaUp);
 }
 
-
 /**
  * Trennt normal, expliziten Schutz und Assist.
  *
@@ -2431,7 +2466,6 @@ function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled, wallboxMod
     const protect = allowed && modeAllowsStoragePolicy && !assist;
     return { mode: assist ? 'assist' : (protect ? 'protect' : 'normal'), assistRequested: assist, protectionRequested: protect };
 }
-
 
 /**
  * Trennt echte Fahrzeugladeleistung von Wallbox-Eigenverbrauch/Standby.
@@ -2587,7 +2621,6 @@ class ChargingManagementModule extends BaseModule {
         this._chargingPhaseSelectionTsLast = null;
         this._chargingAudit = new ChargingManagementAuditStore(this.adapter, (id, value, ack) => this._queueState(id, value, ack), () => this._flushPubQueue());
     }
-
 
     async _restoreChargingAuditState() { return this._chargingAudit.restore(); }
     _getChargingAuditPayload(limit = 200) { return this._chargingAudit.getPayload(limit); }
@@ -3207,7 +3240,6 @@ class ChargingManagementModule extends BaseModule {
         }));
     }
 
-
     /** Code-Teil: _publishChargingStationDiagnosticsFromAllocationPlan – Spiegelt Stationsverbrauch und Restleistung aus dem finalen TS-geprueften */
     async _publishChargingStationDiagnosticsFromAllocationPlan(allocationState, wbList) {
         try {
@@ -3287,7 +3319,6 @@ class ChargingManagementModule extends BaseModule {
             return false;
         }
     }
-
 
     /** Code-Teil: _buildChargingFinalAllocationMetrics – Leitet die zentrale EVCS-Reservierung ausschließlich aus dem finalen, */
     _buildChargingFinalAllocationMetrics(allocationState, wbList, activityThresholdW = 100) {
@@ -3975,7 +4006,7 @@ class ChargingManagementModule extends BaseModule {
                 || safetyStopExisting
                 || (safetyDecision && safetyDecision.clamped === true && requestedFlexibleW > 0)
             );
-            const safeStopAllowed = !!(w.online && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked || w.enabled || w.cfgEnabled));
+            const safeStopAllowed = !!(w.online && (!w.cfgEnabled || !w.userStationEnabled || !w.userEnabled || w.rfidLockActive || w.operationalBlocked || w.enabled || w.cfgEnabled));
             const phaseSwitchSafetyReady = !isPhaseSwitchEntry || !liveEnvelope || (liveEnvelope.valid === true && liveEnvelope.forceZero !== true && liveEnvelope.emergencyStop !== true);
             const shouldWrite = !!(
                 baseWriteRequired
@@ -4074,10 +4105,17 @@ class ChargingManagementModule extends BaseModule {
                     // Kunden-/Sicherheitsfreigabe und niemals dem PV-Sollwert. 0 W im
                     // PV-Modus bedeutet dadurch "Warten bei aktiver Wallbox".
                     if (w.enableKey) {
-                        const safetyForcedStop = !!(safetyStopExisting || (safetyDecision && safetyDecision.forceZero === true && requestedFlexibleW > 0));
-                        setpointTarget.enable = safetyForcedStop
-                            ? false
-                            : (!!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked);
+                        const availability = w.availabilityRequest && typeof w.availabilityRequest === 'object'
+                            ? w.availabilityRequest
+                            : resolveEvcsAvailabilityRequest({
+                                userStationEnabled: w.userStationEnabled,
+                                rfidEnforced: w.rfidEnforced,
+                                rfidAuthorized: w.rfidAuthorized,
+                            });
+                        // 0 W steuert die Ladeleistung. Availability steuert nur
+                        // den Zugang. Daher bleibt die Station bei Ladeende,
+                        // Steckerziehen, PV-/Tarifpause und Safety-Stopp Operative.
+                        setpointTarget.enable = availability.requested === true;
                     }
                     const res = await applySetpoint(
                         { adapter: this.adapter, dp: this.dp },
@@ -4319,7 +4357,7 @@ class ChargingManagementModule extends BaseModule {
             const safeTargetA = positiveCommandBlocked ? 0 : (Number.isFinite(targetA) && targetA > 0 ? targetA : 0);
             const shouldWrite = hasSetpoint && !!w.online && (
                 !!w.controlAvailable
-                || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled))
+                || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled || w.rfidLockActive))
                 || !!w.operationalBlocked
             );
             entries.push({
@@ -4336,8 +4374,6 @@ class ChargingManagementModule extends BaseModule {
         await this._executeChargingSetpointEntries(entries, wbList, debugAlloc, 'js-fallback', fallbackReason);
         return true;
     }
-
-
 
     /**
      * Default publishing options for certain "noisy" diagnostic counters.
@@ -4692,8 +4728,12 @@ class ChargingManagementModule extends BaseModule {
             const mappings = [
                 { key: `cm.wb.${safe}.setA`, objectId: String(wb.setCurrentAId || '').trim(), type: 'number', value: 0, unit: 'A' },
                 { key: `cm.wb.${safe}.setW`, objectId: String(wb.setPowerWId || '').trim(), type: 'number', value: 0, unit: 'W' },
-                { key: `cm.wb.${safe}.en`, objectId: String(wb.enableId || '').trim(), type: 'boolean', value: false, unit: '' },
             ];
+            // App-/Modul-Deaktivierung stoppt ausschließlich die Ladeleistung.
+            // Die Stationsverfügbarkeit ist eine separate Zugangsentscheidung und
+            // darf weder bei Modul-AUS noch bei Ladeende, Tarif-/PV-Pause oder
+            // Safety-Stop auf Inoperative gesetzt werden. Eine bestehende Kunden-
+            // oder RFID-Sperre bleibt deshalb unangetastet.
             for (const mapping of mappings) {
                 if (!mapping.objectId) continue;
                 attempted += 1;
@@ -4860,7 +4900,6 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.tsBudgetJson', 'TypeScript charging budget shadow JSON', 'string', 'json');
         await mk('chargingManagement.control.tsBudgetSource', 'TypeScript charging budget source', 'string', 'text');
 
-
         // MU6.8: Failsafe diagnostics (Stale Meter/Budget)
         await mk('chargingManagement.control.staleMeter', 'Meter stale (failsafe)', 'boolean', 'indicator');
         await mk('chargingManagement.control.staleBudget', 'Budget stale (failsafe)', 'boolean', 'indicator');
@@ -5010,6 +5049,13 @@ class ChargingManagementModule extends BaseModule {
         await mk('userStationEnabled', 'Ladestation freigegeben (User)', 'boolean', 'switch.enable', true, { def: true, states: { true: 'An', false: 'Gesperrt' } });
         await mk('stationEnabled', 'Ladestation freigegeben (effektiv)', 'boolean', 'indicator');
         await mk('stationEnableControlAvailable', 'Ladestation-Freigabe schreibbar', 'boolean', 'indicator');
+        await mk('rfidAuthorized', 'RFID autorisiert', 'boolean', 'indicator');
+        await mk('rfidEnforced', 'RFID-Zugangskontrolle aktiv', 'boolean', 'indicator');
+        await mk('rfidLockActive', 'RFID-Sperre wirksam', 'boolean', 'indicator');
+        await mk('rfidReason', 'RFID-Entscheidungsgrund', 'string', 'text');
+        await mk('availabilityOwner', 'Eigentümer der Stationsfreigabe', 'string', 'text');
+        await mk('availabilityRequested', 'Angeforderte Stationsfreigabe', 'boolean', 'indicator');
+        await mk('availabilityRequestReason', 'Grund der Stationsfreigabe', 'string', 'text');
         await mk('userEnabled', 'Regelung aktiv (User)', 'boolean', 'switch.enable', true, { def: true, states: { true: 'Aktiv', false: 'Aus' } });
         await mk('enabled', 'Enabled (effective)', 'boolean', 'indicator');
         await mk('online', 'Online', 'boolean', 'indicator');
@@ -5156,7 +5202,6 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargeDemandSourceId', 'Ladebedarf Datenpunkt', 'string', 'text');
         await mk('pvStartReservationW', 'PV-Startreservierung (W)', 'number', 'value.power');
         await mk('goalSocAvailable', 'Fahrzeug-SoC verfügbar', 'boolean', 'indicator');
-
 
         // Ziel-Laden: berechnete Werte (read-only)
         await mk('goalActive', 'Zeit-Ziel aktiv (berechnet)', 'boolean', 'indicator');
@@ -5356,7 +5401,6 @@ class ChargingManagementModule extends BaseModule {
         return ch;
     }
 
-
     /** Code-Teil: Methode `_ensureStationChannel` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
     /** Code-Teil: _ensureStationChannel – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _ensureStationChannel(stationKey) {
@@ -5403,7 +5447,6 @@ class ChargingManagementModule extends BaseModule {
         this._knownStations.add(ch);
         return ch;
     }
-
 
     /** Code-Teil: Methode `_getPeakShavingActive` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
     /** Code-Teil: _getPeakShavingActive – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
@@ -5686,7 +5729,6 @@ class ChargingManagementModule extends BaseModule {
         const wbMeterStaleTimeoutMs = wbMeterStaleTimeoutSec * 1000;
         const wbStatusStaleTimeoutMs = wbStatusStaleTimeoutSec * 1000;
 
-
         // MU6.11: ramp limiting + setpoint step (anti-flutter, but keep safety by never limiting ramp-down)
         const maxDeltaWPerTick = clamp(num(cfg.maxDeltaWPerTick, 0), 0, 1e12); // 0 = unlimited
         const maxDeltaAPerTick = clamp(num(cfg.maxDeltaAPerTick, 0), 0, 1e6); // 0 = unlimited
@@ -5945,9 +5987,38 @@ class ChargingManagementModule extends BaseModule {
                 userEnabled = true;
             }
 
-            const stationEnabled = cfgEnabled && userStationEnabled;
+            // RFID ist eine eigenständige Zugangshoheit. Fehlen die lokalen
+            // RFID-Zustände, bleibt die Station freigegeben (RFID nicht aktiv).
+            let rfidAuthorized = true;
+            let rfidEnforced = false;
+            let rfidReason = 'rfid_disabled';
+            try {
+                const rfidIdx = wbIndex + 1;
+                const stAuthorized = await this._getStateCached(`evcs.${rfidIdx}.rfidAuthorized`);
+                const stEnforced = await this._getStateCached(`evcs.${rfidIdx}.rfidEnforced`);
+                const stReason = await this._getStateCached(`evcs.${rfidIdx}.rfidReason`);
+                if (stAuthorized && stAuthorized.val !== null && stAuthorized.val !== undefined) {
+                    rfidAuthorized = toBool(stAuthorized.val) !== false;
+                }
+                if (stEnforced && stEnforced.val !== null && stEnforced.val !== undefined) {
+                    rfidEnforced = toBool(stEnforced.val) === true;
+                }
+                if (stReason && stReason.val !== null && stReason.val !== undefined) {
+                    rfidReason = String(stReason.val || '').trim() || rfidReason;
+                }
+            } catch {
+                rfidAuthorized = true;
+                rfidEnforced = false;
+                rfidReason = 'rfid-state-unavailable';
+            }
+            const availabilityRequest = resolveEvcsAvailabilityRequest({
+                userStationEnabled,
+                rfidEnforced,
+                rfidAuthorized,
+            });
+            const rfidLockActive = availabilityRequest.rfidLockActive === true;
+            const stationEnabled = cfgEnabled && userStationEnabled && !rfidLockActive;
             const enabled = stationEnabled && userEnabled;
-
 
             // Ladepunkt-Metadaten (Stationsgruppe / Connector)
             const stationKey = String(wb.stationKey || '').trim();
@@ -6623,6 +6694,13 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.unavailableActive`, unavailableActive, true);
                 await this._queueState(`${ch}.unavailableReason`, unavailableReason, true);
                 await this._queueState(`${ch}.operationalBlocked`, operationalBlocked, true);
+                await this._queueState(`${ch}.rfidAuthorized`, rfidAuthorized, true);
+                await this._queueState(`${ch}.rfidEnforced`, rfidEnforced, true);
+                await this._queueState(`${ch}.rfidLockActive`, rfidLockActive, true);
+                await this._queueState(`${ch}.rfidReason`, rfidReason, true);
+                await this._queueState(`${ch}.availabilityOwner`, availabilityRequest.owner, true);
+                await this._queueState(`${ch}.availabilityRequested`, availabilityRequest.requested, true);
+                await this._queueState(`${ch}.availabilityRequestReason`, availabilityRequest.reason, true);
             } catch {
                 // ignore
             }
@@ -7300,6 +7378,14 @@ class ChargingManagementModule extends BaseModule {
                 cfgEnabled,
                 userStationEnabled,
                 stationEnabled,
+                rfidAuthorized,
+                rfidEnforced,
+                rfidLockActive,
+                rfidReason,
+                availabilityRequest,
+                availabilityOwner: availabilityRequest.owner,
+                availabilityRequested: availabilityRequest.requested,
+                availabilityRequestReason: availabilityRequest.reason,
                 userEnabled,
                 enabled,
                 online,
@@ -7505,7 +7591,6 @@ class ChargingManagementModule extends BaseModule {
             return null;
         };
 
-        
         /**
          * MU6.8: state staleness helper (uses state.ts / state.lc).
          * @param {string} id
@@ -7524,7 +7609,6 @@ class ChargingManagementModule extends BaseModule {
                 return true;
             }
         };
-
 
         // Tariff-derived permissions (optional; provided by tarif-vis.js)
         // gridChargeAllowed: whether EVCS may use grid import (Tarif-Sperre)
@@ -8673,7 +8757,6 @@ if (components.length) {
             budgetW = Number.POSITIVE_INFINITY;
         }
 
-
         // Backwards compatibility: if PV-only is globally active AND no wallbox is grid-allowed,
         // enforce the PV cap for ALL budget modes.
         if (capTotalBudgetByPv && typeof pvCapW === 'number' && Number.isFinite(pvCapW)) {
@@ -9250,7 +9333,6 @@ if (components.length) {
             // ignore
         }
 
-
         // MU6.8: If metering/budget inputs are stale, enforce safe targets (0) to avoid overloading the grid connection.
         let staleMeter = false;
         let staleBudget = false;
@@ -9462,15 +9544,17 @@ if (components.length) {
                 /** @type {any|null} */
                 let applyWrites = null;
 
-                if (w.online && (w.controlAvailable || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled)) || w.operationalBlocked)) {
+                if (w.online && (w.controlAvailable || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled || w.rfidLockActive)) || w.operationalBlocked)) {
                     // 0.7.127: Failsafe setzt den sicheren Zielwert nur noch als
                     // Executor-/Fallback-Plan. Der einzige EVCS-Setpoint-Schreiber bleibt
                     // _executeChargingSetpointEntries.
                     applyStatus = 'planned_by_js_safety_executor';
-                    const reasonToSet = (!!w.cfgEnabled && !w.userStationEnabled) ? ReasonCodes.DISABLED : ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason);
+                    const reasonToSet = (!w.cfgEnabled || !w.userStationEnabled || w.rfidLockActive)
+                        ? ReasonCodes.DISABLED
+                        : ((!w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason);
                     await this._queueState(`${w.ch}.reason`, reasonToSet, true);
                 } else {
-                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
+                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive), true);
                 }
 
                 await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -9508,7 +9592,9 @@ if (components.length) {
                     applied,
                     applyStatus,
                     applyWrites,
-                    reason: (w.online && (w.controlAvailable || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled)) || w.operationalBlocked)) ? ((!!w.cfgEnabled && !w.userStationEnabled) ? ReasonCodes.DISABLED : ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason)) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
+                    reason: (w.online && (w.controlAvailable || (!w.cfgEnabled || !w.userStationEnabled || !w.userEnabled || w.rfidLockActive) || w.operationalBlocked))
+                        ? ((!w.cfgEnabled || !w.userStationEnabled || w.rfidLockActive) ? ReasonCodes.DISABLED : ((!w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason))
+                        : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive)),
                 });
             }
 
@@ -9571,7 +9657,6 @@ if (components.length) {
                 legacy: this._chargingLegacyDecisionTreeLast,
             });
 
-    
         publishEvPriorityCaps({
             active: !!evPriorityRequested,
             blockStorageCharge: !!(evPriorityRequested && (evPriorityLimitedWallboxes > 0 || evPriorityPendingW > 0)),
@@ -9771,7 +9856,6 @@ if (components.length) {
                 }
             }
 
-            
             // If the user selected rampDownToZero but we can still compute safe hard caps (Gate A),
             // follow those caps instead of forcing 0A. Only ramp down to 0 when no safe budget is available.
             if (!pauseFollowPeakBudget && pb !== 'followPeakBudget' && (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW))) {
@@ -9842,7 +9926,7 @@ if (components.length) {
                         applyStatus = 'planned_by_js_safety_executor';
                         await this._queueState(`${w.ch}.reason`, reason, true);
                     } else {
-                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
+                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive), true);
                     }
 
                     await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -9880,7 +9964,7 @@ if (components.length) {
                         targetA,
                         applied,
                         status: applyStatus,
-                        reason: w.controlAvailable ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
+                        reason: w.controlAvailable ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive)),
                     });
 
                     // totals stay 0
@@ -10025,7 +10109,6 @@ if (components.length) {
                 return ask.localeCompare(bsk);
             });
 
-
         // MU3.1.1 (Sprint 3.1): Optional round-robin fairness within station groups.
         // This keeps overall prioritization, but rotates the order of NON-boost connectors inside the same station
         // so that one connector does not always take the full station cap first.
@@ -10090,7 +10173,6 @@ if (components.length) {
             }
         }
 
-
         // MU3.1: expose allocation order for transparency
         for (let i = 0; i < sorted.length; i++) {
             const w = sorted[i];
@@ -10100,7 +10182,6 @@ if (components.length) {
             await this._queueState(`${w.ch}.allocationRank`, i + 1, true);
         }
         await this._queueState('chargingManagement.debug.sortedOrder', sorted.map(w => w.safe).join(','), true);
-
 
         // Stationsbudgets (gemeinsame Leistungsgrenzen je Station)
         /** @type {Map<string, number>} */
@@ -10283,7 +10364,6 @@ if (components.length) {
                 set.add(String(w.safe || ''));
                 stationConnectors.set(_sk, set);
             }
-
 
             let targetW = 0;
             let targetA = 0;
@@ -10589,7 +10669,7 @@ if (components.length) {
             if (!w.controlAvailable) {
                 targetW = 0;
                 targetA = 0;
-                reason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
+                reason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive);
             }
 
             // PV-only Start / Ramp / Stop state machine
@@ -11207,6 +11287,13 @@ if (components.length) {
                 online: !!w.online,
                 userStationEnabled: !!w.userStationEnabled,
                 stationEnabled: !!w.stationEnabled,
+                rfidAuthorized: w.rfidAuthorized !== false,
+                rfidEnforced: !!w.rfidEnforced,
+                rfidLockActive: !!w.rfidLockActive,
+                rfidReason: String(w.rfidReason || ''),
+                availabilityOwner: String(w.availabilityOwner || ''),
+                availabilityRequested: w.availabilityRequested === true,
+                availabilityRequestReason: String(w.availabilityRequestReason || ''),
                 enabled: !!w.enabled,
                 controlAvailable: !!w.controlAvailable,
                 onlineSource: String(w.onlineSource || ''),
@@ -11288,7 +11375,7 @@ if (components.length) {
             let applyWrites = null;
 
             // Regelung AUS, Kunden-Sperre oder frischer Betriebsfehler: sicheren 0-Sollwert planen.
-            if (!!w.cfgEnabled && !!w.online && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked)) {
+            if (!!w.online && (!w.cfgEnabled || !w.userStationEnabled || !w.userEnabled || w.rfidLockActive || w.operationalBlocked)) {
                 // TS-Migration 0.7.126: Auch der sichere 0-Wert bei kundenseitig
                 // deaktivierter Regelung wird im Normalpfad vom produktiven TS-Write-Plan
                 // ausgeführt. JS bleibt Executor/Fallback, schreibt hier aber nicht doppelt.
@@ -11308,7 +11395,7 @@ if (components.length) {
             } else {
                 await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
+            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive, !!w.rfidLockActive);
             await this._queueState(`${w.ch}.reason`, offReason, true);
             debugAlloc.push({
                 safe: w.safe,
@@ -11321,6 +11408,13 @@ if (components.length) {
                 online: !!w.online,
                 userStationEnabled: !!w.userStationEnabled,
                 stationEnabled: !!w.stationEnabled,
+                rfidAuthorized: w.rfidAuthorized !== false,
+                rfidEnforced: !!w.rfidEnforced,
+                rfidLockActive: !!w.rfidLockActive,
+                rfidReason: String(w.rfidReason || ''),
+                availabilityOwner: String(w.availabilityOwner || ''),
+                availabilityRequested: w.availabilityRequested === true,
+                availabilityRequestReason: String(w.availabilityRequestReason || ''),
                 enabled: !!w.enabled,
                 controlAvailable: !!w.controlAvailable,
                 onlineSource: String(w.onlineSource || ''),
@@ -11379,10 +11473,9 @@ if (components.length) {
                 setAKey: w.setAKey || '',
                 setWKey: w.setWKey || '',
                 enableKey: w.enableKey || '',
-                writeRequired: !!((w.setAKey || w.setWKey || w.enableKey) && !!w.online && !!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked)),
+                writeRequired: !!((w.setAKey || w.setWKey || w.enableKey) && !!w.online && (!w.cfgEnabled || !w.userStationEnabled || !w.userEnabled || w.rfidLockActive || w.operationalBlocked)),
             });
         }
-
 
         /**
          * Code-Teil: zentrale PV-Intent-Reservierung vor Speicherregelung
@@ -11539,7 +11632,6 @@ if (components.length) {
             evcsPendingDemandTotalW = 0;
             evcsPendingDemandWallboxes = 0;
         }
-
 
         let evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
         let evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
@@ -11734,7 +11826,6 @@ if (components.length) {
         }
         await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'normal-allocation-write-plan', legacyFallbackReason);
         await this._publishChargingTsNormalSourceState('normal-allocation-write-plan', tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason, false);
-
 
         publishEvPriorityCaps({
             active: !!evPriorityRequested,
@@ -11999,6 +12090,7 @@ module.exports = {
     isPersistentEvcsReadyStatus,
     resolveEvcsStatusAgePolicy,
     classifyEvcsConnectorStatus,
+    resolveEvcsAvailabilityRequest,
     inferOcppConnectorNoFromObjectId,
     inferIoBrokerOcppConnectorContext,
     belongsToOcppConnectorContext,

@@ -442,12 +442,15 @@ async function runTick({
   // muss einen echten Richtungswechsel direkt durchlassen. Dieser Tariffall
   // wechselt von 3 kW Entladen unmittelbar auf 4 kW Netzladen. Ohne den globalen
   // Bypass wuerde die Standardrampe faelschlich noch +2,5 kW weiter entladen.
+  // RC63 setzt fuer diesen reinen Rampentest die vollstaendige, bereits extern
+  // validierte Speicher-Netzladefreigabe explizit auf true; ein guenstiger Tarif
+  // oder Negativpreis allein darf diesen Pfad nicht mehr oeffnen.
   const tariffChargeReverse = await runTick({
     gridW: 1000,
     battPowerW: 3000,
     lastTargetW: 3000,
     lastSource: 'eigenverbrauch',
-    storagePatch: { pvEnabled: false },
+    storagePatch: { pvEnabled: false, tariffPermissionHoldSec: 0, allowGridCharge: true },
     tarifVis: {
       aktiv: true,
       state: 'cheap',
@@ -455,6 +458,8 @@ async function runTick({
       negativeActive: true,
       gridImportPreferred: true,
       netzbezugBevorzugt: true,
+      storageGridChargeAllowed: true,
+      storageGridChargeBlockReason: '',
     },
   });
   assert.strictEqual(tariffChargeReverse.targetW, -4000, `Tarif-Richtungswechsel muss direkt Netzladen schreiben: ${tariffChargeReverse.targetW}`);

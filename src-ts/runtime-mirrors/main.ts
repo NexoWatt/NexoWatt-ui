@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: bf9d2a07f3c817df586c386ca210b79bc9b7d1201ff6b6b2fb85c0404457fa8e
+ * Original-Hash: 02987c2e496e61e9fc216989eea18b09d9080672d9b3daa1e1d5caf3324f6e99
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -31439,6 +31439,28 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const now = Date.now();
     if (!this._rfidEnforceCache) this._rfidEnforceCache = {};
 
+    // Die ausdrückliche Kundensperre besitzt Vorrang vor einer positiven RFID-
+    // Autorisierung. So kann ein Whitelist-Tag eine bewusst ausgeschaltete
+    // Ladestation nicht kurzzeitig wieder auf Operative setzen.
+    const safeWallboxKey = String(wb.key || `lp${idx}`)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 64) || `lp${idx}`;
+    let customerStationEnabled = true;
+    try {
+      const stationState = await this.getStateAsync(`chargingManagement.wallboxes.${safeWallboxKey}.userStationEnabled`);
+      if (stationState && stationState.val !== null && stationState.val !== undefined && String(stationState.val).trim() !== '') {
+        const raw = stationState.val;
+        customerStationEnabled = raw === true
+          || raw === 1
+          || ['true', '1', 'on', 'an', 'yes', 'ja'].includes(String(raw).trim().toLowerCase());
+      }
+    } catch (_eCustomerStationState) {
+      customerStationEnabled = true;
+    }
+
     // Determine latest RFID code seen
     let code = '';
     if (wb.rfidReadId) {
@@ -31503,8 +31525,39 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             this.log.debug(`[EVCS RFID] lockWriteId failed: ${e && e.message ? e.message : e}`);
           }
         }
+      } else if (wb.enableWriteId) {
+        // OCPP21 und andere Wallboxen ohne separaten Lock-DP nutzen die
+        // Stationsfreigabe als Zugangskontrolle. Nur die RFID-Whitelist darf
+        // diesen Pfad automatisch auf Inoperative setzen.
+        const want = !!authorized && customerStationEnabled;
+        enforced = true;
+        if (prev.enableWanted !== want) {
+          try {
+            const rfidWriteResult = await withActuatorShadowContext(this, {
+              owner: `charging.lp${idx}`,
+              module: 'rfidAccess',
+              priority: 600,
+              reason: customerStationEnabled
+                ? `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`
+                : `Kundensperre Wallbox lp${idx} hat Vorrang vor RFID`,
+              leaseMs: 15000,
+              kind: 'charging-rfid-availability',
+              enforceAuthority: true,
+              releaseAuthority: authorized,
+            }, () => this.setForeignStateAsync(wb.enableWriteId, want));
+            if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
+              this.log.debug(`[EVCS RFID] enableWriteId durch ${rfidWriteResult.blockedByOwner || 'Aktor-Authority'} blockiert`);
+            } else {
+              prev.enableWanted = want;
+            }
+          } catch (e) {
+            this.log.debug(`[EVCS RFID] enableWriteId failed: ${e && e.message ? e.message : e}`);
+          }
+        }
       } else if (wb.activeId) {
-        const want = !!authorized; // enable/disable charging (soft lock)
+        // Legacy-Fallback nur für Installationen ohne separaten Lock- oder
+        // Availability-Datenpunkt.
+        const want = !!authorized;
         enforced = true;
         const cur = this.stateCache[`evcs.${idx}.active`] ? !!this.stateCache[`evcs.${idx}.active`].value : undefined;
         if (prev.activeWanted !== want || (cur !== undefined && cur !== want)) {
@@ -31515,10 +31568,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
               priority: 600,
               reason: `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`,
               leaseMs: 15000,
-              kind: 'charging-rfid-enable',
+              kind: 'charging-rfid-enable-legacy',
               enforceAuthority: true,
-              // Freigabe beendet die RFID-Sperr-Lease; eine aktive Sperre bleibt
-              // dagegen verbindlich, bis ein autorisierter Tag erkannt wird.
               releaseAuthority: authorized,
             }, () => this.setForeignStateAsync(wb.activeId, want));
             if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
