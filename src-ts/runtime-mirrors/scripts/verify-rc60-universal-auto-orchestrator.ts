@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5a1e3015f44703aae7260e7426cda10505c00645850629a209288c3916196dc0
+ * Original-Hash: 09a8ee6f1e917a392306ed6cb28283b6c5263b2f7376f50e4945d1c2a9fc962b
  */
 
 /**
@@ -80,6 +80,10 @@ function makeHarness(opts = {}) {
   const deadlineHours = opts.deadlineHours ?? 10;
   const goalFinishTs = opts.goalFinishTs ?? (now + deadlineHours * 3600_000);
   const tariffState = opts.tariffState ?? (gridAllowed ? 'neutral' : 'teuer');
+  const tariffActive = opts.tariffActive ?? true;
+  const tariffStale = opts.tariffStale ?? false;
+  const netFeeEnabled = opts.netFeeEnabled ?? false;
+  const netFeeMode = opts.netFeeMode ?? 'Standard';
   const telemetryProfile = opts.telemetryProfile ?? 'generic';
   const explicitConnectedConfigured = Object.prototype.hasOwnProperty.call(opts, 'explicitConnected');
   const explicitDemandConfigured = Object.prototype.hasOwnProperty.call(opts, 'explicitDemand');
@@ -205,13 +209,15 @@ function makeHarness(opts = {}) {
   setState('chargingManagement.wallboxes.lp1.goalTargetSocPct', goalTargetSocPct);
   setState('chargingManagement.wallboxes.lp1.goalFinishTs', goalFinishTs);
   setState('chargingManagement.wallboxes.lp1.goalBatteryKwh', opts.goalBatteryKwh ?? 60);
+  setState('tarif.aktiv', tariffActive);
+  setState('tarif.dynamicTariffStale', tariffStale);
   setState('tarif.state', tariffState);
   setState('tarif.preisAktuellEurProKwh', opts.priceCurrent ?? (tariffState === 'guenstig' ? 0.1 : tariffState === 'teuer' ? 0.5 : 0.3));
   setState('tarif.preisDurchschnittEurProKwh', opts.priceAverage ?? 0.3);
   setState('tarif.negativpreisAktiv', opts.negativeActive ?? false);
   setState('tarif.netzbezugBevorzugt', opts.gridImportPreferred ?? false);
-  setState('tarif.netFeeEnabled', false);
-  setState('tarif.netFeeMode', 'Standard');
+  setState('tarif.netFeeEnabled', netFeeEnabled);
+  setState('tarif.netFeeMode', netFeeMode);
 
   const values = new Map();
   const entries = new Map();
@@ -431,6 +437,49 @@ function assertTechnicalStart(result, name, basis = 'currentA') {
   });
   assert(expensiveUrgent.targetPowerW > 0, 'Urgent target must override tariff wait within hard limits.');
   assert(['latest_start', 'legacy_urgency', 'forecast_insufficient', 'always'].includes(expensiveUrgent.tariffOverrideReason), `Unexpected tariff override: ${expensiveUrgent.tariffOverrideReason}`);
+
+  // RC65: NT is not allowed to overrule an expensive or stale active dynamic
+  // tariff. The time-target override must nevertheless engage at latest-start.
+  const ntExpensiveFar = await tickScenario({
+    status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',
+    gridAllowed: false, tariffActive: true, tariffStale: false, tariffState: 'teuer',
+    netFeeEnabled: true, netFeeMode: 'NT', deadlineHours: 10,
+    vehicleSoc: 50, goalTargetSocPct: 60,
+  });
+  assert.strictEqual(ntExpensiveFar.targetPowerW, 0, 'NT must not overrule an expensive active tariff while the target still has time.');
+
+  const ntExpensiveUrgent = await tickScenario({
+    status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',
+    gridAllowed: false, tariffActive: true, tariffStale: false, tariffState: 'teuer',
+    netFeeEnabled: true, netFeeMode: 'NT', deadlineHours: 0.7,
+    vehicleSoc: 50, goalTargetSocPct: 60,
+  });
+  assert(ntExpensiveUrgent.targetPowerW > 0, 'Urgent time-target must override the NT/expensive tariff lock within hard limits.');
+  assert(['latest_start', 'legacy_urgency', 'forecast_insufficient', 'always'].includes(ntExpensiveUrgent.tariffOverrideReason), `Unexpected NT-expensive target override: ${ntExpensiveUrgent.tariffOverrideReason}`);
+
+  const ntStaleFar = await tickScenario({
+    status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',
+    gridAllowed: false, tariffActive: true, tariffStale: true, tariffState: 'neutral',
+    netFeeEnabled: true, netFeeMode: 'NT', deadlineHours: 10,
+    vehicleSoc: 50, goalTargetSocPct: 60,
+  });
+  assert.strictEqual(ntStaleFar.targetPowerW, 0, 'NT must not overrule stale active tariff data while the target still has time.');
+
+  const ntStaleUrgent = await tickScenario({
+    status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',
+    gridAllowed: false, tariffActive: true, tariffStale: true, tariffState: 'neutral',
+    netFeeEnabled: true, netFeeMode: 'NT', deadlineHours: 0.7,
+    vehicleSoc: 50, goalTargetSocPct: 60,
+  });
+  assert(ntStaleUrgent.targetPowerW > 0, 'Urgent time-target must override the NT/stale tariff lock within hard limits.');
+  assert(['latest_start', 'legacy_urgency', 'forecast_insufficient', 'always'].includes(ntStaleUrgent.tariffOverrideReason), `Unexpected NT-stale target override: ${ntStaleUrgent.tariffOverrideReason}`);
+
+  const ntWithoutDynamicTariff = await tickScenario({
+    status: 'C1', userMode: 'auto', goalEnabled: false,
+    gridAllowed: false, tariffActive: false, tariffStale: false, tariffState: 'unknown',
+    netFeeEnabled: true, netFeeMode: 'NT',
+  });
+  assert(ntWithoutDynamicTariff.targetPowerW > 0, 'Configured NT must allow EVCS grid charging when the dynamic tariff is disabled.');
 
   // Mixed protocol fleet: startable Alfen, OCPP and generic wallboxes share
   // one minimum-service plan without one protocol consuming the others' floor.

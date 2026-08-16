@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.188 RC63 – direkter npm-Publish
+NexoWatt EOS 0.8.189 RC64 – direkter npm-Publish
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. In PowerShell in diesen Ordner wechseln.
@@ -6,9 +6,9 @@ NexoWatt EOS 0.8.188 RC63 – direkter npm-Publish
 4. Veröffentlichen: npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.188 auf npm noch frei ist,
+- ob Version 0.8.189 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob alle freigegebenen Produktdateien unverändert enthalten sind.
 
-RC63 behebt die OCPP21-Availability-Verriegelung nach Ladeende und führt ein separates fail-closed Speicher-Netzlade-Gate ein. Speicher-Netzladen ist nur bei frischem günstigen Tarif, aktivem manuellem NT-/Quartalsfenster sowie AppCenter-/Prioritätsfreigabe erlaubt; PV-Laden bleibt unabhängig.
+RC64 korrigiert ausschließlich die Speicher-Netzladefreigabe: Bei aktiviertem zeitvariablem Netzentgelt gibt das aktuell aktive, manuell konfigurierte NT-/Quartalsfenster frei. Bei ausgeschaltetem variablem Netzentgelt gibt ein frischer günstiger dynamischer Tarif frei. AppCenter-, Prioritäts-, Writer-, SoC-, Netz- und Safety-Grenzen bleiben zwingend; PV-/NVP-Laden bleibt unabhängig.

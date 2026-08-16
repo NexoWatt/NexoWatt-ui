@@ -61,26 +61,49 @@ function testEvcsAvailability() {
 }
 
 function testStorageTariffGate() {
-  const base = {
+  const master = {
     appCenterAllowed: true,
-    tariffActive: true,
-    currentPriceFresh: true,
-    tariffState: 'guenstig',
-    manualNetFeeEnabled: true,
-    manualNtWindowActive: true,
     priorityAllowsStorage: true,
     storageWriterAvailable: true,
     storagePowerW: 4000,
   };
 
-  assert.strictEqual(resolveStorageGridChargePermission(base).allowed, true);
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, manualNtWindowActive: false }).allowed, false, 'cheap outside NT must be blocked');
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, tariffState: 'neutral' }).allowed, false, 'NT alone must not permit grid charging');
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, tariffState: 'teuer' }).allowed, false);
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, currentPriceFresh: false }).allowed, false, 'stale price must fail closed');
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, appCenterAllowed: false }).allowed, false, 'AppCenter permission is mandatory');
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, priorityAllowsStorage: false }).allowed, false, 'storage priority is mandatory');
-  assert.strictEqual(resolveStorageGridChargePermission({ ...base, tariffActive: false }).allowed, false, 'dynamic tariff is mandatory');
+  const ntPath = {
+    ...master,
+    tariffActive: false,
+    currentPriceFresh: false,
+    tariffState: 'neutral',
+    manualNetFeeEnabled: true,
+    manualNtWindowActive: true,
+  };
+  const ntAllowed = resolveStorageGridChargePermission(ntPath);
+  assert.strictEqual(ntAllowed.allowed, true, 'configured NT must allow storage grid charging when the dynamic tariff is disabled');
+  assert.strictEqual(ntAllowed.source, 'net-fee-nt');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, tariffActive: true, currentPriceFresh: true, tariffState: 'neutral' }).allowed, true, 'fresh neutral tariff may charge inside NT');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, tariffActive: true, currentPriceFresh: true, tariffState: 'guenstig' }).allowed, true, 'fresh cheap tariff may charge inside NT');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, tariffActive: true, currentPriceFresh: true, tariffState: 'teuer' }).allowed, false, 'expensive tariff must block storage grid charging even inside NT');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, tariffActive: true, currentPriceFresh: false, tariffState: 'neutral' }).allowed, false, 'stale dynamic price must block storage grid charging inside NT');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, manualNtWindowActive: false }).allowed, false, 'net-fee mode must fail closed outside configured NT');
+
+  const cheapPath = {
+    ...master,
+    tariffActive: true,
+    currentPriceFresh: true,
+    tariffState: 'guenstig',
+    manualNetFeeEnabled: false,
+    manualNtWindowActive: false,
+  };
+  const cheapAllowed = resolveStorageGridChargePermission(cheapPath);
+  assert.strictEqual(cheapAllowed.allowed, true, 'cheap dynamic tariff must allow charging when variable net fee is disabled');
+  assert.strictEqual(cheapAllowed.source, 'dynamic-tariff-cheap');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...cheapPath, tariffState: 'neutral' }).allowed, false);
+  assert.strictEqual(resolveStorageGridChargePermission({ ...cheapPath, tariffState: 'teuer' }).allowed, false);
+  assert.strictEqual(resolveStorageGridChargePermission({ ...cheapPath, currentPriceFresh: false }).allowed, false, 'stale price must fail closed on the dynamic-tariff path');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...cheapPath, tariffActive: false }).allowed, false, 'dynamic tariff must be active when net fee is disabled');
+
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, appCenterAllowed: false }).allowed, false, 'AppCenter permission is mandatory');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, priorityAllowsStorage: false }).allowed, false, 'storage priority is mandatory');
+  assert.strictEqual(resolveStorageGridChargePermission({ ...ntPath, storageWriterAvailable: false }).allowed, false, 'storage writer is mandatory');
 
   assert.strictEqual(formatStorageNtWindowLabel({ model: 2, quarter: 3, startRaw: '22:00', endRaw: '06:00' }), 'Q3 NT 22:00–06:00');
   assert.strictEqual(formatStorageNtWindowLabel({ model: 1, startRaw: '21:00', endRaw: '05:30' }), 'NT 21:00–05:30');
@@ -347,7 +370,18 @@ class FakeDp {
   getBoolean(key, fallback = false) { return this.values.has(key) ? this.values.get(key) === true : fallback; }
 }
 
-async function runTariffIntegration({ hour = 23, currentPrice = 0.10, currentPriceAgeMs = 0, allowGridCharge = true, priority = 2, netFeeModel = 2, configureQuarter = true, configureSimple = true } = {}) {
+async function runTariffIntegration({
+  hour = 23,
+  currentPrice = 0.10,
+  currentPriceAgeMs = 0,
+  allowGridCharge = true,
+  priority = 2,
+  netFeeEnabled = true,
+  netFeeModel = 2,
+  configureQuarter = true,
+  configureSimple = true,
+  dynamicTariff = true,
+} = {}) {
   const realNow = Date.now;
   const fixed = new Date(2026, 7, 16, hour, 0, 0, 0).getTime(); // Q3, local time
   Date.now = () => fixed;
@@ -379,13 +413,13 @@ async function runTariffIntegration({ hour = 23, currentPrice = 0.10, currentPri
     const dp = new FakeDp();
     const module = new (require('../ems/modules/tarif-vis').TarifVisModule)(adapter, dp);
     await module.init();
-    dp.set('vis.settings.dynamicTariff', true, 0);
+    dp.set('vis.settings.dynamicTariff', dynamicTariff, 0);
     dp.set('vis.settings.tariffMode', 1, 0);
     dp.set('vis.settings.price', 0.25, 0);
     dp.set('vis.settings.priority', priority, 0);
     dp.set('vis.settings.storagePower', 4000, 0);
     dp.set('vis.settings.evcsMaxPower', 22000, 0);
-    dp.set('vis.settings.netFeeEnabled', true, 0);
+    dp.set('vis.settings.netFeeEnabled', netFeeEnabled, 0);
     dp.set('vis.settings.netFeeModel', netFeeModel, 0);
     if (configureSimple) {
       dp.set('vis.settings.netFeeNtStart', '22:00', 0);
@@ -417,28 +451,56 @@ async function testTariffIntegration() {
     assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, true);
     assert.strictEqual(states.get('tarif.speicherSollW').val, -4000);
     assert.strictEqual(adapter._tarifVis.storageGridChargeAllowed, true);
+    assert.strictEqual(adapter._tarifVis.storageGridChargeSource, 'net-fee-nt');
     assert.strictEqual(adapter._tarifVis.storageManualWindowLabel, 'Q3 NT 22:00–06:00');
   }
   {
-    const { states } = await runTariffIntegration({ currentPrice: 0.25 });
+    const { states, adapter } = await runTariffIntegration({ currentPrice: 0.25 });
     assert.strictEqual(states.get('tarif.netFeeMode').val, 'NT');
-    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'NT alone must not charge at neutral price');
-    assert.ok(states.get('tarif.speicherSollW').val >= 0, 'neutral NT must never produce a negative storage target');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, true, 'configured NT must allow charging even at neutral dynamic price');
+    assert.strictEqual(states.get('tarif.speicherSollW').val, -4000);
+    assert.strictEqual(adapter._tarifVis.storageGridChargeSource, 'net-fee-nt');
+  }
+  {
+    const { states, adapter } = await runTariffIntegration({ currentPrice: 0.10, currentPriceAgeMs: 2 * 60 * 60 * 1000 });
+    assert.strictEqual(states.get('tarif.netFeeMode').val, 'NT');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'stale dynamic price must block storage grid charging even inside NT');
+    assert.strictEqual(states.get('tarif.speicherSollW').val, 0);
+    assert.strictEqual(adapter._tarifVis.storageGridChargeSource, 'net-fee-tariff');
+  }
+  {
+    const { states, adapter } = await runTariffIntegration({ currentPrice: 0.50 });
+    assert.strictEqual(states.get('tarif.netFeeMode').val, 'NT');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'expensive dynamic price must block storage grid charging even inside NT');
+    assert.strictEqual(states.get('tarif.speicherSollW').val, 0);
+    assert.strictEqual(adapter._tarifVis.storageGridChargeSource, 'net-fee-tariff');
   }
   {
     const { states } = await runTariffIntegration({ hour: 12, currentPrice: 0.10 });
-    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'cheap outside manual NT must be blocked');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'when variable net fee is enabled, configured NT is the governing window');
     assert.ok(states.get('tarif.speicherSollW').val >= 0);
   }
   {
-    const { states } = await runTariffIntegration({ hour: 12, currentPrice: -0.10 });
-    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'negative price must not bypass manual NT');
+    const { states, adapter } = await runTariffIntegration({ hour: 12, currentPrice: 0.10, netFeeEnabled: false });
+    assert.strictEqual(states.get('tarif.netFeeMode').val, 'off');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, true, 'cheap tariff must allow charging when variable net fee is disabled');
+    assert.strictEqual(states.get('tarif.speicherSollW').val, -4000);
+    assert.strictEqual(adapter._tarifVis.storageGridChargeSource, 'dynamic-tariff-cheap');
+  }
+  {
+    const { states } = await runTariffIntegration({ hour: 12, currentPrice: 0.25, netFeeEnabled: false });
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'neutral tariff must not allow dynamic-tariff grid charging');
     assert.ok(states.get('tarif.speicherSollW').val >= 0);
   }
   {
-    const { states } = await runTariffIntegration({ currentPrice: 0.10, currentPriceAgeMs: 2 * 60 * 60 * 1000 });
-    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'stale cheap price must fail closed');
+    const { states } = await runTariffIntegration({ hour: 12, currentPrice: 0.10, currentPriceAgeMs: 2 * 60 * 60 * 1000, netFeeEnabled: false });
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'stale cheap price must fail closed when net fee is disabled');
     assert.strictEqual(states.get('tarif.speicherSollW').val, 0);
+  }
+  {
+    const { states } = await runTariffIntegration({ currentPrice: 0.25, dynamicTariff: false });
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, true, 'NT must work even when dynamic tariff is disabled');
+    assert.strictEqual(states.get('tarif.speicherSollW').val, -4000);
   }
   {
     const { states } = await runTariffIntegration({ allowGridCharge: false });
@@ -446,7 +508,7 @@ async function testTariffIntegration() {
   }
   {
     const { states } = await runTariffIntegration({ configureQuarter: false });
-    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'missing manual quarter times must fail closed');
+    assert.strictEqual(states.get('tarif.speicherNetzLadenErlaubt').val, false, 'missing manual quarter times must fail closed while net fee is enabled');
     assert.match(states.get('tarif.speicherZeitfensterLabel').val, /nicht konfiguriert/);
   }
   {
@@ -486,6 +548,8 @@ function testWiring() {
   assert.match(tariff, /storageGridChargeAllowed/);
   assert.match(tariff, /tarif\.speicherNetzLadenErlaubt/);
   assert.match(tariff, /manualNtWindowActive: storageChargeWindowOk/);
+  assert.match(tariff, /source: 'net-fee-nt'/);
+  assert.match(tariff, /source: 'dynamic-tariff-cheap'/);
   assert.doesNotMatch(tariff, /\? '22:00' : ntStartRaw/);
   assert.doesNotMatch(tariff, /\? '06:00' : ntEndRaw/);
 
@@ -504,7 +568,7 @@ function testWiring() {
   testStorageFinalFirewall();
   await testTariffIntegration();
   testWiring();
-  console.log('[rc63-availability-storage-grid-gate] OK: availability only customer/RFID; storage grid charge only cheap + fresh + manual NT + AppCenter/priority; PV charging unaffected.');
+  console.log('[rc63-availability-storage-grid-gate] OK: availability only customer/RFID; storage grid charge via configured NT when net fee is on, or fresh cheap tariff when it is off; PV charging unaffected.');
 })().catch((error) => {
   console.error('[rc63-availability-storage-grid-gate] ERROR:', error && error.stack ? error.stack : error);
   process.exit(1);

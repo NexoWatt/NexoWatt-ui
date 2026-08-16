@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8558e785e336daffc0dad717b4c372582b6ff7f7fcb78a2db214d0a4192e04c8
+ * Original-Hash: 1d867928fdfbc2b41e2cae9b57d26cc865170ec55e1f1ebc7be53a158e41d5e1
  */
 
 /**
@@ -148,7 +148,7 @@ async function scenario(setup, tariffCfg = {}) {
     assert.strictEqual(adapter._states.get('tarif.state').val, 'unbekannt');
     assert.strictEqual(adapter._states.get('tarif.negativpreisAktiv').val, false);
     assert.strictEqual(adapter._states.get('tarif.speicherSollW').val, 0, 'stale Preis darf keine Tarif-Speicherladung/-entladung erzwingen');
-    assert.strictEqual(adapter._states.get('tarif.netzLadenErlaubt').val, true, 'stale Preis darf keine wirtschaftliche EVCS-Sperre festhalten');
+    assert.strictEqual(adapter._states.get('tarif.netzLadenErlaubt').val, false, 'stale Preis muss wirtschaftliches EVCS-Netzladen fail-closed sperren; ein dringendes Zeit-Ziel übersteuert erst im Lademanagement');
     assert.strictEqual(adapter._states.get('tarif.entladenErlaubt').val, true, 'Eigenverbrauchs-Entladung muss bei stale Tarif weiter erlaubt bleiben');
     assert.strictEqual(adapter._tarifVis.gridImportPreferred, false);
   }
@@ -183,7 +183,7 @@ async function scenario(setup, tariffCfg = {}) {
     assert.strictEqual(adapter._states.get('tarif.speicherSollW').val, 0);
   }
 
-  console.log('[tariff-freshness-safety] OK: aktueller Preis ist auf 90 min begrenzt; frische Kurve darf den Slot ersetzen; stale Daten lösen kein Netzladen aus.');
+  console.log('[tariff-freshness-safety] OK: aktueller Preis ist auf 90 min begrenzt; frische Kurve darf den Slot ersetzen; stale Daten sperren wirtschaftliches Netzladen fail-closed.');
 })().catch((error) => {
   console.error('[tariff-freshness-safety] ERROR:', error && error.stack ? error.stack : error);
   process.exit(1);

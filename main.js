@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:ce6f689c761e0036f5a10616ff412f3a96c7d0ac522f0265ebda7e46886023ad
+ * Quell-Hash: sha256:f91aee025d2456fcd25e1970a4ec90c2832e20ce2335e5227cf279430080a652
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3957,7 +3957,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.188',
+        liveControlVersion: '0.8.190',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };

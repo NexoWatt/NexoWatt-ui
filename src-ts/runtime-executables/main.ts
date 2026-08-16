@@ -3941,7 +3941,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.188',
+        liveControlVersion: '0.8.190',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };

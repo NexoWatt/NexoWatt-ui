@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 02987c2e496e61e9fc216989eea18b09d9080672d9b3daa1e1d5caf3324f6e99
+ * Original-Hash: b31311ca6ea28d66c3e2371ef381c01c9693a2ea41f4b62f2cffc11e9a2124a8
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -4341,7 +4341,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.187',
+        liveControlVersion: '0.8.190',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };

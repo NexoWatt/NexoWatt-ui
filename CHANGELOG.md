@@ -1,3 +1,21 @@
+## 0.8.190 - 2026-08-16
+
+- Speicher- und EVCS-Netzladefreigabe bei kombiniertem variablem Netzentgelt und Dynamiktarif fail-closed gehärtet: Ein aktives NT-Fenster überstimmt keinen teuren, veralteten oder unbekannten aktiven Stromtarif mehr.
+- Ist der Dynamiktarif deaktiviert, darf das manuell konfigurierte NT-/Quartalsfenster weiterhin allein freigeben. Ist er aktiv, sind innerhalb NT frische Zustände `günstig` oder `neutral` erforderlich.
+- Bei ausgeschaltetem variablem Netzentgelt bleibt ein frischer günstiger Dynamiktarif die einzige wirtschaftliche Speicher-Netzladefreigabe. AppCenter-, Prioritäts-, Writer-, SoC-, Netz- und Safety-Grenzen bleiben unverändert.
+- Das Lademanagement übernimmt NT nicht mehr pauschal als Netzladefreigabe. Teure oder veraltete Tarifdaten sperren den normalen Auto-Netzbezug auch innerhalb NT.
+- Zeit-Ziel-Laden im Auto-Modus behält den Latest-Start-/Forecast-Override: Bei ausreichender Restzeit wird gewartet; sobald die Zielerreichung gefährdet ist, darf die wirtschaftliche Sperre übersteuert werden. Harte Netz-, Stations-, Phasen-, §14a-, Parkregler- und Safety-Grenzen werden nie übersteuert.
+- Regressionen für NT + teuer, NT + stale, NT ohne Dynamiktarif, günstige/neutral frische NT-Fenster sowie dringende und nicht dringende Zeit-Ziele ergänzt.
+
+## 0.8.189 - 2026-08-16
+
+- Speicher-Netzladefreigabe an die gewünschte Betriebsart angepasst: Bei aktiviertem zeitvariablem Netzentgelt gibt ausschließlich das aktuell aktive, manuell konfigurierte NT-/Quartalsfenster Netzladen frei; ein günstiger dynamischer Preis ist dabei keine zusätzliche Pflichtbedingung.
+- Ist das zeitvariable Netzentgelt deaktiviert, darf ein frischer als günstig klassifizierter dynamischer Tarif den Speicher auch ohne NT-Fenster aus dem Netz laden. Neutraler, teurer, fehlender oder veralteter Preis bleibt in diesem Modus gesperrt.
+- NT- und Dynamiktarifpfad als alternative, eindeutige Freigabequellen modelliert. AppCenter-Freigabe, Speicherpriorität, Writer, konfigurierte Ladeleistung sowie alle Netz-, SoC- und Safety-Grenzen bleiben in beiden Pfaden zwingend.
+- Veraltete Dynamiktarifdaten können ein aktives konfiguriertes NT-Fenster nicht mehr fälschlich aufheben. Außerhalb NT bleibt Netzladen bei eingeschaltetem variablem Netzentgelt auch bei günstigem Preis gesperrt.
+- Einfache HT-/NT- und Q1–Q4-Zeitfenster werden weiterhin ausschließlich aus den gespeicherten Einstellungen gelesen; fehlende Zeiten bleiben fail-closed. PV-/NVP-Laden und die RC63-Availability-/RFID-Korrektur bleiben unverändert.
+- Regressionen für NT bei neutralem/teurem/veraltetem Tarif, günstigen Tarif bei ausgeschaltetem Netzentgelt, günstigen Tarif außerhalb NT, fehlende Zeitfenster sowie AppCenter-, Prioritäts- und Writer-Sperren ergänzt.
+
 ## 0.8.188 - 2026-08-16
 
 - OCPP21-Stationsfreigabe von der Ladeleistungsregelung getrennt: Ladeende, Steckerziehen, PV-/Tarifpause, §14a, Netz-, Stations- und Safety-0-Werte setzen `availability` nicht mehr auf `false`. Eine Sperre darf nur der ausdrückliche Kundenschalter oder die aktive RFID-Whitelist auslösen; vorhandene Inoperative-Verriegelungen werden bei erlaubtem Zugang wieder auf Operative angefordert.

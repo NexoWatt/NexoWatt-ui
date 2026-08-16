@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2fd8cc731283919c192979b676b4e864eba7bef9da8722519e33c70e302dc920
+ * Original-Hash: ffd41de71981066480b1f282503ddcd8cae399fa63b60e054018aaa30bf0e545
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:aaccb4e341700644a5a86d4dd2d1d3869a9801eb7ae8beb05a83fc7d27c79eea
+ * Quell-Hash: sha256:827080764feda0d256a1c1a481bc1747a5067725cf3a084e6f95373aa851d2c7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -120,7 +120,7 @@ function strictFiniteNumber(value, fallback = null) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-/** Netzladequellen, die niemals ohne den separaten Tarif+NT-Vertrag schreiben dürfen. */
+/** Netzladequellen, die niemals ohne den separaten wirtschaftlichen Freigabevertrag schreiben dürfen. */
 function isCentralStorageGridChargeSource(src, signedTargetW) {
     if (!(Number(signedTargetW) < 0)) return false;
     const normalized = String(src || '').trim().toLowerCase();
@@ -158,7 +158,7 @@ function resolveStorageGridChargeFinalGate({
         return { blocked: false, targetW: Number(targetW) || 0, reason: '', gridChargeSource };
     }
     const reason = configured === true
-        ? (String(blockReason || '').trim() || 'Speicher-Netzladen nur bei günstigem Tarif und aktivem manuellem NT-Fenster erlaubt')
+        ? (String(blockReason || '').trim() || 'Speicher-Netzladen nur bei aktivem konfiguriertem NT-Fenster oder – bei ausgeschaltetem Netzentgelt – günstigem dynamischem Tarif erlaubt')
         : 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
     return { blocked: true, targetW: 0, reason, gridChargeSource: true };
 }
@@ -2092,7 +2092,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.netzLeistungW', Math.round((typeof gridRawW === 'number') ? gridRawW : gridW));
         await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
 
-        // Speicher-Netzladen besitzt ab RC63 einen eigenen fail-closed Vertrag.
+        // Speicher-Netzladen besitzt einen eigenen fail-closed Vertrag.
         // Das EVCS-Gate `cm.gridChargeAllowed` darf niemals mehr als Speicher-
         // Freigabe interpretiert werden. Fehlt TarifVis oder ist die Freigabe
         // unbekannt, bleibt Netzladen gesperrt; PV-/NVP-Laden bleibt unberührt.
@@ -2160,7 +2160,7 @@ class SpeicherRegelungModule extends BaseModule {
         } else if (!gridChargeAllowed && !gridChargeBlockReason) {
             gridChargeBlockReason = gridChargeAllowedRaw
                 ? 'Speicher-Netzladefreigabe wird stabilisiert'
-                : 'Tarif günstig und manuelles NT-Fenster müssen gleichzeitig aktiv sein';
+                : 'Weder ein aktives konfiguriertes NT-Fenster noch ein günstiger dynamischer Tarifpfad ist freigegeben';
         } else if (gridChargeAllowed) {
             gridChargeBlockReason = '';
         }
@@ -5633,7 +5633,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         // Defense-in-depth: Selbst wenn ein Herstellerprofil, Hold-Pfad,
         // Reserve- oder Refill-Modul einen negativen Netzlade-Sollwert weiterträgt,
-        // muss unmittelbar vor dem Writer erneut die vollständige Tarif+NT-
+        // muss unmittelbar vor dem Writer erneut die zentrale wirtschaftliche
         // Freigabe gelten. PV-/NVP-Laden bleibt absichtlich unangetastet.
         const gridChargeFinalGate = resolveStorageGridChargeFinalGate({
             targetW,

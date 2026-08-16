@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 89e3a2ab26a34badc7d6373f0b2c3a27899bea911bfe3175ade074fdee744b0f
+ * Original-Hash: 15f7907502817f45d4cee927d5a306962e2b9073deec600e92e30c56ce915173
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:54e30926c49eba32b2917cb12fb68a2b8471338901112c5ec745b030ae1962e5
+ * Quell-Hash: sha256:abdac201719cc649359e56e5c56bb12674baba37c3680ccd8b90bd6df453c8d9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -7826,24 +7826,27 @@ class ChargingManagementModule extends BaseModule {
             dischargeAllowedRaw = this.dp.getBoolean('cm.dischargeAllowed', true);
         }
 
-        // Zeitvariables Netzentgelt (HT/NT) Overlay:
-        // Falls Netzentgelt aktiv ist, kann es die Netzlade-Freigabe erzwingen:
-        // - NT: Netzladen erlauben (auch wenn der Stromtarif gerade sperrt)
-        // - HT: Netzladen sperren (PV bleibt möglich)
-        // Hintergrund: Diese Logik muss zuverlässig laufen, auch wenn tarif-vis Flags
-        // kurzzeitig stale/inkonsistent sind.
+        // Netzentgelt: HT sperrt; NT überstimmt keinen aktiven stale/teuren/
+        // unbekannten Tarif. Bei deaktiviertem Dynamiktarif darf NT allein freigeben.
+        // Der Zeit-Ziel-Planer kann die Wirtschaftssperre erst am Latest-Start lösen.
+        let tariffDynamicStale = false;
         try {
             const stNfEn = await this._getStateCached('tarif.netFeeEnabled');
             const stNfMode = await this._getStateCached('tarif.netFeeMode');
+            const stTariffActive = await this._getStateCached('tarif.aktiv');
+            const stTariffStale = await this._getStateCached('tarif.dynamicTariffStale');
+            const stTariffState = await this._getStateCached('tarif.state');
             const nfEnabled = stNfEn ? !!stNfEn.val : false;
             const nfMode = stNfMode ? String(stNfMode.val || '') : '';
-            if (nfEnabled) {
-                if (nfMode === 'NT') gridChargeAllowedRaw = true;
-                else if (nfMode === 'HT') gridChargeAllowedRaw = false;
+            const tariffActive = stTariffActive ? !!stTariffActive.val : false;
+            tariffDynamicStale = stTariffStale ? !!stTariffStale.val : false;
+            const tariffState = stTariffState ? String(stTariffState.val || 'unknown').trim().toLowerCase().replace(/ü/g, 'ue') : 'unknown';
+            if (nfEnabled && nfMode === 'HT') gridChargeAllowedRaw = false;
+            else if (nfEnabled && nfMode === 'NT') {
+                if (!tariffActive) gridChargeAllowedRaw = true;
+                else if (tariffDynamicStale || tariffState === 'teuer' || !['guenstig', 'neutral'].includes(tariffState)) gridChargeAllowedRaw = false;
             }
-        } catch {
-            // ignore
-        }
+        } catch { /* cm.gridChargeAllowed remains authoritative */ }
 
         // Gate E – Negativpreis / Netzbezug bevorzugt:
         // Wenn der dynamische effektive Tarif negativ ist, darf das Lade-/Lastmanagement
@@ -7861,7 +7864,7 @@ class ChargingManagementModule extends BaseModule {
             tariffGridImportPreferred = false;
         }
 
-        if (tariffGridImportPreferred) {
+        if (tariffGridImportPreferred && !tariffDynamicStale) {
             gridChargeAllowedRaw = true;
             dischargeAllowedRaw = false;
         }

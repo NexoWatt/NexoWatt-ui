@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 42712f3c92249f77c082228fd6e6a4882f6cb714f54bbc9f3e44b2a6b0bc9def
+ * Original-Hash: f3dfe82b59dddb18afaada9875d25c98756b8db931ad28cb7ea9a5261ceac98d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/tarif-vis.ts
- * Quell-Hash: sha256:f95b76fc40d3e7a10d5b9ee26f210bef82616ba361b3dfbe72651760cc90c515
+ * Quell-Hash: sha256:81ab0272ec3945afe78ee402dec30357c8744e5148b410898f0b73eed499329e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -76,33 +76,32 @@
 const { BaseModule } = require('./base');
 
 /**
- * Speicher-Netzladen ist nur bei einer vollständigen, frischen Freigabekette
- * zulässig. Ein günstiger Preis allein, NT allein oder ein Negativpreis außerhalb
- * des manuell konfigurierten NT-Fensters reichen ausdrücklich nicht aus.
+ * Speicher-Netzladen: NT ist bei aktivem Netzentgelt Pflicht. Ein zusätzlich
+ * aktiver Dynamiktarif muss frisch und günstig/neutral sein; teuer, stale oder
+ * unbekannt sperrt. Bei Netzentgelt AUS ist nur ein frischer günstiger Tarif gültig.
  */
 function resolveStorageGridChargePermission({
-    appCenterAllowed = false,
-    tariffActive = false,
-    currentPriceFresh = false,
-    tariffState = 'unknown',
-    manualNetFeeEnabled = false,
-    manualNtWindowActive = false,
-    priorityAllowsStorage = false,
-    storageWriterAvailable = false,
-    storagePowerW = 0,
+    appCenterAllowed = false, tariffActive = false, currentPriceFresh = false,
+    tariffState = 'unknown', manualNetFeeEnabled = false, manualNtWindowActive = false,
+    priorityAllowsStorage = false, storageWriterAvailable = false, storagePowerW = 0,
 } = {}) {
-    if (!appCenterAllowed) return { allowed: false, reason: 'Netzladen im AppCenter nicht freigegeben' };
-    if (!storageWriterAvailable) return { allowed: false, reason: 'Kein beschreibbarer Speicher-Ausgang aktiv' };
-    if (!(Number(storagePowerW) > 0)) return { allowed: false, reason: 'Keine Speicher-Netzladeleistung konfiguriert' };
-    if (!tariffActive) return { allowed: false, reason: 'Dynamischer Tarif ist nicht aktiv' };
-    if (!currentPriceFresh) return { allowed: false, reason: 'Aktueller Tarifpreis fehlt oder ist veraltet' };
-    if (String(tariffState || '').trim().toLowerCase() !== 'guenstig') {
-        return { allowed: false, reason: `Tarif ist ${String(tariffState || 'unbekannt')}` };
+    if (!appCenterAllowed) return { allowed: false, source: 'blocked', reason: 'Netzladen im AppCenter nicht freigegeben' };
+    if (!storageWriterAvailable) return { allowed: false, source: 'blocked', reason: 'Kein beschreibbarer Speicher-Ausgang aktiv' };
+    if (!(Number(storagePowerW) > 0)) return { allowed: false, source: 'blocked', reason: 'Keine Speicher-Netzladeleistung konfiguriert' };
+    if (!priorityAllowsStorage) return { allowed: false, source: 'blocked', reason: 'Tarif-Priorität gibt den Speicher nicht frei' };
+    const normalizedTariffState = String(tariffState || 'unknown').trim().toLowerCase().replace(/ü/g, 'ue');
+    if (manualNetFeeEnabled) {
+        if (!manualNtWindowActive) return { allowed: false, source: 'net-fee', reason: 'Zeitvariables Netzentgelt aktiv, aber das konfigurierte NT-/Quartalsfenster ist aktuell nicht aktiv' };
+        if (!tariffActive) return { allowed: true, source: 'net-fee-nt', reason: 'Konfiguriertes NT-/Quartalsfenster aktiv; dynamischer Tarif ist deaktiviert' };
+        if (!currentPriceFresh) return { allowed: false, source: 'net-fee-tariff', reason: 'NT-Fenster aktiv, aber der dynamische Tarifpreis fehlt oder ist veraltet' };
+        if (normalizedTariffState === 'teuer') return { allowed: false, source: 'net-fee-tariff', reason: 'NT-Fenster aktiv, aber der dynamische Tarif ist teuer' };
+        if (!['guenstig', 'neutral'].includes(normalizedTariffState)) return { allowed: false, source: 'net-fee-tariff', reason: `NT-Fenster aktiv, aber der dynamische Tarifzustand ist ${String(tariffState || 'unbekannt')}` };
+        return { allowed: true, source: 'net-fee-nt', reason: `Konfiguriertes NT-/Quartalsfenster aktiv + dynamischer Tarif ${normalizedTariffState === 'guenstig' ? 'günstig' : 'neutral'} und frisch` };
     }
-    if (!manualNetFeeEnabled) return { allowed: false, reason: 'Zeitvariables Netzentgelt ist nicht aktiviert' };
-    if (!manualNtWindowActive) return { allowed: false, reason: 'Manuelles NT-/Quartalsfenster ist aktuell nicht aktiv' };
-    if (!priorityAllowsStorage) return { allowed: false, reason: 'Tarif-Priorität gibt den Speicher nicht frei' };
-    return { allowed: true, reason: 'Tarif günstig + manuelles NT-Fenster aktiv + AppCenter-Freigabe' };
+    if (!tariffActive) return { allowed: false, source: 'dynamic-tariff', reason: 'Dynamischer Tarif ist nicht aktiv' };
+    if (!currentPriceFresh) return { allowed: false, source: 'dynamic-tariff', reason: 'Aktueller Tarifpreis fehlt oder ist veraltet' };
+    if (normalizedTariffState !== 'guenstig') return { allowed: false, source: 'dynamic-tariff', reason: `Tarif ist ${String(tariffState || 'unbekannt')}` };
+    return { allowed: true, source: 'dynamic-tariff-cheap', reason: 'Dynamischer Tarif günstig + AppCenter-/Prioritätsfreigabe' };
 }
 
 /**
@@ -1012,9 +1011,9 @@ class TarifVisModule extends BaseModule {
             const netFeeFresh = (netFeeAge === null || netFeeAge === undefined) ? true : (netFeeAge <= staleTimeoutMs);
 
             // IMPORTANT (Robustness/UX):
-            // Zeitvariables Netzentgelt (HT/NT) darf NICHT vom dynamischen Stromtarif abhängig sein.
-            // Viele Installationen nutzen HT/NT, aber keinen dynamischen Tarif.
-            // -> NetFee muss auch funktionieren, wenn vis.settings.dynamicTariff = AUS.
+            // Das Zeitfenster muss auch ohne dynamischen Stromtarif funktionieren.
+            // Ist der dynamische Tarif aktiv, muss sein Preis zusätzlich frisch sein;
+            // teuer, stale oder unbekannt sperrt trotz NT die wirtschaftliche Netzladung.
             const netFeeEff = !!(netFeeFresh && netFeeEnabledRaw);
 
             const netFeeModelRaw = this.dp ? this.dp.getNumberFresh('vis.settings.netFeeModel', staleTimeoutMs, 1) : 1;
@@ -1483,15 +1482,15 @@ class TarifVisModule extends BaseModule {
                 const netFeeIsHt = !!(netFeeActive && netFeeMode === 'HT');
                 const netFeeIsStandard = !!(netFeeActive && netFeeMode === 'Standard');
                 // IMPORTANT:
-                // - NT/HT sind echte Overlays.
-                // - Standard (ST) ist *neutral* und darf die dynamische Tarif-Logik nicht aushebeln.
-                //   (z. B. in Quartalen ohne HT/NT gilt 24/7 Standard → Verhalten wie vorher.)
+                // - NT/HT sind ausschließlich die konfigurierten Netzentgelt-Zeitfenster.
+                // - Bei aktiviertem Netzentgelt ist NT Pflicht; Standard/HT sperren.
+                // - Ist zusätzlich der dynamische Tarif aktiv, muss er frisch und
+                //   günstig/neutral sein; teuer, stale oder unbekannt sperrt auch in NT.
+                // - Ohne dynamischen Tarif reicht das gültige NT-Fenster aus.
                 const netFeeOverlay = !!(netFeeIsNt || netFeeIsHt);
 
-                // Speicher-Netzladen ist ausschließlich bei der vollständigen
-                // Freigabekette erlaubt: Tarif günstig UND Preis frisch UND
-                // manuelles NT-Fenster aktiv UND AppCenter-/Prioritätsfreigabe.
-                const storageTimeOk = storageChargeWindowOk;
+                // Netzentgelt AN: NT + ggf. frischer günstiger/neutraler Tarif.
+                // Netzentgelt AUS: frischer günstiger Tarif. Mastergates bleiben Pflicht.
                 const cheapWanted = tarifState === 'guenstig' && allowStorageCheapEff;
                 const chargeAllowed = storageGridChargeAllowed;
 
@@ -1502,7 +1501,7 @@ class TarifVisModule extends BaseModule {
                     storageFullHold = false;
                     speicherSollW = 0;
 	                } else if (chargeAllowed) {
-	                    // günstig (Preis) im erlaubten Zeitfenster ODER NT (Netzentgelt): Speicher laden (SoC-Hysterese)
+	                    // Aktiver wirtschaftlicher Freigabepfad (NT oder günstiger Tarif bei Netzentgelt AUS): Speicher laden (SoC-Hysterese)
 	                    // Default/Fallback: wenn SoC nicht verfügbar ist, verhalte dich wie bisher (laden)
                     storageChargeWanted = true;
 
@@ -1523,10 +1522,8 @@ class TarifVisModule extends BaseModule {
                     }
 
 	                    speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
-                } else if (cheapWanted && !chargeAllowed) {
-                    // Tarif ist günstig, aber mindestens ein Bestandteil der
-                    // vollständigen Speicher-Netzladefreigabe fehlt.
-                    // -> Eigenverbrauchsoptimierung übernimmt.
+                } else if ((netFeeIsNt || cheapWanted) && !chargeAllowed) {
+                    // Wirtschaftliches Fenster erkannt, aber Tarif/Mastergate sperrt.
 	                    this._tariffChargeLatch = false;
 	                    storageChargeWanted = false;
 	                    storageFullHold = false;
@@ -1554,9 +1551,7 @@ class TarifVisModule extends BaseModule {
             }
 
             const dynamicTariffStale = !!(aktivEff && !preisAktuellOk);
-            // Ein veralteter dynamischer Preis darf niemals Speicher-Netzladen
-            // freigeben – auch nicht während NT. Die manuelle Zeit ist nur eine
-            // zusätzliche UND-Bedingung, kein Ersatz für einen frischen Preis.
+            // Aktiver Dynamiktarif mit stale Preis sperrt auch innerhalb NT.
             if (dynamicTariffStale) {
                 this._tariffChargeLatch = false;
                 storageChargeWanted = false;
@@ -1572,29 +1567,30 @@ class TarifVisModule extends BaseModule {
             // - bei günstig: nur true, wenn Priorität EVCS zulässt
             let gridChargeAllowed = true;
 
-            // 1) Basis: dynamischer Tarif (falls aktiv)
+            // Dynamiktarif: stale/teuer/unbekannt sperrt; neutral erlaubt; günstig folgt Priorität.
             if (aktivEff) {
-                if (gridImportPreferred) {
+                if (!preisAktuellOk) {
+                    gridChargeAllowed = false;
+                } else if (gridImportPreferred) {
                     gridChargeAllowed = true;
                 } else if (tarifState === 'teuer') {
                     gridChargeAllowed = false;
                 } else if (tarifState === 'guenstig') {
                     gridChargeAllowed = allowEvcsCheapEff ? true : false;
-                } else {
+                } else if (tarifState === 'neutral') {
                     gridChargeAllowed = true;
+                } else {
+                    gridChargeAllowed = false;
                 }
             }
 
-            // 2) Overlay: Zeitvariables Netzentgelt (HT/NT) – gilt unabhängig vom Stromtarif
+            // Netzentgelt: HT sperrt; NT allein erlaubt nur bei deaktiviertem Dynamiktarif.
             const netFeeActiveForGrid = !!(netFeeEff && netFeeMode !== 'off');
             if (netFeeActiveForGrid) {
                 if (netFeeMode === 'NT') {
-                    // NT: Netzladen freigeben
-                    gridChargeAllowed = true;
-                } else if (netFeeMode === 'HT') {
-                    // HT: Netzladen sperren (PV möglich)
-                    gridChargeAllowed = false;
-                }
+                    if (!aktivEff) gridChargeAllowed = true;
+                    else if (!preisAktuellOk || tarifState === 'teuer' || !['guenstig', 'neutral'].includes(tarifState)) gridChargeAllowed = false;
+                } else if (netFeeMode === 'HT') gridChargeAllowed = false;
                 // Standard (ST): kein Override
             }
 
@@ -1741,7 +1737,7 @@ if (aktivEff || netFeeActive) {
 
   if (intentDirection === 'charge') {
     storageIntentStatus = 'charge';
-    storageIntentReason = `Speicher-Netzladen freigegeben: ${storageChargeWindowLabel}`;
+    storageIntentReason = `Speicher-Netzladen freigegeben: ${String(storageGridChargePermission.reason || 'wirtschaftliches Ladefenster aktiv')}`;
     parts.push(`Tarifwunsch Speicher laden (${Math.abs(Math.round(speicherSollW))} W)`);
   } else if (intentDirection === 'discharge') {
     storageIntentStatus = 'discharge';
@@ -1841,6 +1837,7 @@ await this._setIfChanged('tarif.speicherIntentGrund', storageIntentReason);
                 storageGridChargeConfigured: !!storageGridChargeConfigured,
                 storageGridChargeAllowed: !!storageGridChargeAllowed,
                 storageGridChargeBlockReason: String(storageGridChargeBlockReason || ''),
+                storageGridChargeSource: String(storageGridChargePermission.source || 'blocked'),
                 storageTariffCheap: !!(aktivEff && preisAktuellOk && tarifState === 'guenstig'),
                 storageManualWindowActive: !!storageChargeWindowOk,
                 storageManualWindowLabel: String(storageChargeWindowLabel || ''),
