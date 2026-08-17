@@ -44,7 +44,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v480';
+const CACHE_NAME = 'nexowatt-cache-v481';
 
 const OFFLINE_URLS = [
   './',
@@ -54,6 +54,7 @@ const OFFLINE_URLS = [
   'dc-station-display.html',
   'dc-station-display.js',
   'dc-station-display.css',
+  'assets/nexowatt-eos-logo-wide.png',
   'energy-ledger.html',
   'energy-origin-ledger-view.js',
   'mesh-microgrid.html',

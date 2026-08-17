@@ -1,3 +1,12 @@
+## 0.8.191 - 2026-08-17
+
+- Stations-/Kioskseiten vollständig als modernes NexoWatt-EOS-Vollbildlayout überarbeitet. Das originale EOS-Logo, Stationsmetadaten, kompakte Statuschips, Stationsübersicht, EOS-Entscheidung und strukturierte Warn-/Fehleranzeige sind jetzt in einer gemeinsamen Oberfläche enthalten.
+- Mehrladepunktdarstellung responsive gehärtet: Bis zu vier LPs passen im 16:9-Querformat nebeneinander in eine Zeile; fünf bis acht LPs werden automatisch auf maximal zwei verdichtete Reihen verteilt. 1920×1080, 1600×900 und 1366×768 wurden ohne Seiten-Scrollen geprüft.
+- LP-Karten zeigen Leistung, Fahrzeugstatus und optionalen SoC, Sessionenergie, Kosten, Preis, Solar-/Netzanteil, Modus, Regelung, Ziel-Laden, Speicheroption, optionale AC-Phasenumschaltung und Schnellaktionen kompakt an.
+- Reale Diagnosegründe aus Ladepunkt, Tarif, PV, Ziel-Laden, Speicher, §14a, Netz-/Phasengrenzen, Mapping und Aktorbestätigung werden zu einer verständlichen EOS-Entscheidung und zu Warnungen/Fehlern verdichtet.
+- CSV-Schaltfläche aus der Stationsseite entfernt. Die vorhandene CSV-Service-/Adminroute bleibt unverändert verfügbar.
+- Steuerungssicherheit unverändert: Die Stationsseite erzeugt ausschließlich Charging-Management-Intents; direkte Hardwarewrites bleiben deaktiviert und der bestehende Single Writer mit allen Netz-, Stations-, §14a- und Safety-Grenzen bleibt alleiniger Ausführer.
+
 ## 0.8.190 - 2026-08-16
 
 - Speicher- und EVCS-Netzladefreigabe bei kombiniertem variablem Netzentgelt und Dynamiktarif fail-closed gehärtet: Ein aktives NT-Fenster überstimmt keinen teuren, veralteten oder unbekannten aktiven Stromtarif mehr.

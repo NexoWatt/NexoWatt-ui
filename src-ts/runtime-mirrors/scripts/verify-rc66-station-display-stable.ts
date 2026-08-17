@@ -1,0 +1,191 @@
+// @ts-nocheck
+/**
+ * TypeScript-Parallelspiegel: scripts/verify-rc66-station-display-stable.js
+ *
+ * Zweck:
+ * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
+ * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
+ * scripts/verify-rc66-station-display-stable.js
+ *
+ * Zusammenhang:
+ * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
+ * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
+ * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ *
+ * Wichtig für die Migration:
+ * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
+ * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ *
+ * Original-Hash: 0e9904db0e3f8c4ef76950db03c3d773d411b08a000072e850f2fb003544ab04
+ */
+
+/**
+ * Code-Teil: Runtime-Spiegel der kompletten Datei
+ *
+ * Zweck:
+ * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
+ * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
+ * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const root = path.resolve(__dirname, '..');
+/**
+ * Code-Teil: read
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+/**
+ * Code-Teil: fail
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const fail = message => {
+  console.error(`[rc66-station-display] FEHLER: ${message}`);
+  process.exit(1);
+};
+/**
+ * Code-Teil: mustContain
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const mustContain = (rel, needle, message) => {
+  if (!read(rel).includes(needle)) fail(`${message || needle} fehlt in ${rel}`);
+};
+/**
+ * Code-Teil: mustNotContain
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const mustNotContain = (rel, needle, message) => {
+  if (read(rel).includes(needle)) fail(`${message || needle} darf in ${rel} nicht enthalten sein`);
+};
+
+const pkg = JSON.parse(read('package.json'));
+const versionParts = String(pkg.version || '').split('.').map(Number);
+if (versionParts.length !== 3 || versionParts.some(part => !Number.isFinite(part)) || versionParts[0] !== 0 || versionParts[1] !== 8 || versionParts[2] < 191) {
+  fail(`Paketversion muss mindestens 0.8.191 sein, ist aber ${pkg.version || 'unbekannt'}`);
+}
+
+const logoRel = 'www/assets/nexowatt-eos-logo-wide.png';
+const logoPath = path.join(root, logoRel);
+if (!fs.existsSync(logoPath)) fail(`Logo fehlt: ${logoRel}`);
+const logo = fs.readFileSync(logoPath);
+if (logo.length < 20000 || logo.length > 500000) fail(`Logo-Dateigröße unplausibel: ${logo.length} Byte`);
+if (logo.toString('hex', 1, 4) !== '504e47') fail('Logo ist keine PNG-Datei');
+const width = logo.readUInt32BE(16);
+const height = logo.readUInt32BE(20);
+if (width < 600 || height < 250 || width <= height) fail(`Logo-Abmessungen unplausibel: ${width}x${height}`);
+
+mustContain('www/dc-station-display.html', '/static/assets/nexowatt-eos-logo-wide.png', 'Logo im Ladebildschirm');
+mustContain('www/dc-station-display.html', 'rel="preload" as="image"', 'Logo-Preload');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', '/static/assets/nexowatt-eos-logo-wide.png', 'Logo in der Runtime');
+mustContain('src-ts/runtime-executables/www/sw.ts', 'assets/nexowatt-eos-logo-wide.png', 'Logo im Service-Worker-Cache');
+mustContain('src-ts/runtime-executables/www/sw.ts', "nexowatt-cache-v481", 'neue Service-Worker-Cachekennung');
+
+mustNotContain('www/dc-station-display.html', 'CSV', 'CSV-Schaltfläche im HTML');
+mustNotContain('src-ts/runtime-executables/www/dc-station-display.ts', 'operator.csv', 'CSV-Link in der Stationsoberfläche');
+mustNotContain('src-ts/runtime-executables/www/dc-station-display.ts', 'csvExport', 'CSV-Bedienelement in der Stationsoberfläche');
+// Der Service-/Adminexport bleibt ausdrücklich erhalten.
+mustContain('src-ts/runtime-executables/main.ts', "app.get('/api/display/station/:token/operator.csv'", 'CSV-Service-Route');
+
+for (const [needle, message] of [
+  ['derivePresentationModel', 'abgeleitete Entscheidung/Warnung'],
+  ['withPresentationModel', 'sicheres View-Modell'],
+  ['renderStatusStrip', 'kompakte Statusleiste'],
+  ['renderSummary', 'Stationszusammenfassung'],
+  ['renderDecisionPanel', 'EOS-Entscheidungsbereich'],
+  ['renderWarningsPanel', 'Warnungs-/Fehlerbereich'],
+  ['connectorLayout', 'dynamisches Mehr-LP-Layout'],
+  ['--lp-columns', 'dynamische Spaltenzahl'],
+  ['vehicleSocPct', 'Fahrzeug-SoC auf der Stationsseite'],
+  ['hardwareCommandConfirmed', 'Aktorbestätigung in der Diagnose'],
+  ['mappingIssues', 'Zuordnungsfehler in der Diagnose'],
+  ['directHardwareWrite', 'Single-Writer-Hinweis'],
+]) mustContain('src-ts/runtime-executables/www/dc-station-display.ts', needle, message);
+
+for (const [needle, message] of [
+  ['body{overflow:hidden}', 'kein Desktop-Seitenscrollen'],
+  ['grid-template-columns:repeat(var(--lp-columns,1)', 'dynamisches LP-Raster'],
+  ['data-density="dense"', 'kompakte Darstellung großer Stationen'],
+  ['max-height:840px', 'kurzer 16:9-Kioskmodus'],
+  ['nw-status-strip', 'Statusleisten-Design'],
+  ['nw-summary-grid', 'Übersichtskarten'],
+  ['nw-insights-grid', 'Entscheidung und Warnungen'],
+  ['nw-energy-split', 'Solar-/Netzanteil pro Session'],
+]) mustContain('www/dc-station-display.css', needle, message);
+
+for (const needle of [
+  'stationMaxPowerW',
+  'tariffActive',
+  'gridCapBinding',
+  'phaseCapBinding',
+  'para14aBinding',
+  'storageAssistActive',
+  'staleMeter',
+  'staleBudget',
+  'goalTariffOverride',
+  'availabilityOwner',
+]) mustContain('src-ts/runtime-executables/main.ts', needle, `Display-Payload ${needle}`);
+
+mustContain('src-ts/runtime-executables/main.ts', "require('./lib/station-display-presentation')", 'typisierter Stationsdisplay-Präsentationshelfer');
+mustContain('src-ts/runtime-executables/main.ts', 'summary: presentation.summary', 'typisierte Stationszusammenfassung im Backend-Payload');
+mustContain('src-ts/runtime-executables/main.ts', 'decisionLines: presentation.decisionLines', 'typisierte EOS-Entscheidungsgründe im Backend-Payload');
+mustContain('src-ts/runtime-executables/main.ts', 'warnings: presentation.warnings', 'typisierte Warnungen im Backend-Payload');
+mustContain('src-ts/runtime-executables/main.ts', 'vehicleStateNormalized', 'normalisierter Fahrzeugzustand im LP-Diagnosepayload');
+for (const [needle, message] of [
+  ['shortDecision', 'verständliche Kurzentscheidung'],
+  ['decisionLines: decisionLines.slice(0, 8)', 'strukturierte EOS-Entscheidungsgründe'],
+  ['warnings: warnings.slice(0, 12)', 'strukturierte Warnungen'],
+  ['never\n * writes states', 'read-only Präsentationsvertrag'],
+]) mustContain('src-ts/runtime-executables/lib/station-display-presentation.ts', needle, message);
+
+if (pkg.scripts?.['test:rc66-station-display-browser'] !== 'node scripts/verify-rc66-station-display-browser.js') {
+  fail('RC66-Browsertest ist nicht im Paket-Skriptvertrag registriert.');
+}
+if (!fs.existsSync(path.join(root, 'scripts/verify-rc66-station-display-browser.js'))) {
+  fail('RC66-Browsertestdatei fehlt.');
+}
+
+if (!(pkg.files || []).includes(logoRel)) fail(`${logoRel} fehlt in package.json.files`);
+if (!(pkg.files || []).includes('lib/station-display-presentation.js')) fail('typisierter Präsentationshelfer fehlt in package.json.files');
+
+// Browser-Runtime muss als JavaScript parsebar sein; dabei wird sie nicht ausgeführt.
+try {
+  new vm.Script(read('www/dc-station-display.js'), { filename: 'www/dc-station-display.js' });
+} catch (error) {
+  fail(`Stations-Runtime ist syntaktisch ungültig: ${error.message}`);
+}
+
+console.log(`[rc66-station-display] OK: modernes Vollbildlayout, NexoWatt-Branding, Mehr-LP-Raster, Status-/Entscheidungsdiagnose, kein CSV-UI und Single-Writer-Vertrag sind abgesichert (${width}x${height}, ${logo.length} Byte).`);

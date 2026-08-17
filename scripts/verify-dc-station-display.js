@@ -22,6 +22,13 @@ function mustMatch(rel, regex, message) {
     process.exit(1);
   }
 }
+function mustNotContain(rel, needle, message) {
+  const text = read(rel);
+  if (text.includes(needle)) {
+    console.error(`[dc-station-display] FEHLER: ${message || needle} darf in ${rel} nicht enthalten sein`);
+    process.exit(1);
+  }
+}
 
 /** Vergleicht Paketversionen numerisch, damit Patch-Versionen ab 100 nicht an alten Regex-Grenzen scheitern. */
 function mustPackageVersionAtLeast(minVersion, message) {
@@ -141,3 +148,17 @@ mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorE
 mustContain('src-ts/runtime-executables/main.ts', 'nexowatt.dc.operator-export.v2', 'CSV v2 Schema');
 mustContain('src-ts/runtime-executables/main.ts', 'LetzteSessionPersistiert', 'persistierte Last-Session im CSV');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'nw-connector-last-session', 'Last-Session Anzeige im Display');
+
+
+// 0.8.191 RC66: produktionsnahe responsive Stationsseite.
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'derivePresentationModel', 'EOS-Entscheidungs-/Warnungsmodell');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'renderStatusStrip', 'Status-/Infoleiste');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'renderDecisionPanel', 'EOS-Entscheidungsanzeige');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'renderWarningsPanel', 'Fehler-/Warnungsanzeige');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'connectorLayout', 'Mehr-LP-Responsive-Layout');
+mustContain('www/dc-station-display.css', 'grid-template-columns:repeat(var(--lp-columns,1)', 'dynamisches LP-Raster');
+mustContain('www/dc-station-display.css', 'body{overflow:hidden}', 'scrollfreier Desktop-Kiosk');
+mustContain('www/dc-station-display.html', '/static/assets/nexowatt-eos-logo-wide.png', 'NexoWatt-EOS-Logo');
+mustNotContain('src-ts/runtime-executables/www/dc-station-display.ts', 'operator.csv', 'CSV-Schaltfläche auf Stationsseite');
+mustNotContain('src-ts/runtime-executables/www/dc-station-display.ts', 'csvExport', 'CSV-Bedienelement auf Stationsseite');
+mustPackageVersionAtLeast('0.8.191', 'Paketversion 0.8.191+');

@@ -54,9 +54,9 @@ mustMatch('src-ts/runtime-executables/main.ts', /ports\.sort\(\(a, b\) => \(a\.c
 mustContain('src-ts/runtime-executables/main.ts', 'station-fallback-manual', 'Legacy-Fallback für bestehende Stationsseiten');
 
 // Separates Stationsdisplay bleibt stationsbezogen und beliebig skalierbar.
-mustContain('src-ts/runtime-executables/www/dc-station-display.ts', "connectorCount >= 5 ? 'many'", 'Layoutklasse für fünf und mehr Ports');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', "layout.count >= 5 ? 'many'", 'Layoutklasse für fünf und mehr Ports');
 mustContain('www/dc-station-display.css', '.nw-connectors--count-many', 'responsive 5+-Port-Ansicht');
-mustContain('www/dc-station-display.css', '@media (min-width: 900px) and (max-height: 760px)', 'Landscape-Kiosk-Optimierung');
+mustContain('www/dc-station-display.css', '@media (min-width:1101px) and (max-height:840px)', 'Landscape-Kiosk-Optimierung');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'storageCentral', 'zentraler Speicherschutz-Hinweis auf Stationsseiten');
 mustContain('src-ts/runtime-executables/main.ts', 'global_storage_control_required', 'Stationsdisplay darf globalen Schalter nicht pro LP umgehen');
 

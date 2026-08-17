@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.189 RC64 – direkter npm-Publish
+NexoWatt EOS 0.8.191 RC66 – Stationsseiten / Kiosk UI
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. In PowerShell in diesen Ordner wechseln.
@@ -6,9 +6,15 @@ NexoWatt EOS 0.8.189 RC64 – direkter npm-Publish
 4. Veröffentlichen: npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.189 auf npm noch frei ist,
+- ob Version 0.8.191 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob alle freigegebenen Produktdateien unverändert enthalten sind.
 
-RC64 korrigiert ausschließlich die Speicher-Netzladefreigabe: Bei aktiviertem zeitvariablem Netzentgelt gibt das aktuell aktive, manuell konfigurierte NT-/Quartalsfenster frei. Bei ausgeschaltetem variablem Netzentgelt gibt ein frischer günstiger dynamischer Tarif frei. AppCenter-, Prioritäts-, Writer-, SoC-, Netz- und Safety-Grenzen bleiben zwingend; PV-/NVP-Laden bleibt unabhängig.
+RC66 modernisiert ausschließlich die Stations-/Kioskseiten: NexoWatt-EOS-Logo,
+responsives Vollbildlayout, mehrere Ladepunkte nebeneinander, kompakte Status- und
+Übersichtskarten, EOS-Entscheidungsgründe sowie Fehler-/Warnmeldungen. Die
+CSV-Schaltfläche wurde von der Stationsseite entfernt; die Service-/Adminroute
+bleibt erhalten. Alle Bedienhandlungen laufen weiterhin über Charging Management
+und den bestehenden Single Writer. Lade-, Speicher-, Tarif-, §14a- und
+Safety-Regelungen wurden nicht durch einen zweiten Hardware-Writer ersetzt.

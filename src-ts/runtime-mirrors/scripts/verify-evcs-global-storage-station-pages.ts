@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 74cf64560663f9fe650b4cfb7e6c091f5d415df7c4b6cc5290bfcae08c5e2b19
+ * Original-Hash: 83bf3afb79758a7ef743b8e6eb530770f76711f178bfa22feb7b9c8cc8615964
  */
 
 /**
@@ -128,9 +128,9 @@ mustMatch('src-ts/runtime-executables/main.ts', /ports\.sort\(\(a, b\) => \(a\.c
 mustContain('src-ts/runtime-executables/main.ts', 'station-fallback-manual', 'Legacy-Fallback für bestehende Stationsseiten');
 
 // Separates Stationsdisplay bleibt stationsbezogen und beliebig skalierbar.
-mustContain('src-ts/runtime-executables/www/dc-station-display.ts', "connectorCount >= 5 ? 'many'", 'Layoutklasse für fünf und mehr Ports');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', "layout.count >= 5 ? 'many'", 'Layoutklasse für fünf und mehr Ports');
 mustContain('www/dc-station-display.css', '.nw-connectors--count-many', 'responsive 5+-Port-Ansicht');
-mustContain('www/dc-station-display.css', '@media (min-width: 900px) and (max-height: 760px)', 'Landscape-Kiosk-Optimierung');
+mustContain('www/dc-station-display.css', '@media (min-width:1101px) and (max-height:840px)', 'Landscape-Kiosk-Optimierung');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'storageCentral', 'zentraler Speicherschutz-Hinweis auf Stationsseiten');
 mustContain('src-ts/runtime-executables/main.ts', 'global_storage_control_required', 'Stationsdisplay darf globalen Schalter nicht pro LP umgehen');
 

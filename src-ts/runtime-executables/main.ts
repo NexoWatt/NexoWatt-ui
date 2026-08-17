@@ -1,68 +1,11 @@
 // @ts-nocheck
 /**
  * Executable TypeScript source: main.js
- *
- * Zweck:
- * Diese Datei ist ab 0.7.131 die kanonische TypeScript-Quelle der produktiven
- * Adapter-/Frontend-Runtime-Datei `main.js`.
- *
- * Build-Regel:
- * `npm run sync:ts-runtime-executables` erzeugt daraus die auslieferbare
- * JavaScript-Datei. Änderungen an der Runtime sollen hier vorgenommen werden;
- * die JS-Datei ist nur noch Build-Artefakt für Node.js/ioBroker bzw. den Browser.
- *
- * Sicherheit:
- * Der Inhalt basiert auf der bisher produktiven JavaScript-Runtime und bleibt
- * vorübergehend mit `@ts-nocheck` ausführbar. Fachliche TS-Helfer wie EVCS,
- * Energiefluss, Core-Limits und Heizstab bleiben die bereits typisierten Quellen.
- */
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-/**
- * Datei: main.js
- * Rolle im Projekt: Adapter-Kernlaufzeit.
- * Zweck: Startet den ioBroker-Adapter, legt States an, startet Web/API/SSE und verbindet Frontend mit EMS-Modulen.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/* GENERIERTER BUILD-HINWEIS: Diese Datei wird aus src-admin-tab gebaut. Fachliche Änderungen bitte in den Quellen dokumentieren/ändern, nicht im Bundle. */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Adapter-Einstiegspunkt: startet ioBroker-Adapter, Webserver, REST-/SSE-APIs, Lizenzprüfung, State-Anlage und EMS-Engine.
- * Zusammenhänge:
- * - www/* nutzt die hier bereitgestellten APIs wie /api/state, /config, /events und /api/set.
- * - ems/modules/* berechnen Regelungs- und Diagnosewerte, die hier als States und Live-Snapshots veröffentlicht werden.
- * - io-package.json definiert Default-Konfiguration und Adapter-Metadaten.
- * Wartungshinweise:
- * - Änderungen an State-Namen, API-Antworten oder Mapping-Keys können Dashboard, History, Heizstab, KI-Berater und SmartHome direkt beeinflussen.
- * - Webserver, Timer und SSE-Verbindungen müssen im unload sauber beendet werden.
+ * Canonical adapter runtime source; generate main.js with
+ * `npm run sync:ts-runtime-executables`.
  */
 'use strict';
-/**
- * Datenvertrag: AdapterStateCacheEntry
- * Zweck: Beschreibt die Struktur, die main.js intern für gelesene ioBroker-States verwendet.
- * Zusammenhang: /api/state, SSE-Liveupdates, EMS-Module und Frontend greifen indirekt auf diese Werte zu.
- * TypeScript-Ziel:
- * interface AdapterStateCacheEntry { value: unknown; ts?: number; lc?: number; ack?: boolean; }
- */
-/**
- * Datenvertrag: ApiStateResponse
- * Zweck: Beschreibt die Antwort von /api/state für www/app.js, history.js und weitere Frontendbereiche.
- * Zusammenhang: Wenn hier Struktur oder Namen geändert werden, müssen Frontend, History und Reports mitgeprüft werden.
- * TypeScript-Ziel:
- * interface ApiStateResponse { states: Record<string, AdapterStateCacheEntry>; config?: AdapterConfig; ts?: number; }
- */
-/**
- * Vertragsstelle: Mapping- und State-Namen
- * Zweck: main.js normalisiert externe Datenpunkte in interne States.
- * Wichtig: State-Namen sind ein Vertrag mit www/app.js, www/history.js und ems/modules/*.
- * Nicht ändern ohne Migration: Speicher-, Netz-, PV-, Heizstab-, EVCS-, Speicherfarm- und aiAdvisor.* Namen.
- */
+
 const utils = require('@iobroker/adapter-core');
 const express = require('express');
 const path = require('path');
@@ -75,6 +18,7 @@ const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
+const { buildStationDisplayPresentation } = require('./lib/station-display-presentation');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
 /**
@@ -3941,7 +3885,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.190',
+        liveControlVersion: '0.8.191',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -11749,6 +11693,25 @@ async onReady() {
     await primeKey('chargingManagement.control.mode');
     await primeKey('chargingManagement.control.budgetW');
     await primeKey('chargingManagement.control.remainingW');
+    await primeKey('chargingManagement.control.infrastructureHardCapW');
+    await primeKey('chargingManagement.control.infrastructureCapacityW');
+    await primeKey('chargingManagement.control.gridImportLimitW_effective');
+    await primeKey('chargingManagement.control.gridCapBinding');
+    await primeKey('chargingManagement.control.phaseCapBinding');
+    await primeKey('chargingManagement.control.para14aActive');
+    await primeKey('chargingManagement.control.para14aBinding');
+    await primeKey('chargingManagement.control.storageAssistActive');
+    await primeKey('chargingManagement.control.storageProtectedLoadW');
+    await primeKey('chargingManagement.control.staleMeter');
+    await primeKey('chargingManagement.control.staleBudget');
+    await primeKey('chargingManagement.control.failsafeDetails');
+    await primeKey('tarif.aktiv');
+    await primeKey('tarif.state');
+    await primeKey('tarif.preisAktuellEurProKwh');
+    await primeKey('tarif.currentPriceFresh');
+    await primeKey('tarif.statusText');
+    await primeKey('tarif.netFeeMode');
+    await primeKey('tariffProvider.currentPriceEurPerKwh');
     await primeKey('chargingManagement.control.tsControlProductiveJson');
     await primeKey('chargingManagement.control.tsAllocationShadowJson');
     await primeKey('chargingManagement.control.tsAllocationProductivePrepJson');
@@ -11800,6 +11763,27 @@ async onReady() {
       await primeKey(`${base}.goalDesiredPowerW`);
       await primeKey(`${base}.goalShortfallW`);
       await primeKey(`${base}.goalStatus`);
+      await primeKey(`${base}.goalTariffOverride`);
+      await primeKey(`${base}.goalTariffOverrideReason`);
+      await primeKey(`${base}.vehicleSocPct`);
+      await primeKey(`${base}.availabilityOwner`);
+      await primeKey(`${base}.availabilityRequested`);
+      await primeKey(`${base}.availabilityRequestReason`);
+      await primeKey(`${base}.mappingIssues`);
+      await primeKey(`${base}.applyStatus`);
+      await primeKey(`${base}.hardwareCommandConfirmed`);
+      await primeKey(`${base}.hardwareCommandState`);
+      await primeKey(`${base}.meterStale`);
+      await primeKey(`${base}.reason`);
+      await primeKey(`${base}.statusRaw`);
+      await primeKey(`${base}.statusEffective`);
+      await primeKey(`${base}.statusClass`);
+      await primeKey(`${base}.faultActive`);
+      await primeKey(`${base}.faultReason`);
+      await primeKey(`${base}.unavailableActive`);
+      await primeKey(`${base}.unavailableReason`);
+      await primeKey(`${base}.operationalBlocked`);
+      await primeKey(`${base}.actualPowerW`);
       await primeKey(`${base}.effectiveMode`);
       await primeKey(`${base}.chargerType`);
       await primeKey(`${base}.charging`);
@@ -20586,6 +20570,20 @@ const _nwDisplayBuildPayload = (station) => {
       const goalEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalEnabled`, false), false);
       const goalTargetSocPct = _nwDisplayClamp(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTargetSocPct`, 100), 0, 100, 100);
       const goalFinishTs = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalFinishTs`, 0), 0));
+      const goalStatus = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalStatus`, goalEnabled ? 'active' : 'inactive') || '').trim();
+      const goalTariffOverride = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTariffOverride`, false), false);
+      const goalTariffOverrideReason = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTariffOverrideReason`, '') || '').trim();
+      const vehicleSocRaw = _nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.vehicleSocPct`, _nwDisplayStateVal(`evcs.${idx}.vehicleSoc`, null)), NaN);
+      const vehicleSocPct = Number.isFinite(vehicleSocRaw) ? Math.max(0, Math.min(100, vehicleSocRaw)) : null;
+      const availabilityOwner = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.availabilityOwner`, '') || '').trim();
+      const availabilityRequested = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.availabilityRequested`, true), true);
+      const availabilityRequestReason = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.availabilityRequestReason`, '') || '').trim();
+      const mappingIssuesRaw = _nwDisplayParseJson(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.mappingIssues`, '[]'), []);
+      const mappingIssues = Array.isArray(mappingIssuesRaw) ? mappingIssuesRaw.map((entry) => String(entry || '')).filter(Boolean).slice(0, 8) : [];
+      const applyStatus = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.applyStatus`, '') || '').trim();
+      const hardwareCommandConfirmed = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.hardwareCommandConfirmed`, true), true);
+      const hardwareCommandState = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.hardwareCommandState`, '') || '').trim();
+      const vehicleStateNormalized = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.vehicleStateNormalized`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.universalVehicleState`, '')) || '').trim();
       const session = _nwDisplayActiveSession(idx);
       const persistedLastSession = persistedLastByLpForPayload && typeof persistedLastByLpForPayload === 'object' ? persistedLastByLpForPayload[safe] : null;
       const rawLastSession = _nwDisplayNewestSession(_nwDisplayLastCompletedSession(idx), persistedLastSession);
@@ -20624,6 +20622,7 @@ const _nwDisplayBuildPayload = (station) => {
         unavailableActive,
         unavailableReason,
         operationalBlocked,
+        meterStale,
         online,
         plugged,
         charging,
@@ -20636,6 +20635,7 @@ const _nwDisplayBuildPayload = (station) => {
         userAutoSource,
         userEnabled,
         pvAvailable,
+        vehicleSocPct,
         solarSharePercent: station.showSolarShare ? solarSharePct : null,
         energyDayKwh: Math.round(energyDayKwh * 1000) / 1000,
         sessionId,
@@ -20666,6 +20666,12 @@ const _nwDisplayBuildPayload = (station) => {
           goalEnabled,
           goalTargetSocPct,
           goalFinishTs,
+          goalStatus,
+          goalTariffOverride,
+          goalTariffOverrideReason,
+          availabilityOwner,
+          availabilityRequested,
+          availabilityRequestReason,
           strategyActive: _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyActive`, false), false),
           strategyStatus: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyStatus`, '') || ''),
           strategyReason: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.strategyReason`, '') || ''),
@@ -20675,12 +20681,66 @@ const _nwDisplayBuildPayload = (station) => {
         controlBridge: String(station.controlBridge || 'charging-management'),
         protocolHint: String(station.protocolHint || 'manufacturer-open'),
         reason: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.reason`, '') || ''),
+        diagnostics: {
+          mappingIssues,
+          mappingOk: mappingIssues.length === 0,
+          applyStatus,
+          hardwareCommandConfirmed,
+          hardwareCommandState,
+          vehicleStateNormalized,
+        },
         session,
         lastSession,
       };
     });
+  const tariffActive = _nwDisplayBool(_nwDisplayStateVal('tarif.aktiv', false), false);
+  const tariffStateRaw = String(_nwDisplayStateVal('tarif.state', tariffActive ? 'unknown' : 'off') || '').trim().toLowerCase();
+  const tariffState = ['guenstig', 'günstig', 'cheap'].includes(tariffStateRaw)
+    ? 'cheap'
+    : (['teuer', 'expensive'].includes(tariffStateRaw)
+      ? 'expensive'
+      : (['neutral', 'normal'].includes(tariffStateRaw) ? 'neutral' : (tariffActive ? 'unknown' : 'off')));
+  const tariffPriceRaw = _nwDisplayNum(_nwDisplayStateVal('tarif.preisAktuellEurProKwh', _nwDisplayStateVal('tariffProvider.currentPriceEurPerKwh', null)), NaN);
+  const tariffFresh = _nwDisplayBool(_nwDisplayStateVal('tarif.currentPriceFresh', !tariffActive), !tariffActive);
+  const stationMaxPowerW = Math.max(0,
+    _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.infrastructureHardCapW', 0), 0)
+    || _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.infrastructureCapacityW', 0), 0)
+    || _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.gridImportLimitW_effective', 0), 0)
+    || _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.budgetW', 0), 0));
+  const globalControlActive = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.active', true), true);
+  const globalControlMode = String(_nwDisplayStateVal('chargingManagement.control.mode', '') || '').trim();
+  const globalControlStatus = String(_nwDisplayStateVal('chargingManagement.control.status', '') || '').trim();
+  const gridCapBinding = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.gridCapBinding', false), false);
+  const phaseCapBinding = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.phaseCapBinding', false), false);
+  const para14aActive = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.para14aActive', false), false);
+  const para14aBinding = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.para14aBinding', false), false);
+  const storageAssistActive = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.storageAssistActive', false), false);
+  const storageProtectedLoadW = Math.max(0, _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.storageProtectedLoadW', 0), 0));
+  const staleMeter = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.staleMeter', false), false);
+  const staleBudget = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.staleBudget', false), false);
+  const failsafeDetails = String(_nwDisplayStateVal('chargingManagement.control.failsafeDetails', '') || '').trim();
+  const presentation = buildStationDisplayPresentation({
+    connectors,
+    runtime,
+    station,
+    globalControlActive,
+    globalControlMode,
+    globalControlStatus,
+    staleMeter,
+    staleBudget,
+    failsafeDetails,
+    tariffActive,
+    tariffFresh,
+    tariffState,
+    pvAvailable,
+    pvSurplusW,
+    storageAssistActive,
+    storageProtectedLoadW,
+    para14aBinding,
+    gridCapBinding,
+    phaseCapBinding,
+  });
   const operator = _nwDisplayBuildOperatorSummary(station, connectors, now);
-  operator.csvUrl = station && station.token ? `/api/display/station/${encodeURIComponent(String(station.token || ''))}/operator.csv` : '';
   for (const c of connectors) {
     const lp = _nwDisplayNormalizeLpKey(c && c.id);
     const persisted = operator && operator.lastSessionsByLp ? operator.lastSessionsByLp[lp] : null;
@@ -20724,11 +20784,37 @@ const _nwDisplayBuildPayload = (station) => {
       pvAvailable,
       pvSurplusW: Math.round(pvSurplusW),
       totalAssignedPowerW: connectors.reduce((sum, c) => sum + (Number(c.powerW) || 0), 0),
+      stationMaxPowerW: Math.round(stationMaxPowerW),
       connectorCount: connectors.length,
       layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
+      tariff: {
+        active: tariffActive,
+        state: tariffState,
+        fresh: tariffFresh,
+        priceEurPerKwh: Number.isFinite(tariffPriceRaw) ? tariffPriceRaw : null,
+        statusText: String(_nwDisplayStateVal('tarif.statusText', '') || ''),
+        netFeeMode: String(_nwDisplayStateVal('tarif.netFeeMode', '') || ''),
+      },
+      control: {
+        active: globalControlActive,
+        mode: globalControlMode,
+        status: globalControlStatus,
+        gridCapBinding,
+        phaseCapBinding,
+        para14aActive,
+        para14aBinding,
+        storageAssistActive,
+        storageProtectedLoadW,
+        staleMeter,
+        staleBudget,
+        failsafeDetails,
+      },
+      summary: presentation.summary,
+      decisionLines: presentation.decisionLines,
+      warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.28',
+      apiVersion: '0.8.191',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -20921,7 +21007,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.28';
+  commandPayload.version = '0.8.191';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22158,7 +22244,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.28').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.191').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 234,
+  "expectedStepCount": 236,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -193,6 +193,8 @@
     "npm run test:app-center-install-colors",
     "npm run test:evcs-global-storage-station-pages",
     "npm run test:dc-station-display",
+    "npm run test:rc66-station-display-stable",
+    "npm run test:rc66-station-display-browser",
     "npm run test:burger-menu-guard",
     "npm run test:energy-wallet-diagnostics",
     "npm run test:energy-ledger-foundation",
