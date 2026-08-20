@@ -10,10 +10,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NexoWatt EOS – Lizenz</title>
+  <title>NexoWatt EOS – Lizenz aktivieren</title>
   <link rel="stylesheet" href="/static/styles.css" />
-  <script src="/static/nw-i18n.js" defer></script>
   <script src="/static/auth.js"></script>
+  <script src="/static/nw-i18n.js" defer></script>
 </head>
 <body
   class="nw-cockpit-page nw-cockpit-skin nw-page-license"
@@ -23,34 +23,20 @@
 >
 <header class="topbar">
   <div class="brand">
-    <a href="/" aria-label="NexoWatt EOS Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png" /></a>
+    <img alt="NexoWatt EOS" src="/static/nexowatt-logo.png" />
   </div>
-  <button aria-label="Menü" id="menuBtn">☰</button>
-  <h1>Lizenz</h1>
-  <nav class="tabs" aria-label="Hauptnavigation">
-    <a class="tab" href="/">LIVE</a>
-    <a class="tab" href="/history.html">HISTORY</a>
-    <a class="tab" href="/smarthome.html">SMARTHOME</a>
-    <a class="tab" href="/logic.html">NEXOLOGIC</a>
-  </nav>
-  <a class="topbar-gear" href="/settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
-  <div class="menu hidden" id="menuDropdown">
-    <a class="menu-item" href="/">Live</a>
-    <a class="menu-item" href="/history.html">History</a>
-    <a class="menu-item" href="/smarthome.html">SmartHome</a>
-    <a class="menu-item" href="/logic.html">NexoLogic</a>
-    <a class="menu-item" href="/settings.html">Einstellungen</a>
-  </div>
+  <h1>Lizenz aktivieren</h1>
+  <div class="nw-license-instance" id="nw-license-instance">Instanz 0</div>
 </header>
 
 <main class="container nw-page-shell nw-license-page">
   <section class="nw-card nw-license-intro">
     <div>
-      <div class="nw-license-eyebrow">INSTALLER / ADMIN</div>
+      <div class="nw-license-eyebrow">SYSTEMEINRICHTUNG · ADMIN / INSTALLER</div>
       <h2>Lizenzverwaltung</h2>
-      <p class="muted">System-UUID und Lizenzschlüssel sind ausschließlich nach erfolgreicher Rollenprüfung verfügbar. Die Seite speichert keinen Lizenzschlüssel im Browser.</p>
+      <p class="muted">Dieser Bereich bleibt auch auf einem neuen System ohne aktive Lizenz erreichbar. System-UUID und Lizenzschlüssel werden erst nach erfolgreicher Admin-/Installer-Anmeldung geladen; der Browser speichert den Schlüssel nicht dauerhaft.</p>
+      <p class="muted">Nach dem Speichern wird die Lizenz sofort geprüft und übernommen. Die übrigen EOS-Bereiche werden bei gültiger Lizenz direkt freigeschaltet; ein Adapterneustart ist normalerweise nicht erforderlich.</p>
     </div>
-    <div class="nw-license-instance" id="nw-license-instance">Instanz 0</div>
   </section>
 
   <section class="nw-license-grid">
@@ -79,14 +65,12 @@
     <div class="nw-license-actions">
       <button id="nw-license-save" class="nw-config-btn nw-config-btn--primary" type="button" disabled>Speichern</button>
       <button id="nw-license-reload" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
-      <button id="nw-license-back" class="nw-config-btn nw-config-btn--ghost" type="button">Zurück zum Installer</button>
+      <button id="nw-license-back" class="nw-config-btn nw-config-btn--ghost" type="button">Zurück zum EOS Admin</button>
     </div>
-    <div id="nw-license-status" class="nw-status" role="status" aria-live="polite">Berechtigung wird geprüft …</div>
+    <div id="nw-license-status" class="nw-status" role="status" aria-live="polite">Admin-/Installer-Anmeldung wird geprüft …</div>
   </section>
 </main>
 
 <script src="/static/license.js"></script>
-<script src="/static/cockpit-shell.js"></script>
-<script src="/static/nw-shell.js"></script>
 </body>
 </html>

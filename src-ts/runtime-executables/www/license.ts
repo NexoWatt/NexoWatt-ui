@@ -190,7 +190,12 @@ interface LicenseHttpError extends Error {
       });
       if (el.uuid && info.uuid) el.uuid.value = String(info.uuid);
       if (el.key && info.licenseKey) el.key.value = String(info.licenseKey);
-      setStatus(info.message || (info.valid ? 'Lizenz gespeichert und aktiviert ✅' : 'Lizenz gespeichert, aber noch ungültig ❌'), info.valid === true);
+      setStatus(
+        info.message || (info.valid
+          ? 'Lizenz gespeichert und aktiviert ✅ Die übrigen EOS-Bereiche sind sofort freigeschaltet.'
+          : 'Lizenz gespeichert, aber noch ungültig ❌'),
+        info.valid === true,
+      );
     } catch (error) {
       const err = asError(error);
       setStatus(err.message || 'Lizenz konnte nicht gespeichert werden.', false);

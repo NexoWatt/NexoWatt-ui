@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:4ef6854778f0d9984aa64ade0eced1cbb43f0b4a46e1c6ac5f27da08db1a7637
+ * Quell-Hash: sha256:409557aee39d952c0f3a2cf5a2e9de517d99a2fff4877b85f0f1a7bca48c908d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -34,7 +34,7 @@ const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
-const { buildStationDisplayPresentation } = require('./lib/station-display-presentation');
+const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
 /**
@@ -3901,7 +3901,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.191',
+        liveControlVersion: '0.8.192',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -12235,7 +12235,7 @@ async onReady() {
           features: this._nwBuildLicenseFeatureInfo().features || {},
           proFullAccess: !!this._nwBuildLicenseFeatureInfo().proFullAccess,
           message: this._nwLicenseOk
-            ? 'Lizenz gespeichert und aktiviert ✅'
+            ? 'Lizenz gespeichert und aktiviert ✅ Die übrigen EOS-Bereiche sind sofort freigeschaltet.'
             : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
           expiresAt: Number(info.expiresAt || 0),
           daysRemaining: Number(info.daysRemaining || 0),
@@ -12257,6 +12257,8 @@ async onReady() {
     // -------------------------------------------------------------------
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: (req, res, next) => {
     app.use(async (req, res, next) => {
+      if (isUnlicensedLicenseBootstrapRequest(req)) return next(); // Enger Admin-/Installer-Lizenz-Bootstrap vor dem allgemeinen Gate.
+
       if (!this._nwLicenseOk) {
         try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (_eLicGate) {}
       }
@@ -12306,9 +12308,6 @@ async onReady() {
         // ignore
       }
 
-      const uuidStr = String(this._nwSystemUuid || '').trim();
-      const uuidLine = uuidStr ? `<p><b>System‑UUID:</b> <code>${esc(uuidStr)}</code></p>` : '';
-
       res.status(403);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end(`<!doctype html>
@@ -12322,7 +12321,7 @@ async onReady() {
               .card{width:min(720px,92vw);background:rgba(2,6,23,0.55);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:20px 18px;box-shadow:0 20px 80px rgba(0,0,0,0.55)}
               h1{font-size:18px;margin:0 0 10px 0}
               p{margin:8px 0;color:rgba(255,255,255,0.85);line-height:1.45}
-              code{background:rgba(148,163,184,0.14);padding:2px 6px;border-radius:8px}
+              code{background:rgba(148,163,184,0.14);padding:2px 6px;border-radius:8px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:11px;text-decoration:none;font-weight:750;border:1px solid rgba(148,163,184,.28);color:#eef7ff;background:rgba(15,23,42,.8)}.btn.primary{color:#00160d;border-color:rgba(0,230,118,.75);background:linear-gradient(135deg,#00e676,#22f2a1);box-shadow:0 10px 30px rgba(0,230,118,.2)}
             </style>
           </head>
           <body>
@@ -12330,10 +12329,7 @@ async onReady() {
               <h1>${headline}</h1>
               <p><b>Status:</b> ${esc(lMsg)}</p>
               ${detailLine}
-              ${uuidLine}
-              <p>Diese VIS ist aktuell gesperrt, bis ein gültiger Lizenzschlüssel hinterlegt ist.</p>
-              <p>Bitte im <b>NexoWatt EOS Admin</b> unter <code>NexoWatt EOS → Lizenz</code> einen gültigen Lizenzschlüssel eintragen.</p>
-              <p>Danach den Adapter neu starten (oder kurz deaktivieren/aktivieren).</p>
+              <p>Die Bedienoberfläche und alle lizenzpflichtigen EOS-Bereiche bleiben bis zur Aktivierung gesperrt. Die Lizenzverwaltung selbst ist bewusst auch auf einem neuen, noch nicht lizenzierten System erreichbar.</p><p>Öffne <b>Lizenz aktivieren</b>, melde dich dort mit den EOS-Admin- oder Installer-Zugangsdaten an und trage den gültigen Lizenzschlüssel ein. Die Lizenz wird beim Speichern sofort geprüft und übernommen.</p><div class="actions"><a class="btn primary" href="/license.html?nwAdmin=1">Lizenz aktivieren</a></div>
             </div>
           </body>
         </html>`);
@@ -12747,8 +12743,8 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 <body class="nw-cockpit-page nw-cockpit-skin" data-nw-required-capability="${String(capability || '')}" data-nw-page-name="${String(title || 'geschützte Seite')}" data-nw-required-role="${String(requiredRole || 'passende Rolle')}">
 <main><section class="nw-config-card" style="max-width:760px;margin:48px auto;padding:22px">
 <div class="nw-config-card__title">${String(title || 'Zugriff geschützt')}</div>
-<p class="nw-config-card__subtitle">Diese Seite ist geschützt. Bitte mit passender EOS-Rolle anmelden. Ohne Berechtigung werden keine Hintergrundwerte geladen oder angezeigt.</p>
-<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn" id="nwAccessLoginBtn" type="button">Anmelden</button><button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button></div>
+<p class="nw-config-card__subtitle">${String(capability || '') === 'license.manage' ? 'Die Lizenzverwaltung bleibt auch ohne aktive EOS-Lizenz erreichbar. Bitte mit den EOS-Admin- oder Installer-Zugangsdaten anmelden; erst danach werden System-UUID und Lizenzfeld geladen.' : 'Diese Seite ist geschützt. Bitte mit passender EOS-Rolle anmelden. Ohne Berechtigung werden keine Hintergrundwerte geladen oder angezeigt.'}</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn" id="nwAccessLoginBtn" type="button">${String(capability || '') === 'license.manage' ? 'Admin-/Installer-Anmeldung' : 'Anmelden'}</button><button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button></div>
 </section></main><script src="/static/auth.js"></script><script>
 window.addEventListener('nw-auth-login', function(){ try { window.location.reload(); } catch(e) {} });
 document.addEventListener('DOMContentLoaded', function(){
@@ -20830,7 +20826,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.191',
+      apiVersion: '0.8.192',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21023,7 +21019,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.191';
+  commandPayload.version = '0.8.192';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22260,7 +22256,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.191').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.192').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });

@@ -1,3 +1,10 @@
+## 0.8.192 - 2026-08-20
+
+- RC67: Lizenzaktivierung bleibt auf einem neuen, noch nicht lizenzierten EOS-System erreichbar, ist aber weiterhin strikt über `license.manage` auf Admin/Installer begrenzt.
+- Der allgemeine Lizenz-Lock erlaubt nur die Lizenzseite, minimale statische Assets sowie strikte Auth-/Lizenz-Endpunkte; alle anderen EOS-Seiten und APIs bleiben gesperrt.
+- Die Sperrseite verweist direkt auf „Lizenz aktivieren“ und erklärt die sofortige Freischaltung korrekt; der falsche Admin-Pfad und der unnötige Neustart-Hinweis wurden entfernt.
+- Neuer Regressionstest verhindert künftig sowohl eine blockierte Lizenzaktivierung als auch einen zu breiten `/static/*`- oder `/api/*`-Bypass.
+
 ## 0.8.191 - 2026-08-17
 
 - Stations-/Kioskseiten vollständig als modernes NexoWatt-EOS-Vollbildlayout überarbeitet. Das originale EOS-Logo, Stationsmetadaten, kompakte Statuschips, Stationsübersicht, EOS-Entscheidung und strukturierte Warn-/Fehleranzeige sind jetzt in einer gemeinsamen Oberfläche enthalten.

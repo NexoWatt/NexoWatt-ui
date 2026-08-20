@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 45d1f8654751fa239725e03383789753a5d3e74521e7409aa6f6a22a68be4f51
+ * Original-Hash: 44c218f966b597fb37e60be1267159dde5f4fa0d50575e258b1b65c0e2f1c7ba
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/license.ts
- * Quell-Hash: sha256:172dece835947a55fc0626c1556756e41ecbeb15e999e65f8d5ec24d992eb801
+ * Quell-Hash: sha256:12962f4a02572e4dcaf770f9db07c5117acff40e99327326cd3c19e866a3b205
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -300,7 +300,9 @@
                 el.uuid.value = String(info.uuid);
             if (el.key && info.licenseKey)
                 el.key.value = String(info.licenseKey);
-            setStatus(info.message || (info.valid ? 'Lizenz gespeichert und aktiviert ✅' : 'Lizenz gespeichert, aber noch ungültig ❌'), info.valid === true);
+            setStatus(info.message || (info.valid
+                ? 'Lizenz gespeichert und aktiviert ✅ Die übrigen EOS-Bereiche sind sofort freigeschaltet.'
+                : 'Lizenz gespeichert, aber noch ungültig ❌'), info.valid === true);
         }
         catch (error) {
             const err = asError(error);
