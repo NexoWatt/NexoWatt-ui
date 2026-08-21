@@ -1,21 +1,13 @@
-NexoWatt EOS 0.8.192 RC67 – Lizenzaktivierung auf neuen Systemen
+NexoWatt EOS 0.8.193 RC68 – §14a Kommunikations-Fallback
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
-2. In PowerShell in diesen Ordner wechseln.
-3. Optional: npm ci
-4. Veröffentlichen: npm publish
+2. Optional: npm ci
+3. npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.192 auf npm noch frei ist,
+- ob Version 0.8.193 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
-- ob alle freigegebenen Produktdateien unverändert enthalten sind.
+- ob keine freigegebene Produktdatei verändert wurde.
 
-RC67 korrigiert ausschließlich den Lizenz-Bootstrap neuer, noch nicht lizenzierter
-Systeme. Die Lizenzseite bleibt erreichbar, verlangt jedoch weiterhin eine echte
-EOS-Admin-/Installer-Anmeldung. System-UUID und Lizenzfeld werden erst nach dieser
-Rollenprüfung geladen. LIVE, Einstellungen, AppCenter, Simulation und alle anderen
-lizenzpflichtigen Bereiche bleiben bis zu einer gültigen Lizenz gesperrt.
-
-Nach erfolgreichem Speichern wird die Lizenz sofort geprüft und in der laufenden
-Adapterinstanz übernommen; ein normaler Adapterneustart ist dafür nicht erforderlich.
+RC68 bleibt ein Feldtestkandidat. Die spätere 1.0.0-Stable-Freigabe erfolgt erst nach den realen §14a-, Ladepark-, Kommunikations- und Dauerbetriebstests.

@@ -31,6 +31,7 @@ const REQUIRED_COMMANDS = [
   'npm run test:safety-module-deactivate',
   'npm run test:para14a-central-constraint',
   'npm run test:para14a-eebus-direct-api',
+  'npm run test:rc68-para14a-communication-fallback',
   'npm run test:charging-infrastructure-budget',
   'npm run test:npm-version-free-guard',
   'npm run test:npm-version-free-runtime',

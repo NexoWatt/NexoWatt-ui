@@ -1786,7 +1786,7 @@
           <div class="nw-config-item">
             <div class="nw-config-item__left">
               <div class="nw-config-item__title">Maximales Alter Aktiv-Signal (s)</div>
-              <div class="nw-config-item__subtitle">Nach Ablauf gilt die unten gewählte sichere Stale-Policy.</div>
+              <div class="nw-config-item__subtitle">Nach Ablauf begrenzt EOS lokal auf Pmin,14a; keine unbegrenzte Freigabe und kein pauschaler 0-W-Stopp.</div>
             </div>
             <div class="nw-config-item__right">
               <input id="para14aSignalMaxAgeSec" class="nw-config-input" type="number" min="1" max="300" step="1" value="30"/>
@@ -1796,13 +1796,13 @@
           <div class="nw-config-item">
             <div class="nw-config-item__left">
               <div class="nw-config-item__title">Verhalten bei veraltetem Signal</div>
-              <div class="nw-config-item__subtitle">Empfohlen: eine zuletzt aktive Begrenzung halten; eine alte Freigabe aktiviert keine Begrenzung neu.</div>
+              <div class="nw-config-item__subtitle">Standard: lokaler Mindestleistungs-Fallback. Netz-, Stations-, Phasen- und Safety-Grenzen bleiben übergeordnet.</div>
             </div>
             <div class="nw-config-item__right">
               <select id="para14aStalePolicy" class="nw-config-input">
-                <option value="hold-active">Letzte aktive Begrenzung halten</option>
-                <option value="force-active">Bei stale sicher begrenzen</option>
-                <option value="release">Bei stale freigeben (nicht empfohlen)</option>
+                <option value="local-pmin">Lokaler Pmin-Fallback (Standard)</option>
+                <option value="hold-active">Letzte aktive Begrenzung halten, sonst Pmin</option>
+                <option value="force-active">Bei stale sicher auf Pmin begrenzen</option>
               </select>
             </div>
           </div>

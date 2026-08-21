@@ -8804,8 +8804,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     ic.para14aMinPerDeviceW = Number.isFinite(min) ? Math.max(4200, Math.round(min)) : 4200;
     const signalMaxAgeSec = Number(ic.para14aSignalMaxAgeSec);
     ic.para14aSignalMaxAgeSec = (Number.isFinite(signalMaxAgeSec) && signalMaxAgeSec >= 1) ? Math.min(300, Math.round(signalMaxAgeSec)) : 30;
-    const stalePolicy = String(ic.para14aStalePolicy || 'hold-active').trim().toLowerCase();
-    ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(stalePolicy) ? stalePolicy : 'hold-active';
+    const stalePolicy = String(ic.para14aStalePolicy || 'local-pmin').trim().toLowerCase();
+    ic.para14aStalePolicy = stalePolicy === 'release'
+      ? 'local-pmin'
+      : (['local-pmin', 'hold-active', 'force-active'].includes(stalePolicy) ? stalePolicy : 'local-pmin');
     ic.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
 
     ic.para14aActiveId = (typeof ic.para14aActiveId === 'string') ? ic.para14aActiveId.trim() : '';
@@ -9118,7 +9120,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.para14aMode) els.para14aMode.value = String(ic.para14aMode || 'ems');
     if (els.para14aMinPerDeviceW) els.para14aMinPerDeviceW.value = String(Number.isFinite(Number(ic.para14aMinPerDeviceW)) ? Math.round(Number(ic.para14aMinPerDeviceW)) : 4200);
     if (els.para14aSignalMaxAgeSec) els.para14aSignalMaxAgeSec.value = String(ic.para14aSignalMaxAgeSec || 30);
-    if (els.para14aStalePolicy) els.para14aStalePolicy.value = String(ic.para14aStalePolicy || 'hold-active');
+    if (els.para14aStalePolicy) els.para14aStalePolicy.value = String(ic.para14aStalePolicy || 'local-pmin');
     if (els.para14aLegacyDirectWritesEnabled) els.para14aLegacyDirectWritesEnabled.checked = ic.para14aLegacyDirectWritesEnabled === true;
     if (els.para14aActiveId) els.para14aActiveId.value = String(ic.para14aActiveId || '');
     if (els.para14aEmsSetpointWId) els.para14aEmsSetpointWId.value = String(ic.para14aEmsSetpointWId || '');
@@ -13507,7 +13509,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       patch.installerConfig.para14aMode = String(ic.para14aMode || 'ems');
       patch.installerConfig.para14aMinPerDeviceW = Math.round(Number(ic.para14aMinPerDeviceW) || 0);
       patch.installerConfig.para14aSignalMaxAgeSec = Math.max(1, Math.round(Number(ic.para14aSignalMaxAgeSec) || 30));
-      patch.installerConfig.para14aStalePolicy = String(ic.para14aStalePolicy || 'hold-active');
+      patch.installerConfig.para14aStalePolicy = String(ic.para14aStalePolicy || 'local-pmin');
       patch.installerConfig.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
       patch.installerConfig.para14aActiveId = String(ic.para14aActiveId || '').trim();
       patch.installerConfig.para14aEmsSetpointWId = String(ic.para14aEmsSetpointWId || '').trim();
@@ -16508,8 +16510,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   if (els.para14aStalePolicy) {
     els.para14aStalePolicy.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
-      const value = String(els.para14aStalePolicy.value || 'hold-active');
-      ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(value) ? value : 'hold-active';
+      const value = String(els.para14aStalePolicy.value || 'local-pmin');
+      ic.para14aStalePolicy = ['local-pmin', 'hold-active', 'force-active'].includes(value) ? value : 'local-pmin';
     });
   }
   if (els.para14aLegacyDirectWritesEnabled) {

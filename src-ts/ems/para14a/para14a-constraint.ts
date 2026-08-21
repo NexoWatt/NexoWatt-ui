@@ -8,7 +8,7 @@
  */
 
 export type Para14aMode = 'direct' | 'ems';
-export type Para14aStalePolicy = 'hold-active' | 'release' | 'force-active';
+export type Para14aStalePolicy = 'local-pmin' | 'hold-active' | 'force-active';
 
 export interface Para14aSignalInput {
   enabled: boolean;
@@ -64,6 +64,12 @@ export interface Para14aConstraintInput {
   externalTotalSetpointW?: number | null;
   forceZero?: boolean;
   emergencyStop?: boolean;
+  /**
+   * Lokaler Kommunikations-Fallback: Der Netzbetreiber-/CLS-Kanal ist nicht
+   * frisch. EOS begrenzt den netzwirksamen Bezug auf Pmin,14a, lässt aber
+   * jeden einzelnen Ladepunkt höchstens mit der Basis-Mindestleistung starten.
+   */
+  communicationFallback?: boolean;
   evcs?: Para14aEvcsInput[];
   consumers?: Para14aConsumerInput[];
 }
@@ -81,6 +87,7 @@ export interface Para14aConstraintSnapshot {
   active: boolean;
   forceZero: boolean;
   emergencyStop: boolean;
+  communicationFallbackActive: boolean;
   source: string;
   mode: Para14aMode;
   constraintOnly: true;
@@ -133,7 +140,10 @@ function parseBool(value: unknown): boolean | null {
 
 function normalizePolicy(value: unknown): Para14aStalePolicy {
   const text = String(value ?? '').trim().toLowerCase();
-  if (text === 'release') return 'release';
+  // Legacy `release` is unsafe for an enabled §14a installation: a broken
+  // communication channel must neither unlock unrestricted power nor force a
+  // complete 0-W stop. Migrate it deterministically to the local Pmin fallback.
+  if (text === 'local-pmin' || text === 'release') return 'local-pmin';
   if (text === 'force-active' || text === 'active') return 'force-active';
   return 'hold-active';
 }
@@ -149,8 +159,11 @@ export function resolvePara14aSignal(input: Para14aSignalInput): Para14aSignalRe
     return { active: false, fresh: true, stale: false, source: 'disabled', reason: 'feature-disabled', ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
   }
   if (!input.mapped) {
-    const active = input.assumeActiveWithoutSignal === true;
-    return { active, fresh: false, stale: true, source: active ? 'config' : 'no-signal', reason: active ? 'assume-active-without-signal' : 'activation-signal-not-mapped', ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
+    const active = input.assumeActiveWithoutSignal === true || policy === 'local-pmin' || policy === 'force-active';
+    const reason = policy === 'local-pmin'
+      ? 'local-pmin-no-signal'
+      : (active ? 'assume-active-without-signal' : 'activation-signal-not-mapped');
+    return { active, fresh: false, stale: true, source: active ? 'config' : 'no-signal', reason, ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
   }
 
   const parsed = parseBool(input.rawValue);
@@ -159,11 +172,11 @@ export function resolvePara14aSignal(input: Para14aSignalInput): Para14aSignalRe
     return { active: parsed === true, fresh: true, stale: false, source: 'dp', reason: parsed ? 'fresh-active' : 'fresh-inactive', ageMs, lastFreshActive: parsed, lastFreshTs: now, stalePolicy: policy };
   }
 
+  if (policy === 'local-pmin') {
+    return { active: true, fresh: false, stale: true, source: 'dp-stale', reason: 'stale-local-pmin', ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
+  }
   if (policy === 'force-active') {
     return { active: true, fresh: false, stale: true, source: 'dp-stale', reason: 'stale-force-active', ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
-  }
-  if (policy === 'release') {
-    return { active: false, fresh: false, stale: true, source: 'dp-stale', reason: 'stale-release', ageMs, lastFreshActive, lastFreshTs, stalePolicy: policy };
   }
   const active = lastFreshActive === true || parsed === true;
   const reason = lastFreshActive === true
@@ -238,6 +251,7 @@ function sumCaps(values: Array<number | null | undefined>): number {
 }
 
 export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): Para14aConstraintSnapshot {
+  const communicationFallbackActive = input.communicationFallback === true;
   const forceZero = input.forceZero === true || input.emergencyStop === true;
   const emergencyStop = input.emergencyStop === true;
   const active = input.active === true || forceZero;
@@ -368,8 +382,26 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     }
   }
 
+  // Im EMS-Betrieb ist Pmin,14a ein gemeinsames Budget. Bei einem lokalen
+  // Kommunikations-Fallback darf deshalb kein sekundärer GZF-Anteil (z. B.
+  // 3,36 kW bei zwei SteuVE) einen einzelnen AC-Ladepunkt unter seine
+  // technische Mindestleistung drücken. Jeder Ladepunkt erhält als lokales
+  // Geräte-Cap höchstens die 4,2-kW-Basis; das gemeinsame EVCS-/Gesamtbudget
+  // bleibt weiterhin die nach GZF berechnete Summe und verhindert eine
+  // Mehrfachnutzung.
+  const evcsFormulaCapW = units
+    .filter((unit) => unit.kind === 'evcs')
+    .reduce((sum, unit) => sum + positive(unit.capW), 0);
   const evcsCapsBySafe: Record<string, number> = {};
-  units.filter((unit) => unit.kind === 'evcs' && unit.evcsSafe).forEach((unit) => { evcsCapsBySafe[String(unit.evcsSafe)] = Math.round(unit.capW); });
+  units.filter((unit) => unit.kind === 'evcs' && unit.evcsSafe).forEach((unit) => {
+    const fallbackDeviceCapW = unit.installedW > 0
+      ? Math.min(baseW, unit.installedW)
+      : baseW;
+    const deviceCapW = communicationFallbackActive
+      ? fallbackDeviceCapW
+      : unit.capW;
+    evcsCapsBySafe[String(unit.evcsSafe)] = Math.max(0, Math.round(deviceCapW));
+  });
   const heatUnit = units.find((unit) => unit.kind === 'heat');
   const airUnit = units.find((unit) => unit.kind === 'airCondition');
   const heatSplit = splitGroupCap(positive(heatUnit?.capW), heatRows);
@@ -412,6 +444,7 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     active,
     forceZero,
     emergencyStop,
+    communicationFallbackActive,
     source: String(input.source || ''),
     mode,
     constraintOnly: true,
@@ -423,9 +456,9 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     primaryW: Math.round(primaryW),
     secondaryW: Math.round(secondaryW),
     evcsCapsBySafe,
-    evcsTotalCapW: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : sumCaps(Object.values(evcsCapsBySafe))) : null,
+    evcsTotalCapW: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : evcsFormulaCapW) : null,
     appCapsW: {
-      evcs: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : sumCaps(Object.values(evcsCapsBySafe))) : null,
+      evcs: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : evcsFormulaCapW) : null,
       storage: active && (storageRows.length || forceZero) ? Math.round(forceZero ? 0 : storageCap) : null,
       thermal: active && (heatRows.length || airRows.length || forceZero) ? Math.round(forceZero ? 0 : thermalCap) : null,
       heatingRod: active && (heatingRodRows.length || forceZero) ? Math.round(forceZero ? 0 : heatingRodCap) : null,

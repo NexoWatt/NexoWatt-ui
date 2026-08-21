@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/safety-envelope.ts
- * Quell-Hash: sha256:cfcd0096c17c859ac5c5dbf2fc811da32989122b5d17b403fa079ebedad74e6b
+ * Quell-Hash: sha256:78e31e0f8f1b5c0d688e1ab02b3ce1c8d9470a7641b328f43b90682e396dbe38
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -485,6 +485,9 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
             safetyReady: paraSafetyReady,
             localFailsafeActive: paraLocalFailsafe,
             fallbackSafe: paraFallbackSafe,
+            communicationFallbackActive: !!(p14aRuntime && p14aRuntime.communicationFallbackActive === true),
+            communicationFallbackReason: String(p14aRuntime && p14aRuntime.communicationFallbackReason || ''),
+            fallbackEvcsCapW: strictFiniteNumber(p14aRuntime && p14aRuntime.fallbackEvcsCapW, null),
             signalStatus: String(p14aRuntime && p14aRuntime.signalStatus || (paraEnabled ? 'missing' : 'disabled')),
             forceZero: paraForceZero,
             totalCapW: paraTotalCapW,

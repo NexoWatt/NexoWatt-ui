@@ -1,3 +1,12 @@
+## 0.8.193 - 2026-08-21
+
+- RC68 ersetzt den pauschalen 0-W-Safety-Stopp bei fehlendem, ungültigem oder veraltetem §14a-/CLS-/EEBUS-Signal durch einen lokalen Pmin,14a-Kommunikationsfallback. Es erfolgt weder eine unbegrenzte Freigabe noch eine unnötige Vollsperre.
+- Direktansteuerung begrenzt jeden steuerbaren Ladepunkt auf höchstens 4,2 kW netzwirksame Leistung. Im EOS-/EMS-Modus bleibt das gemeinsame Pmin,14a-Budget einschließlich Gleichzeitigkeitsfaktor erhalten; ein tatsächlich startbereiter Ladepunkt kann innerhalb dieses Gesamtbudgets bis 4,2 kW erhalten.
+- Netzanschluss-, Stations-, Phasen-, Geräte- und Safety-Grenzen bleiben immer stärker. Reicht der lokale Headroom nicht für die technische AC-Mindestleistung, setzt der bestehende Single Writer den Ladepunkt weiterhin sicher auf 0 W.
+- Lokale, physikalisch validierte PV-Leistung darf zusätzlich zum §14a-Netzanteil verwendet werden. Alte externe Setpoints werden während des Kommunikationsfallbacks nicht übernommen.
+- Die frühere unsichere Stale-Option `release` wird auf `local-pmin` migriert. AppCenter, Runtime und Safety-Envelope veröffentlichen den aktiven Kommunikationsfallback, den Grund und das wirksame EVCS-Budget.
+- Neuer RC68-Regressionsverbund prüft fehlende/stale Signale, frische Freigabe, EEBUS-Gateway-Failsafe, Direkt- und EMS-Modus, GZF-Verteilung, Netzanschluss-Headroom, lokale PV-Ergänzung und finalen Wallbox-Write.
+
 ## 0.8.192 - 2026-08-20
 
 - RC67: Lizenzaktivierung bleibt auf einem neuen, noch nicht lizenzierten EOS-System erreichbar, ist aber weiterhin strikt über `license.manage` auf Admin/Installer begrenzt.

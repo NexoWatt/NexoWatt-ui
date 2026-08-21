@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 131f4966ecce469a723eb39a86d3f561bcc518adbd00c20e9606ce3127a0b27c
+ * Original-Hash: f8f0f6dcb944bbfb7da49a95b1ef22fa85aaba2154196882521d97a4d3aa1adf
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:8bf69c1295face11c4e24ec4ddba718e2d00d51949e86249d332b1de7855a537
+ * Quell-Hash: sha256:c31674f3221de2d8d60da68e2d1e072a70eded05e03e4da8c960a4eef47b00e8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,31 +46,6 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/modules/para14a.js
- * Rolle im Projekt: §14a-Modul.
- * Zweck: Erfasst und verarbeitet §14a-relevante Vorgaben und Reports.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: EMS-Regelungsmodul: verarbeitet Konfiguration, States und Budgets für eine bestimmte Energie-Funktion.
- * Zusammenhänge:
- * - Wird von ems/module-manager.js initialisiert und zyklisch getickt.
- * - main.js veröffentlicht die entstehenden States und APIs.
- * Wartungshinweise:
- * - Keine UI-spezifische Logik einbauen; Ausgabe über States/API bereitstellen.
- */
-
 'use strict';
 
 const { BaseModule } = require('./base');
@@ -1345,6 +1320,9 @@ class Para14aModule extends BaseModule {
         await mk('para14a.forceZero', '§14a erzwingt 0 W', 'boolean', 'indicator', false);
         await mk('para14a.emergencyStop', '§14a Sicherheitsstopp', 'boolean', 'indicator', false);
         await mk('para14a.localFailsafeActive', 'Lokaler §14a-Failsafe aktiv', 'boolean', 'indicator', false);
+        await mk('para14a.communicationFallbackActive', '§14a Kommunikations-Fallback aktiv', 'boolean', 'indicator', false);
+        await mk('para14a.communicationFallbackReason', '§14a Kommunikations-Fallback Grund', 'string', 'text', false);
+        await mk('para14a.fallbackEvcsCapW', '§14a Fallback EVCS-Gesamtbudget (W)', 'number', 'value.power', false, 'W');
         await mk('para14a.mode', '§14a Modus', 'string', 'text', false);
         await mk('para14a.controlSource', '§14a Quelle', 'string', 'text', false);
         await mk('para14a.minPerDeviceW', 'Mindestleistung je Verbraucher (W)', 'number', 'value.power', false, 'W');
@@ -1484,7 +1462,7 @@ class Para14aModule extends BaseModule {
             ageMs,
             maxAgeMs,
             assumeActiveWithoutSignal: cfg.para14aAssumeActiveWithoutSignal === true,
-            stalePolicy: cfg.para14aStalePolicy || 'hold-active',
+            stalePolicy: cfg.para14aStalePolicy || 'local-pmin',
             lastFreshActive: this._signalMemory.lastFreshActive,
             lastFreshTs: this._signalMemory.lastFreshTs,
             nowMs: Date.now(),
@@ -1497,42 +1475,7 @@ class Para14aModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: Methode `_computeDistribution`
-     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    _computeDistribution({ mode, minPerDeviceW, evcsCount, hasWP, hasKlima, pSumWP, pSumKlima, externalTotalSetpointW }) {
-        const baseW = Math.max(0, minPerDeviceW);
-        const nSteuVE = Math.max(0, Math.round(evcsCount)) + (hasWP ? 1 : 0) + (hasKlima ? 1 : 0);
-        const n = Math.max(1, nSteuVE);
-        const gzf = getGzf(n);
 
-        const big = (pSumWP > 11000) || (pSumKlima > 11000);
-        const primaryW = (mode === 'ems' && big)
-            ? Math.max(0, Math.max(0.4 * pSumWP, 0.4 * pSumKlima))
-            : baseW;
-
-        const secondaryW = (n > 1) ? (gzf * baseW) : 0;
-
-        const pMinW = primaryW + (n - 1) * secondaryW;
-
-        // In EMS mode, a Netzbetreiber/Steuerbox may provide an explicit total setpoint.
-        // If present, we use it as the effective total budget. Otherwise we use the computed minimum.
-        const totalBudgetW = (mode === 'ems' && typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW) && externalTotalSetpointW >= 0)
-            ? Math.max(pMinW, externalTotalSetpointW)
-            : pMinW;
-
-        return { nSteuVE: n, gzf, pMinW, primaryW, secondaryW, totalBudgetW };
-    }
-
-    /**
-     * Code-Teil: Methode `tick`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
     /**
      * Wird aufgerufen, wenn die §14a-App im AppCenter deaktiviert wird. Die letzte
      * aktive Begrenzung darf dann nicht im zentralen Budget weiterleben.
@@ -1544,6 +1487,9 @@ class Para14aModule extends BaseModule {
             forceZero: false,
             emergencyStop: false,
             localFailsafeActive: false,
+            communicationFallbackActive: false,
+            communicationFallbackReason: '',
+            fallbackEvcsCapW: null,
             mode: '',
             source: 'module-disabled',
             totalCapW: null,
@@ -1563,6 +1509,9 @@ class Para14aModule extends BaseModule {
             await this._setStateIfChanged('para14a.forceZero', false);
             await this._setStateIfChanged('para14a.emergencyStop', false);
             await this._setStateIfChanged('para14a.localFailsafeActive', false);
+            await this._setStateIfChanged('para14a.communicationFallbackActive', false);
+            await this._setStateIfChanged('para14a.communicationFallbackReason', 'module-disabled');
+            await this._setStateIfChanged('para14a.fallbackEvcsCapW', 0);
             await this._setStateIfChanged('para14a.signalFresh', false);
             await this._setStateIfChanged('para14a.signalAgeMs', null);
             await this._setStateIfChanged('para14a.signalStatus', 'module-disabled');
@@ -1640,34 +1589,58 @@ class Para14aModule extends BaseModule {
             enableId: load.enableId,
         }));
         const consumers = automaticConsumers.concat(manualConsumers);
+        const gatewayLocalFailsafeActive = !!(directIngress && directIngress.localFailsafeActive === true);
+        // Ein aktiviertes §14a-Modul ohne frisches Signal darf weder die gesamte
+        // Ladung auf 0 W verriegeln noch unbeschränkt freigeben. EOS aktiviert
+        // stattdessen lokal Pmin,14a. Das gilt für fehlende Mappings, ungültige
+        // Werte, abgelaufene DP-Signale und einen unterbrochenen EEBUS-/CLS-Kanal.
+        const communicationFallbackActive = !!(
+            cfg.para14a
+            && (signal.fresh !== true || gatewayLocalFailsafeActive)
+        );
+        const communicationFallbackReason = communicationFallbackActive
+            ? `local-pmin:${String(
+                gatewayLocalFailsafeActive
+                    ? (directIngress && (directIngress.status || directIngress.reason) || 'gateway-local-failsafe')
+                    : (signal.reason || 'signal-not-fresh'),
+            )}`
+            : '';
+        const effectiveSignalActive = signal.active === true || communicationFallbackActive;
+        const effectiveSignalSource = communicationFallbackActive
+            ? `local-pmin-fallback:${String(signal.source || 'unknown')}`
+            : String(signal.source || '');
+
         const directLimitW = finiteOrNull(directIngress && directIngress.limitW);
-        const directTotalSetpointW = directIngress && signal.active
+        const directTotalSetpointW = !communicationFallbackActive && directIngress && signal.active
             && directLimitW !== null
             && directLimitW >= 0
             ? directLimitW
             : null;
-        const mappedTotalSetpointRaw = signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
+        const mappedTotalSetpointRaw = !communicationFallbackActive && signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
             ? this.dp.getNumberFresh(this._emsSetpointDpKey, setpointMaxAgeMs, null)
             : null;
         const mappedTotalSetpointW = finiteOrNull(mappedTotalSetpointRaw);
-        const externalTotalSetpointW = directTotalSetpointW !== null
-            ? directTotalSetpointW
-            : mappedTotalSetpointW;
-        const localFailsafeActive = !!(directIngress && directIngress.localFailsafeActive === true);
+        // Bei Kommunikationsausfall wird bewusst kein alter/externer Sollwert
+        // übernommen. Die Constraint-Berechnung fällt dadurch exakt auf das
+        // lokale Pmin,14a zurück.
+        const externalTotalSetpointW = communicationFallbackActive
+            ? null
+            : (directTotalSetpointW !== null ? directTotalSetpointW : mappedTotalSetpointW);
+        const localFailsafeActive = gatewayLocalFailsafeActive || communicationFallbackActive;
 
         // §14a ist ein Mindestleistungs-/Netzbezugsvertrag und kein Not-Aus.
         // Ein externer Wert von 0 W sowie ein veraltetes Kommunikationssignal
-        // werden durch die Constraint-Berechnung auf Pmin,14a bzw. den letzten
-        // gültigen Vertrag zurückgeführt. Ein echter 0-W-Stopp gehört ausschließlich
-        // zum separaten EOS-Safety-Envelope und darf nicht als §14a protokolliert
-        // oder verteilt werden.
+        // werden durch die Constraint-Berechnung auf Pmin,14a zurückgeführt.
+        // Ein echter 0-W-Stopp gehört ausschließlich zum separaten EOS-Safety-
+        // Envelope und darf nicht als §14a protokolliert oder verteilt werden.
         const forceZero = false;
         const emergencyStop = false;
         const constraint = buildPara14aConstraintSnapshot({
-            active: signal.active,
+            active: effectiveSignalActive,
             forceZero,
             emergencyStop,
-            source: signal.source,
+            communicationFallback: communicationFallbackActive,
+            source: effectiveSignalSource,
             mode,
             minPerDeviceW,
             externalTotalSetpointW,
@@ -1675,16 +1648,13 @@ class Para14aModule extends BaseModule {
             consumers,
         });
 
-        const staleFallbackKnown = signal.stale === true && (
-            localFailsafeActive
-            || signal.stalePolicy === 'force-active'
-            || signal.lastFreshActive === true
-            || signal.lastFreshActive === false
+        const fallbackSafe = !!(
+            communicationFallbackActive
+            && constraint.active === true
+            && typeof constraint.totalCapW === 'number'
+            && Number.isFinite(constraint.totalCapW)
+            && constraint.totalCapW > 0
         );
-        const fallbackSafe = !!(staleFallbackKnown && (
-            constraint.active !== true
-            || (typeof constraint.totalCapW === 'number' && Number.isFinite(constraint.totalCapW) && constraint.totalCapW > 0)
-        ));
 
         this.adapter._para14a = {
             enabled: !!cfg.para14a,
@@ -1692,8 +1662,8 @@ class Para14aModule extends BaseModule {
             signalFresh: signal.fresh,
             signalStale: signal.stale,
             signalAgeMs: signal.ageMs,
-            signalStatus: signal.reason,
-            stalePolicy: signal.stalePolicy,
+            signalStatus: communicationFallbackActive ? communicationFallbackReason : signal.reason,
+            stalePolicy: communicationFallbackActive ? 'local-pmin' : signal.stalePolicy,
             lastFreshActive: typeof signal.lastFreshActive === 'boolean' ? signal.lastFreshActive : null,
             fallbackSafe,
             signalMaxAgeMs,
@@ -1701,6 +1671,9 @@ class Para14aModule extends BaseModule {
             forceZero: constraint.forceZero === true,
             emergencyStop: constraint.emergencyStop === true,
             localFailsafeActive,
+            communicationFallbackActive,
+            communicationFallbackReason,
+            fallbackEvcsCapW: communicationFallbackActive ? constraint.evcsTotalCapW : null,
             failsafeLimitW: directIngress ? finiteOrNull(directIngress.failsafeLimitW) : null,
             emsSetpointW: Number.isFinite(Number(externalTotalSetpointW)) ? Number(externalTotalSetpointW) : 0,
             totalBudgetW: constraint.totalCapW,
@@ -1721,8 +1694,11 @@ class Para14aModule extends BaseModule {
         await this._setStateIfChanged('para14a.forceZero', constraint.forceZero === true);
         await this._setStateIfChanged('para14a.emergencyStop', constraint.emergencyStop === true);
         await this._setStateIfChanged('para14a.localFailsafeActive', localFailsafeActive);
+        await this._setStateIfChanged('para14a.communicationFallbackActive', communicationFallbackActive);
+        await this._setStateIfChanged('para14a.communicationFallbackReason', communicationFallbackActive ? communicationFallbackReason : '');
+        await this._setStateIfChanged('para14a.fallbackEvcsCapW', communicationFallbackActive ? Math.round(num(constraint.evcsTotalCapW, 0)) : 0);
         await this._setStateIfChanged('para14a.mode', constraint.mode);
-        await this._setStateIfChanged('para14a.controlSource', String(signal.source || ''));
+        await this._setStateIfChanged('para14a.controlSource', effectiveSignalSource);
         await this._setStateIfChanged('para14a.minPerDeviceW', Math.round(minPerDeviceW));
         await this._setStateIfChanged('para14a.nSteuVE', constraint.nSteuVE);
         await this._setStateIfChanged('para14a.gzf', constraint.gzf);
@@ -1737,8 +1713,8 @@ class Para14aModule extends BaseModule {
         await this._setStateIfChanged('para14a.customCapW', Math.round(num(constraint.appCapsW.custom, 0)));
         await this._setStateIfChanged('para14a.signalFresh', signal.fresh);
         await this._setStateIfChanged('para14a.signalAgeMs', signal.ageMs === null ? null : Math.round(signal.ageMs));
-        await this._setStateIfChanged('para14a.signalStatus', signal.reason);
-        await this._setStateIfChanged('para14a.stalePolicy', signal.stalePolicy);
+        await this._setStateIfChanged('para14a.signalStatus', communicationFallbackActive ? communicationFallbackReason : signal.reason);
+        await this._setStateIfChanged('para14a.stalePolicy', communicationFallbackActive ? 'local-pmin' : signal.stalePolicy);
         await this._setStateIfChanged('para14a.constraintOnly', !legacyDirectWritesEnabled);
         await this._setStateIfChanged('para14a.legacyDirectWritesEnabled', legacyDirectWritesEnabled);
         await this._setStateIfChanged('para14a.unmanagedConsumerCount', constraint.unmanagedConsumerCount);
@@ -1791,11 +1767,22 @@ class Para14aModule extends BaseModule {
             await this._setStateIfChanged(`${base}.status`, status);
         }
 
-        const debug = { constraint, signal, legacyDirectWritesEnabled, automaticConsumers, manualConsumers, consumerAudit };
+        const debug = {
+            constraint,
+            signal,
+            communicationFallbackActive,
+            communicationFallbackReason,
+            effectiveSignalActive,
+            effectiveSignalSource,
+            legacyDirectWritesEnabled,
+            automaticConsumers,
+            manualConsumers,
+            consumerAudit,
+        };
         await this._setStateIfChanged('para14a.debug', JSON.stringify(debug));
         const auditSnapshot = this._buildAuditSnapshot({
             active: constraint.active,
-            source: signal.source,
+            source: effectiveSignalSource,
             mode: constraint.mode,
             requestedTotalBudgetW: num(constraint.totalCapW, 0),
             effectiveEvcsCapW: num(constraint.evcsTotalCapW, 0),
