@@ -1,13 +1,12 @@
-NexoWatt EOS 0.8.193 RC68 – §14a Kommunikations-Fallback
+NexoWatt EOS 0.8.194 RC69 – Ladepunkt-Feedback im Systemstatus
 
-1. ZIP vollständig in einen frischen Projektordner entpacken.
+1. ZIP vollständig in einen neuen, leeren Projektordner entpacken.
 2. Optional: npm ci
 3. npm publish
 
-Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.193 auf npm noch frei ist,
+Der Publish-Guard prüft:
+- ob Version 0.8.194 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
-- ob das Release-Artefaktmanifest exakt passt,
-- ob keine freigegebene Produktdatei verändert wurde.
+- ob das Release-Manifest und alle Produktdateien unverändert sind.
 
-RC68 bleibt ein Feldtestkandidat. Die spätere 1.0.0-Stable-Freigabe erfolgt erst nach den realen §14a-, Ladepark-, Kommunikations- und Dauerbetriebstests.
+RC69 ergänzt ausschließlich lesendes Kundenfeedback im Dashboard-Systemstatus. Die Lade-, §14a-, Speicher-, Safety- und Single-Writer-Regelung bleibt unverändert.

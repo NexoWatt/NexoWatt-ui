@@ -1,3 +1,12 @@
+## 0.8.194 - 2026-08-21
+
+- RC69 ergänzt im LIVE-Dashboard unter Systemstatus eine kompakte Ladepunktdiagnose. Für jeden aktiven Ladepunkt wird unmittelbar sichtbar, ob er lädt, begrenzt lädt, wartet oder gestoppt wurde und welcher Regelgrund wirksam ist.
+- Kundenverständliche Gründe für EOS Safety, §14a-Kommunikationsfallback, Netzanschluss-, Stations-, Phasen- und Peak-Shaving-Limits, PV-/Min+PV-Warten, Tarif- und Zeit-Ziel-Warten, Betriebsstrategien, RFID, Offline-/Fehlerzustände, Mappingprobleme, veraltete Messwerte und unbestätigte Wallboxbefehle ergänzt.
+- Die Systemstatuskarte verdichtet Ladepunktfehler und Wartezustände, markiert Warnungen beziehungsweise Fehler visuell und verlinkt direkt zum Lademanagement.
+- Aktive Gerätefilterung gehärtet: Audit-Ressourcen werden übernommen; reine Direct-Runtime-Fallbacks erscheinen nur mit ausdrücklichem `cfgEnabled=true`. Gelöschte, deaktivierte und alte Ladepunktdaten werden nicht erneut eingeblendet.
+- Ein echter EOS-Safety-Stopp hat in der Anzeige Vorrang vor einem noch vorhandenen positiven Istwert. Der RC68-§14a-Kommunikationsfallback wird dagegen korrekt als begrenzter Warnbetrieb mit wirksamem EVCS-Budget dargestellt.
+- Die neue Statusdarstellung ist vollständig lesend, dreisprachig (DE/NL/EN) und verändert keine Lade-, Speicher-, §14a-, Safety-, Arbitrierungs- oder Hardware-Writer-Logik.
+
 ## 0.8.193 - 2026-08-21
 
 - RC68 ersetzt den pauschalen 0-W-Safety-Stopp bei fehlendem, ungültigem oder veraltetem §14a-/CLS-/EEBUS-Signal durch einen lokalen Pmin,14a-Kommunikationsfallback. Es erfolgt weder eine unbegrenzte Freigabe noch eine unnötige Vollsperre.

@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 96018f83676c85fead23fbad93607c679cfe1256514e4e11934167fa739740f6
+ * Original-Hash: 5ef3d921db7e4bc573499d846eb83434f159e2b8bb05e6fb0edf0f22e239989e
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 238,
+  "expectedStepCount": 240,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -60,6 +60,8 @@
     "npm run test:para14a-central-constraint",
     "npm run test:para14a-eebus-direct-api",
     "npm run test:rc68-para14a-communication-fallback",
+    "npm run test:dashboard-lp-status-typing",
+    "npm run test:rc69-dashboard-lp-feedback",
     "npm run test:multiuse-storage-policy-only",
     "npm run test:storage-policy-core-cleanup",
     "npm run test:storage-control-app-separation",

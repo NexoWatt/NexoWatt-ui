@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.193",
+  "version": "0.8.194",
   "files": [
     {
       "path": "LICENSE",
@@ -222,6 +222,11 @@
       "path": "docs/RC68_PARA14A_COMMUNICATION_FALLBACK_DE.md",
       "size": 3138,
       "sha256": "6d25f52df04467eeabbefce814feb67765ad700b8aa00101ee3b81d6512e657a"
+    },
+    {
+      "path": "docs/RC69_DASHBOARD_LADEPUNKT_FEEDBACK_DE.md",
+      "size": 3111,
+      "sha256": "73171b8548c4bfd56d9057af4ed2b2389423baf1a62014828b4370028d861eb5"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -636,12 +641,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "6cb1b973e6b697ab78258a4c464fe69df2bf93df309f1a201a547ebc333cfe5d"
+      "sha256": "5ff139d964592968925002162af3a5d6a08c3ff2a8457e468b3628528723f5f6"
     },
     {
       "path": "io-package.json",
-      "size": 25521,
-      "sha256": "1ae1ae71dc6e49ff5cd783649a2f0d03caf8aabd2135df60835effe28d6a7cd1"
+      "size": 25590,
+      "sha256": "58722dcd86a9c84a15800d8c6654947d5bf3c6b3d61f1f435f90d9b9cb19a12a"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -886,7 +891,7 @@
     {
       "path": "main.js",
       "size": 1718938,
-      "sha256": "96018f83676c85fead23fbad93607c679cfe1256514e4e11934167fa739740f6"
+      "sha256": "5ef3d921db7e4bc573499d846eb83434f159e2b8bb05e6fb0edf0f22e239989e"
     },
     {
       "path": "www/admin-guard.js",
@@ -900,8 +905,13 @@
     },
     {
       "path": "www/app.js",
-      "size": 528744,
-      "sha256": "f78221e7dd63b6f71a4859dca767b856d4d4df9ec0060da3a57a399f314063db"
+      "size": 529080,
+      "sha256": "ed0bfde81603afd5c20a94e987fd77039b4b45fd983b6b7480a30a5c0cbace22"
+    },
+    {
+      "path": "www/dashboard-lp-status.js",
+      "size": 33014,
+      "sha256": "b33a372f5007e337a382a72fdae4f02373b17e91af4dd23813232a30a876d1bb"
     },
     {
       "path": "www/apple-touch-icon.png",
@@ -1016,7 +1026,7 @@
     {
       "path": "www/dc-station-display.js",
       "size": 53547,
-      "sha256": "ecb4bf5aff78eacf7c7db08359778285163ccbe7b8ee06c73f4f55eb50e5532f"
+      "sha256": "f73ec4c416b6a647d38843ce5f7feda1a838f891d3b5afdcd05391b230b31148"
     },
     {
       "path": "www/ems-apps-nvp-diagnostics.js",
@@ -1090,18 +1100,18 @@
     },
     {
       "path": "www/i18n/de.json",
-      "size": 1308,
-      "sha256": "cce44ed23888d020c2bae3a0d12cfb4726a5bf6a027622d6254c90c19fb048c5"
+      "size": 1490,
+      "sha256": "9fb548f4edb2c14f0eaf94803dc970e67d715059e7d7da80c0ad4523cb700331"
     },
     {
       "path": "www/i18n/en.json",
-      "size": 7998,
-      "sha256": "419764becd6d2ae9ad25b5ae4de6ed5c692097719e05f7650c34b7f3c02cad3a"
+      "size": 8188,
+      "sha256": "29fd80f548032301bfd4cf13d302e460bc008d8ba9e3d316d54fb47274ac11bd"
     },
     {
       "path": "www/i18n/nl.json",
-      "size": 49405,
-      "sha256": "c54c81ba97d518bc3ed558712e0dfcf3e5262ee4d65b5fd6d185b52ff40ca0e2"
+      "size": 49554,
+      "sha256": "5dc9469fc2ce3024ee6e5c6e5ea7a4437cc75cfabe2c98102f312840c498a56a"
     },
     {
       "path": "www/icons/battery.png",
@@ -1130,8 +1140,8 @@
     },
     {
       "path": "www/index.html",
-      "size": 48838,
-      "sha256": "121ccdbcbf81d46cdc9fd24fe08fd2bb8684e2f869a9822114e0f2b2b9cad7d8"
+      "size": 49356,
+      "sha256": "436dcd134b8c94525b6f7f25254c9e5105ca938f90e0da9f7d5d2f357d674c0f"
     },
     {
       "path": "www/license.html",
@@ -1156,7 +1166,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "08752089208aaf4a6773f62ee4727f6a5da091de784173d828d07079faf4d588"
+      "sha256": "564c1f14587ee7741365d132145b0155896cfb37b8c8832e0192956e3952ba9f"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1191,7 +1201,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "306529daaf545801c634879dfba0c42ab728c15b8df7f8187029f3b686fd1fdf"
+      "sha256": "b78aa785f994990f94f1c2d414063c20a1779bfb5120ec7ada693b16759b2214"
     },
     {
       "path": "www/nw-shell.js",
@@ -1201,7 +1211,7 @@
     {
       "path": "www/operating-strategies-appcenter.js",
       "size": 93113,
-      "sha256": "c26da905514d528ca8bb3cc3a32da05a5f146e43514268ff4bf3279090d2eb93"
+      "sha256": "b3880e5ef39210a4b6d25836623feb53737c881a6b13ea5d9c905fcf15ebff71"
     },
     {
       "path": "www/operating-strategies-rule-builder.js",
@@ -1325,13 +1335,13 @@
     },
     {
       "path": "www/styles.css",
-      "size": 336143,
-      "sha256": "bab33bf2b988fcae979c64d5b58631106f24e2940cb8ffd6cfff60494fa2f20f"
+      "size": 340184,
+      "sha256": "313afd07d78144d9367039265adf67060e22b626023cd6c5d291b571a19050b4"
     },
     {
       "path": "www/sw.js",
       "size": 4927,
-      "sha256": "03b21782dbcb0c7939a26be354de4881535464b6515797b5befc4118af4576fe"
+      "sha256": "457cb364bc7a3bc51d268347754ada7c2e74ae26e58752007c8e8b5eed2d17b8"
     },
     {
       "path": "www/tariff-report.html",

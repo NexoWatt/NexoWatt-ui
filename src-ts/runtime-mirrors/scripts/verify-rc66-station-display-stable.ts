@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0e9904db0e3f8c4ef76950db03c3d773d411b08a000072e850f2fb003544ab04
+ * Original-Hash: 561383c7d338258fb7c9762200daabef948ca993ec6c1a30d5933e9ad62f6ca9
  */
 
 /**
@@ -112,7 +112,11 @@ mustContain('www/dc-station-display.html', '/static/assets/nexowatt-eos-logo-wid
 mustContain('www/dc-station-display.html', 'rel="preload" as="image"', 'Logo-Preload');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', '/static/assets/nexowatt-eos-logo-wide.png', 'Logo in der Runtime');
 mustContain('src-ts/runtime-executables/www/sw.ts', 'assets/nexowatt-eos-logo-wide.png', 'Logo im Service-Worker-Cache');
-mustContain('src-ts/runtime-executables/www/sw.ts', "nexowatt-cache-v481", 'neue Service-Worker-Cachekennung');
+const swSource = read('src-ts/runtime-executables/www/sw.ts');
+const cacheVersionMatch = /nexowatt-cache-v(\d+)/.exec(swSource);
+if (!cacheVersionMatch || Number(cacheVersionMatch[1]) < 481) {
+  fail(`Service-Worker-Cachekennung muss mindestens v481 sein, gefunden: ${cacheVersionMatch ? cacheVersionMatch[0] : 'keine'}`);
+}
 
 mustNotContain('www/dc-station-display.html', 'CSV', 'CSV-Schaltfläche im HTML');
 mustNotContain('src-ts/runtime-executables/www/dc-station-display.ts', 'operator.csv', 'CSV-Link in der Stationsoberfläche');

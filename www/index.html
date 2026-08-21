@@ -106,6 +106,14 @@
         <span><b>Netzstatus</b><small id="sideGridStatus">Stabil</small></span>
       </div>
     </div>
+    <div class="nw-evcs-system-block hidden" id="sideEvcsStatusBlock">
+      <div class="nw-evcs-system-heading">
+        <span><span aria-hidden="true">🚗</span> <b>Ladepunkte</b></span>
+        <a href="evcs.html" id="sideEvcsStatusDetails">Details</a>
+      </div>
+      <div class="nw-evcs-system-summary" id="sideEvcsStatusSummary">Ladepunkte bereit</div>
+      <div class="nw-evcs-system-list" id="sideEvcsStatusList" aria-live="polite"></div>
+    </div>
   </section>
 
   <section class="card nw-panel nw-panel-overview">
@@ -994,6 +1002,7 @@
 </div>
 
 </main>
+<script src="/static/dashboard-lp-status.js"></script>
 <script src="/static/app.js"></script>
 
 <!-- Kundeneinstellungen liegen ausschließlich in settings.html. -->

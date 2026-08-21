@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:b57ee6e2dcbc731c52701e643665d04c9b5cad0ce8dbc3444a00f0e8bd6dd670
+ * Quell-Hash: sha256:77417ffc445391ef3fa9a937d94858602e9bcb4bd6e6c62a89becbac2521ad41
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1965,10 +1965,10 @@ function updateDashboardShellUi(data) {
 
   setText('sideStorage', Number.isFinite(soc) ? `${Math.round(soc)} %` : '-- %');
   setText('sideBatterySoc', Number.isFinite(soc) ? `${Math.round(soc)} %` : '-- %');
-  setText('sideEms', 'Aktiv');
-  const p14 = !!d('ems.core.para14aActive');
-  const peak = String(d('peakShaving.control.status') || '').trim();
-  setText('sideGridStatus', p14 ? '§14a aktiv' : (peak === 'active' ? 'Peak aktiv' : 'Stabil'));
+  const p14 = !!d('ems.core.para14aActive') || !!d('para14a.active'), peak = String(d('peakShaving.control.status') || '').trim(), safety = String(d('chargingManagement.audit.safetyStage') || '').trim(), p14Fallback = d('para14a.communicationFallbackActive') === true;
+  setText('sideEms', safety === 'EOS-SAFETY-STOP' ? 'Safety aktiv' : 'Aktiv');
+  setText('sideGridStatus', p14Fallback ? '§14a Fallback' : (p14 ? '§14a aktiv' : (peak === 'active' ? 'Peak aktiv' : 'Stabil')));
+  try { window.NexoWattLpStatusPresenter?.render(d, evcsAvailable); } catch (_eChargingStatus) {}
 
   setText('sideConsumptionTotal', formatFlowPower(Math.max(0, load)));
   setText('sideSelfConsumption', Number.isFinite(selfc) ? `${Math.round(selfc)} %` : '-- %');
