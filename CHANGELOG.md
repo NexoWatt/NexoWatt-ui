@@ -1,3 +1,11 @@
+## 0.8.195 - 2026-08-21
+
+- RC70 korrigiert die kompakte Ladepunktanzeige im LIVE-Dashboard: Angezeigt wird jetzt immer der vom Kunden gewählte Modus (`Auto`, `Boost`, `Min+PV` oder `PV`) und nicht mehr der interne Auto-Untermodus. Dadurch erscheint ein Ladepunkt im Auto-Modus nicht fälschlich als `PV`.
+- Der wirksame Auto-Untermodus bleibt für die Begründung erhalten. Ein Auto-Ladepunkt kann deshalb weiterhin korrekt „Wartet auf PV-Überschuss“ melden, während die Modusanzeige eindeutig `Auto` bleibt.
+- Der Link „Details“ wird nur noch angezeigt, wenn mindestens zwei aktive Ladepunkte vorhanden sind. Bei genau einem aktiven Ladepunkt wird der Link ausgeblendet, aus der Tastaturnavigation entfernt und besitzt kein Ziel mehr.
+- Deaktivierte oder alte Runtime-Ladepunkte beeinflussen die Sichtbarkeit des Details-Links nicht. Die Änderung ist vollständig lesend und verändert keine Lade-, Tarif-, §14a-, Speicher-, Betriebsstrategien-, Safety- oder Hardware-Writer-Logik.
+- Ein neuer Chromium-Regressionstest prüft Einzel- und Mehrladepunktdarstellung sowie die Trennung von Benutzer- und Auto-Untermodus.
+
 ## 0.8.194 - 2026-08-21
 
 - RC69 ergänzt im LIVE-Dashboard unter Systemstatus eine kompakte Ladepunktdiagnose. Für jeden aktiven Ladepunkt wird unmittelbar sichtbar, ob er lädt, begrenzt lädt, wartet oder gestoppt wurde und welcher Regelgrund wirksam ist.

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dc-station-display.ts
- * Quell-Hash: sha256:7ea3a7d5d509cd4e1a862be49ec248aedf8a1788683e9cd128dec2ad78dc4690
+ * Quell-Hash: sha256:dac3965850890c5245f1830e4418d0a025439069bea242b48feb42353ff332ba
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -427,7 +427,7 @@
             if (!token)
                 return;
             await fetchJson('/api/display/station/' + encodeURIComponent(token) + '/heartbeat', {
-                method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.194' }),
+                method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.195' }),
                 headers: { 'Content-Type': 'application/json' },
             });
         }
@@ -643,7 +643,7 @@
     </header>${bannerHtml(viewPayload, opts)}${renderStatusStrip(viewPayload)}${renderSummary(viewPayload)}
     <section class="nw-lp-section"><header><strong>${escapeHtml(t('connectors'))} (${connectors.length})</strong><div class="nw-status-legend"><span data-tone="charging">● ${escapeHtml(t('charging'))}</span><span data-tone="ready">● ${escapeHtml(t('ready'))}</span><span data-tone="inactive">● ${escapeHtml(t('inactive'))}</span><span data-tone="waiting">● ${escapeHtml(t('waiting'))}</span></div></header><div class="nw-connector-grid ${countClass} ${layoutClass}">${connectors.map((c) => renderConnector(c, station)).join('') || `<section class="nw-display-status"><h1>${escapeHtml(t('unavailable'))}</h1><p>${escapeHtml(t('noConnectors'))}</p></section>`}</div></section>
     <section class="nw-insights-grid">${renderDecisionPanel(viewPayload)}${renderWarningsPanel(viewPayload, opts)}</section>
-    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.194')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
+    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.195')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
         app.querySelectorAll('[data-command]').forEach((btn) => btn.addEventListener('click', () => {
             const extra = {};
             if (btn.hasAttribute('data-value'))

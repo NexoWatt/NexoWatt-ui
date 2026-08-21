@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b33a372f5007e337a382a72fdae4f02373b17e91af4dd23813232a30a876d1bb
+ * Original-Hash: ee04d77d07549fe05146983e6202b65a3f4adcb6efeafbca3eb19e2bcab0b710
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dashboard-lp-status.ts
- * Quell-Hash: sha256:01e2a519c688612a3ea5c4f4c92b2b122f838678cd571493d20cf8f09c37c89c
+ * Quell-Hash: sha256:4188efa4d8ebccb3e05385b1e8e5b51a92033911192f2812a1b685ffa291d307
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -474,6 +474,8 @@
                 continue;
             if (!hasAuditRuntime && (cfgEnabled !== true || !hasDirectRuntime))
                 continue;
+            const userMode = string(read('userMode', rawValue(raw, 'userMode', 'auto')), 'auto');
+            const effectiveMode = string(read('effectiveMode', rawValue(raw, 'effectiveMode', rawValue(raw, 'mode', userMode))), userMode);
             rows.push({
                 ...raw,
                 safe,
@@ -503,7 +505,9 @@
                 unavailableActive: bool(read('unavailableActive', rawValue(raw, 'unavailableActive', false))),
                 unavailableReason: string(read('unavailableReason', rawValue(raw, 'unavailableReason', ''))),
                 operationalBlocked: bool(read('operationalBlocked', false)),
-                mode: string(read('effectiveMode', rawValue(raw, 'mode', read('userMode', rawValue(raw, 'userMode', 'auto')))), 'auto'),
+                mode: userMode,
+                userMode,
+                effectiveMode,
                 reason: string(read('reason', rawValue(raw, 'reason', ''))),
                 safetyReason: string(rawValue(raw, 'safetyReason', '')),
                 limiter: string(rawValue(raw, 'limiter', '')),
@@ -560,7 +564,8 @@
             const connected = row.connected || connectedStates.includes(row.vehicleStateNormalized.toLowerCase());
             const rawReason = row.safetyReason || row.reason || row.applyStatus;
             const activeLimiterKey = limiterKey(row.limiter, rawReason);
-            const modeLabel = mode(row.mode);
+            const modeLabel = mode(row.userMode || row.mode);
+            const effectiveModeToken = string(row.effectiveMode || row.mode).trim().toLowerCase();
             const detailParts = [];
             let level = 'info';
             let headline = text('readyNoRequest');
@@ -667,11 +672,11 @@
                 if (detail)
                     detailParts.push(detail);
             }
-            else if (row.mode.toLowerCase() === 'pv') {
+            else if (effectiveModeToken === 'pv') {
                 level = 'info';
                 headline = text('pvWait');
             }
-            else if (row.mode.toLowerCase() === 'minpv') {
+            else if (['minpv', 'min+pv', 'min-pv'].includes(effectiveModeToken)) {
                 level = 'info';
                 headline = text('minPvWait');
             }
@@ -739,6 +744,7 @@
         const block = document.getElementById('sideEvcsStatusBlock');
         const list = document.getElementById('sideEvcsStatusList');
         const summaryElement = document.getElementById('sideEvcsStatusSummary');
+        const detailsLink = document.getElementById('sideEvcsStatusDetails');
         const panel = document.querySelector('.nw-panel-status');
         if (!block || !list || !summaryElement)
             return null;
@@ -747,6 +753,23 @@
             globalSafety: false, paraFallbackActive: false, summary: '', systemText: '', overallLevel: 'ok',
         };
         block.classList.toggle('hidden', !evcsAvailable || model.items.length === 0);
+        const detailsAvailable = evcsAvailable && model.items.length > 1;
+        if (detailsLink) {
+            detailsLink.hidden = !detailsAvailable;
+            detailsLink.classList.toggle('hidden', !detailsAvailable);
+            if (detailsAvailable) {
+                detailsLink.setAttribute('href', 'evcs.html');
+                detailsLink.removeAttribute('aria-hidden');
+                detailsLink.removeAttribute('aria-disabled');
+                detailsLink.removeAttribute('tabindex');
+            }
+            else {
+                detailsLink.removeAttribute('href');
+                detailsLink.setAttribute('aria-hidden', 'true');
+                detailsLink.setAttribute('aria-disabled', 'true');
+                detailsLink.tabIndex = -1;
+            }
+        }
         list.textContent = '';
         if (evcsAvailable && model.items.length > 0) {
             summaryElement.textContent = model.summary;
