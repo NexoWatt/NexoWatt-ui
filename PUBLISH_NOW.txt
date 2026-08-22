@@ -1,17 +1,15 @@
-NexoWatt EOS 0.8.195 RC70 – Dashboard-Ladepunktstatus
+NexoWatt EOS 0.8.196 RC71 – Forecast-Aware Auto Target Planner – Publish-Fix
 
 1. ZIP vollständig in einen neuen, leeren Projektordner entpacken.
-2. Optional: npm ci
-3. npm publish
+2. Im Projektordner ausführen: npm publish
 
 Der Publish-Guard prüft:
-- ob Version 0.8.195 auf npm noch frei ist,
+- ob Version 0.8.196 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
-- ob das Release-Manifest und alle Produktdateien unverändert sind.
+- ob das Release-Manifest exakt der package.json-files-Liste entspricht,
+- ob alle freigegebenen Produktdateien unverändert sind.
 
-RC70 korrigiert ausschließlich die lesende Ladepunktanzeige im LIVE-Dashboard:
-- Bei einem aktiven Ladepunkt ist „Details“ nicht verfügbar.
-- Ab zwei aktiven Ladepunkten führt „Details“ zur Lademanagement-Übersicht.
-- Die Modusanzeige zeigt den gewählten Kundenmodus, während der interne Auto-Untermodus nur zur Begründung verwendet wird.
-
-Lade-, Tarif-, §14a-, Speicher-, Betriebsstrategien-, Safety- und Single-Writer-Regelung bleiben unverändert.
+Wichtig:
+- Nicht die frühere RC71-ZIP verwenden.
+- In dieser Publish-Fix-ZIP wurden Manifest und npm-Dateiliste neu synchronisiert.
+- Die RC71-Runtime-Dateien für Forecast-Planer, Open-Meteo-Forecast und Forecast-Einstellungen sind im npm-Paket enthalten.
