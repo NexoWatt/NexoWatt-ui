@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.195",
+    "version": "0.8.196",
     "news": {
+      "0.8.196": {
+        "en": "Forecast-aware auto and target charging planner with optional Open-Meteo weather/PV source and datapoint fallback.",
+        "de": "Prognosegestützter Auto- und Zeit-Ziel-Planer mit optionaler Open-Meteo-Wetter-/PV-Quelle und Datenpunkt-Fallback.",
+        "nl": "Voorspellingsgestuurde auto- en doellader met optionele Open-Meteo bron en datapuntfallback."
+      },
       "0.8.195": {
         "de": "RC70 korrigiert die Ladepunktanzeige im LIVE-Dashboard: Der Status zeigt jetzt den vom Kunden gewählten Modus und nicht mehr den internen Auto-Untermodus. Ein Ladepunkt auf Auto erscheint daher nicht fälschlich als PV, während Gründe wie „Wartet auf PV-Überschuss“ weiterhin korrekt bleiben. Der Link „Details“ ist nur noch bei mindestens zwei aktiven Ladepunkten sichtbar; bei einem einzelnen Ladepunkt wird er vollständig deaktiviert. Die Änderung ist rein lesend und verändert keine Regelungs- oder Hardware-Writer-Logik.",
         "en": "RC70 corrects the charging-point display in the LIVE dashboard: the status now shows the customer-selected mode instead of the internal Auto submode. A charge point set to Auto therefore no longer appears incorrectly as PV, while reasons such as “Waiting for PV surplus” remain accurate. The Details link is now shown only when at least two active charge points exist; with a single charge point it is fully disabled. This is a read-only presentation change and does not alter control or hardware-writer logic.",
@@ -32,11 +37,6 @@
         "de": "RC65 härtet die wirtschaftliche Freigabe für Speicher und Ladepunkte: Bei aktiviertem variablem Netzentgelt darf NT einen aktiven teuren, veralteten oder unbekannten Dynamiktarif nicht mehr überstimmen. NT erlaubt Netzladen allein nur, wenn der Dynamiktarif deaktiviert ist; bei aktivem Dynamiktarif sind frische Zustände günstig oder neutral erforderlich. Bei ausgeschaltetem variablem Netzentgelt bleibt ein frischer günstiger Tarif die einzige wirtschaftliche Freigabe. Das Zeit-Ziel-Laden im Auto-Modus behält seinen Latest-Start-Override und darf eine Tarif-/Zeitfenstersperre erst bei gefährdeter Zielerreichung übersteuern; Netz-, Stations-, Phasen-, §14a-, Parkregler- und Safety-Grenzen bleiben zwingend.",
         "en": "RC65 hardens economic authorization for storage and charging points: with variable grid fees enabled, NT can no longer override an active expensive, stale or unknown dynamic tariff. NT authorizes grid charging by itself only when the dynamic tariff is disabled; with an active dynamic tariff, fresh cheap or neutral states are required. With variable grid fees disabled, a fresh cheap tariff remains the only economic authorization. Auto time-target charging keeps its latest-start override and may bypass a tariff/time-window lock only when goal completion is at risk; grid, station, phase, §14a, park-controller and safety limits remain mandatory.",
         "nl": "RC65 verhardt de economische vrijgave voor opslag en laadpunten: bij ingeschakelde variabele nettarieven mag NT een actief duur, verouderd of onbekend dynamisch tarief niet meer overrulen. NT staat netladen alleen zelfstandig toe wanneer het dynamische tarief is uitgeschakeld; bij een actief dynamisch tarief zijn verse goedkope of neutrale toestanden vereist. Met variabele nettarieven uit blijft een vers goedkoop tarief de enige economische vrijgave. Tijd-doelladen in Auto behoudt de latest-start-override en mag een tarief-/tijdvensterblokkade pas overrulen wanneer het doel anders niet wordt gehaald; net-, station-, fase-, §14a-, parkregelaar- en safety-grenzen blijven verplicht."
-      },
-      "0.8.189": {
-        "de": "RC64 korrigiert die Speicher-Netzladefreigabe: Ist das zeitvariable Netzentgelt aktiviert, gibt ausschließlich das aktuell aktive, manuell konfigurierte NT-/Quartalsfenster Netzladen frei; der dynamische Strompreis ist dabei keine zusätzliche Pflichtbedingung. Ist das variable Netzentgelt deaktiviert, erlaubt ein frischer günstiger dynamischer Tarif Netzladen auch ohne NT-Fenster. AppCenter-Freigabe, Speicherpriorität, Writer, Ladeleistung sowie Netz-, SoC- und Safety-Grenzen bleiben zwingend. Fehlende Zeitfenster bleiben fail-closed; PV-/NVP-Laden und die RC63-Availability-/RFID-Korrektur bleiben unverändert.",
-        "en": "RC64 corrects storage grid-charge authorization: when variable grid fees are enabled, only the currently active manually configured NT/quarter window authorizes grid charging; the dynamic electricity price is not an additional requirement. When variable grid fees are disabled, a fresh cheap dynamic tariff authorizes grid charging without an NT window. AppCenter permission, storage priority, writer, configured power and all grid, SoC and safety limits remain mandatory. Missing time windows fail closed; PV/NVP charging and the RC63 availability/RFID fix remain unchanged.",
-        "nl": "RC64 corrigeert de vrijgave voor netladen van opslag: wanneer variabele nettarieven zijn ingeschakeld, geeft alleen het actuele handmatig ingestelde NT-/kwartaalvenster netladen vrij; de dynamische stroomprijs is dan geen extra voorwaarde. Wanneer het variabele nettarief is uitgeschakeld, staat een vers goedkoop dynamisch tarief netladen zonder NT-venster toe. AppCenter-vrijgave, opslagprioriteit, writer, ingesteld vermogen en alle net-, SoC- en veiligheidsgrenzen blijven verplicht. Ontbrekende tijden blijven fail-closed; PV-/NVP-laden en de RC63 availability-/RFID-fix blijven ongewijzigd."
       }
     },
     "title": "NexoWatt EOS",
@@ -430,7 +430,18 @@
         "timeoutMs": 2000,
         "pollIntervalMs": 1000
       }
-    }
+    },
+    "forecastSourceMode": "auto",
+    "openMeteoWeatherEnabled": true,
+    "openMeteoPvEnabled": false,
+    "forecastFallbackToDatapoints": true,
+    "openMeteoLatitude": 0,
+    "openMeteoLongitude": 0,
+    "openMeteoTimezone": "auto",
+    "forecastUpdateIntervalMin": 30,
+    "forecastHorizonHours": 48,
+    "pvForecastArrays": [],
+    "pvForecastCurveDp": ""
   },
   "instanceObjects": [
     {

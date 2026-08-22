@@ -255,7 +255,7 @@ export function buildChargingManagementPrep(input: ChargingManagementPrepInput):
   if (enabledWallboxes.length && !enabledWallboxes.some((w) => w.hasAnySetpoint)) blockers.push('enabled-wallboxes-without-setpoint');
   for (const wb of wallboxes) for (const issue of wb.mappingIssues) warnings.push(`${wb.key}:${issue}`);
   const totalConfiguredMaxPowerW = wallboxes.reduce((sum, wb) => sum + Math.max(0, wb.maxPowerW || 0), 0);
-  const totalRuntimeTargetPowerW = positiveNumber(input.totalTargetPowerW);
+  let totalRuntimeTargetPowerW = positiveNumber(input.totalTargetPowerW);
   const totalActualPowerW = positiveNumber(input.totalPowerW);
   const onlineWallboxes = positiveNumber(input.onlineWallboxes);
   const visibleEvcs = wallboxes.length > 0 && wallboxes.some((w) => w.enabled || w.hasAnySetpoint);
@@ -312,3 +312,24 @@ export function compareChargingPrepWithRuntime(runtime: Record<string, unknown>,
     mismatches,
   };
 }
+
+  // RC71: Forecast-aware economic gate. This can only defer an existing request;
+  // final network, station, phase, §14a and safety limits remain authoritative.
+  const __nwForecastAutoPlan = planForecastAwareAuto({
+    nowMs: Date.now(),
+    currentRequestW: Number(totalRuntimeTargetPowerW) || 0,
+    forecast: getForecastSnapshot(),
+    context: {
+      input: typeof input === 'undefined' ? undefined : input,
+      wallbox: typeof wallbox !== 'undefined' ? wallbox : (typeof wb !== 'undefined' ? wb : (typeof item !== 'undefined' ? item : undefined)),
+      config: typeof config === 'undefined' ? undefined : config,
+      state: typeof state === 'undefined' ? undefined : state,
+      target: typeof target === 'undefined' ? undefined : target,
+      targetPlan: typeof targetPlan === 'undefined' ? undefined : targetPlan,
+      tariff: typeof tariff === 'undefined' ? undefined : tariff,
+      priceForecast: typeof priceForecast === 'undefined' ? undefined : priceForecast,
+      pvForecast: typeof pvForecast === 'undefined' ? undefined : pvForecast,
+      operatingStrategyIntent: typeof operatingStrategyIntent === 'undefined' ? undefined : operatingStrategyIntent
+    }
+  });
+  totalRuntimeTargetPowerW = Math.min(Math.max(0, Number(totalRuntimeTargetPowerW) || 0), Math.max(0, Number(__nwForecastAutoPlan.requestedPowerW) || 0));

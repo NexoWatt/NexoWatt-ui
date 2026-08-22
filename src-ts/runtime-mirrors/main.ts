@@ -66,6 +66,7 @@
 
 
 'use strict';
+const { startForecastRuntime } = require('./ems/services/open-meteo-forecast-runtime');
 
 
 /**
@@ -11762,6 +11763,7 @@ async migrateNativeConfig() {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 async onReady() {
+    try { this._nwForecastRuntime = startForecastRuntime(this); } catch (e) { this.log.warn(`Forecast runtime start failed: ${e && e.message || e}`); }
     try {
       await this.migrateNativeConfig();
       await this.ensureInfoConnectionState();
@@ -33946,6 +33948,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   onUnload(callback) {
+    try { if (this._nwForecastRuntime) this._nwForecastRuntime.stop(); } catch (e) { /* best effort */ }
     // Der Guard muss vor jedem asynchronen State-/Timer-Aufruf gesetzt werden. Besonders
     // info.connection und noch laufende StateChange-/EMS-Callbacks dürfen beim Shutdown
     // keinen neuen adapter.setTimeout mehr anlegen.

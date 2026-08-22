@@ -1,3 +1,8 @@
+## 0.8.196 (2026-08-21)
+
+- Forecast-aware Auto/target charging planner: exact configured deadline, 15-minute PV/price slot selection, deadline override, optional modules fail gracefully.
+- Settings: optional Open-Meteo weather/PV forecast with multiple PV arrays and AppCenter datapoint fallback.
+
 ## 0.8.195 - 2026-08-21
 
 - RC70 korrigiert die kompakte Ladepunktanzeige im LIVE-Dashboard: Angezeigt wird jetzt immer der vom Kunden gewählte Modus (`Auto`, `Boost`, `Min+PV` oder `PV`) und nicht mehr der interne Auto-Untermodus. Dadurch erscheint ein Ladepunkt im Auto-Modus nicht fälschlich als `PV`.
