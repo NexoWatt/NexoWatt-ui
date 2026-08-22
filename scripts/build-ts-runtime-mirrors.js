@@ -45,6 +45,8 @@ const EXCLUDE_FILES = new Set([
   'scripts/ts-scaffold-rules.js',
   // Eigener, selbstvalidierender Release-Runner; kein produktiver Adapter-Runtimepfad.
   'scripts/publish-check-runner.js',
+  // RC73: reiner Release-/Diagnosevertragstest, keine produktive Adapter-Runtime.
+  'scripts/verify-rc73-ems-admin-overview.js',
 ]);
 
 /**

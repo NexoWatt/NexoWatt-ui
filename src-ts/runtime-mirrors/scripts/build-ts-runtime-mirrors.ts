@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 113fe904bbbf61a52eb158046e57c1cd0e633ccc920109ed8a13024e679ad767
+ * Original-Hash: e06260dcc6785858285b8ce13101830ab9389102eade04c82c1c19c42f55a304
  */
 
 /**
@@ -75,6 +75,8 @@ const EXCLUDE_FILES = new Set([
   'scripts/ts-scaffold-rules.js',
   // Eigener, selbstvalidierender Release-Runner; kein produktiver Adapter-Runtimepfad.
   'scripts/publish-check-runner.js',
+  // RC73: reiner Release-/Diagnosevertragstest, keine produktive Adapter-Runtime.
+  'scripts/verify-rc73-ems-admin-overview.js',
 ]);
 
 /**

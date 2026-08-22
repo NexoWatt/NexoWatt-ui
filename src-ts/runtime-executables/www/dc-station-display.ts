@@ -361,7 +361,7 @@
     try {
       if (!token) token = getToken(); if (!token) return;
       await fetchJson('/api/display/station/' + encodeURIComponent(token) + '/heartbeat', {
-        method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.197' }),
+        method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.198' }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (_e) {}
@@ -529,7 +529,7 @@
     </header>${bannerHtml(viewPayload, opts)}${renderStatusStrip(viewPayload)}${renderSummary(viewPayload)}
     <section class="nw-lp-section"><header><strong>${escapeHtml(t('connectors'))} (${connectors.length})</strong><div class="nw-status-legend"><span data-tone="charging">● ${escapeHtml(t('charging'))}</span><span data-tone="ready">● ${escapeHtml(t('ready'))}</span><span data-tone="inactive">● ${escapeHtml(t('inactive'))}</span><span data-tone="waiting">● ${escapeHtml(t('waiting'))}</span></div></header><div class="nw-connector-grid ${countClass} ${layoutClass}">${connectors.map((c) => renderConnector(c, station)).join('') || `<section class="nw-display-status"><h1>${escapeHtml(t('unavailable'))}</h1><p>${escapeHtml(t('noConnectors'))}</p></section>`}</div></section>
     <section class="nw-insights-grid">${renderDecisionPanel(viewPayload)}${renderWarningsPanel(viewPayload, opts)}</section>
-    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.197')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
+    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.198')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
 
     app.querySelectorAll<HTMLElement>('[data-command]').forEach((btn) => btn.addEventListener('click', () => {
       const extra: AnyRecord = {}; if (btn.hasAttribute('data-value')) extra.value = btn.getAttribute('data-value') === 'true'; if (btn.hasAttribute('data-enabled')) extra.enabled = btn.getAttribute('data-enabled') === 'true';

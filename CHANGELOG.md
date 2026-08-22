@@ -1,3 +1,12 @@
+## 0.8.198 - 2026-08-22
+
+- RC73 ergänzt unter `info.adminOverview.*` einen versionierten read-only EMS-Diagnosevertrag für die neue Live-Kachel des NexoWatt EOS Admin.
+- Zentrales Budget, aktive Bindung, Ladepunkte, Speicher/Speicherfarm, §14a einschließlich Kommunikationsfallback, Tarif, PV-Prognose, Peak-Shaving und Safety werden in einem kompakten Snapshot zusammengeführt.
+- Maximal acht relevante Ereignisse werden für das Cockpit bereitgestellt; der bestehende Ringpuffer bleibt auf 60 verdichtete Einträge begrenzt.
+- Veröffentlichung erfolgt nur bei Änderung oder spätestens alle fünf Sekunden. Fehlende optionale Module werden ausgeblendet und blockieren weder Diagnose noch EMS.
+- Der neue Vertrag besitzt keine Hardware-, Modbus-, OCPP-, Speicher- oder Setpoint-Schreiboperation und verändert keinen bestehenden Regler oder Single-Writer-Pfad.
+- Neue RC73-Regressionsprüfung deckt Normalbetrieb, wartende/ladende Ladepunkte, Speicherfarm, Budgets, Tarif/PV-Prognose, §14a-Fallback, Safety und Ereignisgrenzen ab.
+
 ## 0.8.197 - 2026-08-22
 
 - RC72 verankert die Wetter-/PV-Prognose fest im sichtbaren Kundenbereich **Einstellungen → Wetter-App**. Alle Werte werden über den normalen `settings.*`-/`/api/set`-Vertrag gespeichert; die fehleranfällige dynamische Einfügung ist entfallen.

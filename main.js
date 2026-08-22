@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:b5aadc0ede4b7cce22f934f283bbd76931287f2354ecc0ceef4ac05e52fd470a
+ * Quell-Hash: sha256:5e7247ce13add301cd3cbf3c3edead2c970b200128b865f2dfb43538cb8ce10a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -37,7 +37,7 @@ const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnost
 const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
-const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast');
+const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast'), { AdminOverviewPublisher } = require('./ems/services/admin-overview-publisher');
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
  * Zweck: Lädt den ersten echten TypeScript-Helfer für kleine main.js-Aufgaben.
@@ -3918,7 +3918,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.197',
+        liveControlVersion: '0.8.198',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -11487,11 +11487,11 @@ async onReady() {
       // Damit kann ein angenommener LPC-Befehl sofort einen vollständigen
       // Regelzyklus auslösen und wird nicht nur in Diagnose-States abgelegt.
       try { await this._para14aEebusApi.init(); } catch (e) { this.log.warn('§14a EEBUS direct API init failed: ' + (e && e.message ? e.message : e)); }
-
       // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
       // Without this, the UI might fall back to legacy or show default values after reload.
       try { await this.subscribeEmsUiStates(); } catch (e) { this.log.debug('EMS UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
-
+      try { this._adminOverviewPublisher?.stop(); this._adminOverviewPublisher = new AdminOverviewPublisher(this); await this._adminOverviewPublisher.initialize(); }
+      catch (e) { this._adminOverviewPublisher = null; this.log.warn('EOS Admin EMS overview failed: ' + (e && e.message ? e.message : e)); }
       // Focused 5s live refresh for Energiefluss + charging inputs.
       try {
         this._nwStartLiveCoreRefresh();
@@ -20844,7 +20844,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.197',
+      apiVersion: '0.8.198',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21037,7 +21037,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.197';
+  commandPayload.version = '0.8.198';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22274,7 +22274,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.197').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.198').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -33548,7 +33548,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     this._nwShutdownStartedAt = Date.now();
     try { if (this._openMeteoPvForecastRuntime) this._openMeteoPvForecastRuntime.stop(); } catch (_eForecast) {}
     this._openMeteoPvForecastRuntime = null;
-
+    try { this._adminOverviewPublisher?.stop(); } catch (_eAdminOverview) {}
     try { this._nwStopConnectionHeartbeat(); } catch (_eBeat) {}
     try { this._nwSetInfoConnection(false, 'unload').catch(() => {}); } catch (_eConn) {}
     /**

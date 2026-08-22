@@ -1,13 +1,12 @@
-NexoWatt EOS 0.8.197 RC72 – Wetter-/PV-Prognose und forecast-aware Auto-/Zeit-Ziel-Planer
+NexoWatt EOS 0.8.198 RC73 – EMS Live-Diagnose für EOS Admin
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. Optional: npm ci
 3. npm publish
 
-Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.197 auf npm noch frei ist,
-- ob alle Versionsdateien synchron sind,
-- ob das Release-Artefaktmanifest exakt zu package.json.files passt,
-- ob keine freigegebene Produktdatei verändert wurde.
+Der prepublishOnly-Guard prüft automatisch:
+- ob Version 0.8.198 auf npm noch frei ist,
+- ob package.json.files und Release-Manifest exakt übereinstimmen,
+- ob alle freigegebenen Produktdateien vollständig und unverändert sind.
 
-RC72 ergänzt sichtbare Kunden-Einstellungen unter Wetter-App, Open-Meteo-/AppCenter-Quellenwahl, normalisierte PV-Prognosen und den 15-Minuten-Zeit-Ziel-Planer. Fehlende optionale Module blockieren Auto nicht. Harte Netz-, Stations-, Phasen-, §14a- und Safety-Grenzen bleiben unverändert übergeordnet.
+RC73 ergänzt ausschließlich einen versionierten, rein lesenden EMS-Diagnosevertrag unter info.adminOverview.*. Die vorhandenen Regler, Safety-Grenzen und Hardware-Writer bleiben unverändert.
