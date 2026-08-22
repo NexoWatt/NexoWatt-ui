@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/operating-strategy-runtime.ts
- * Quell-Hash: sha256:8bd9a057a7f3c6907a9fe89a908059ad2ac5eff40306686bf942ee3263075b20
+ * Quell-Hash: sha256:75e3c92faa7006baf9d61399f52463972c731824f90a91a6ac7dd6466a6f6e2c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -209,6 +209,8 @@ function resolveChargingStrategyOverlay(adapter, sourceIds, options = {}) {
         targetSocPct: null,
         targetEnergyKWh: null,
         deadline: 0,
+        requirement: 'should',
+        priority: 50,
         energySourcePolicy: 'pv-preferred',
         fallback,
         fallbackPause: false,
@@ -239,6 +241,8 @@ function resolveChargingStrategyOverlay(adapter, sourceIds, options = {}) {
         targetSocPct: Number.isFinite(Number(request.targetSocPct)) ? clamp(request.targetSocPct, 0, 100) : null,
         targetEnergyKWh: Number.isFinite(Number(request.targetEnergyKWh)) ? Math.max(0, Number(request.targetEnergyKWh)) : null,
         deadline: Math.max(0, num(request.deadline, 0)),
+        requirement: ['must', 'should', 'can'].includes(text(request.requirement || request.className, 'should').toLowerCase()) ? text(request.requirement || request.className, 'should').toLowerCase() : 'should',
+        priority: clamp(request.priority, 0, 100),
         energySourcePolicy: text(request.energySourcePolicy, 'pv-preferred'),
         reason: text(request.reason || request.name, 'strategy-request-active'),
     };

@@ -1,7 +1,13 @@
-## 0.8.196 (2026-08-21)
+## 0.8.197 - 2026-08-22
 
-- Forecast-aware Auto/target charging planner: exact configured deadline, 15-minute PV/price slot selection, deadline override, optional modules fail gracefully.
-- Settings: optional Open-Meteo weather/PV forecast with multiple PV arrays and AppCenter datapoint fallback.
+- RC72 verankert die Wetter-/PV-Prognose fest im sichtbaren Kundenbereich **Einstellungen → Wetter-App**. Alle Werte werden über den normalen `settings.*`-/`/api/set`-Vertrag gespeichert; die fehleranfällige dynamische Einfügung ist entfallen.
+- Prognosequellen `Automatisch`, `Open-Meteo`, `AppCenter-Datenpunkte` und `Deaktiviert` ergänzt. Die vorhandenen AppCenter-Zuordnungen `pvForecastTodayJson` und `pvForecastTomorrowJson` bleiben als eigenständige Quelle und als optionaler Fallback erhalten.
+- Open-Meteo-PV-Prognose aus Anlagenleistung, Neigung, Azimut, direkter/diffuser/globaler Strahlung, Temperatur, Verlusten, Wechselrichtercap und Planungssicherheit integriert. Mehrere PV-Flächen werden unterstützt.
+- Vorausschauender Auto-/Zeit-Ziel-Planer mit exakter Zielzeit und 15-Minuten-Slots ergänzt: PV zuerst, anschließend günstige Preisfenster, danach späteste sichere Restslots. Ohne Prognose gilt ein konservativer Latest-Start-Fallback.
+- Zeit-Ziel aus erzeugt keinerlei Fahrzeug-Zukunftsplanung. Fehlende Tarif-, PV-, Speicher- oder Betriebsstrategiemodule blockieren Auto nicht.
+- Betriebsstrategien bleiben MUSS/SOLL/KANN-Intents innerhalb der zentralen Auto-Arbitrierung. MUSS bleibt bindend; SOLL/KANN dürfen nur bei echter Deadline-Gefährdung zurückstehen.
+- Mehrladepunktplanung berücksichtigt gemeinsame Standort- und Stationscaps. Der Planer ist read-only; der bestehende Single Writer und alle Netz-, Stations-, Phasen-, §14a-, RFID- und Safety-Grenzen bleiben unverändert übergeordnet.
+- Release-Manifest und Publish-Gate um einen deterministischen RC72-Vertrag für Einstellungen, Browseranzeige, Open-Meteo/AppCenter-Fallback, Auto-/Zeit-Ziel, Multi-LP und optionale Module erweitert.
 
 ## 0.8.195 - 2026-08-21
 

@@ -328,7 +328,8 @@ function liveAdapter(runtimeOverrides = {}, linkOverrides = {}) {
     assert.match(read(file), /resolve(?:Charging|Storage|Thermal|HeatingRod)StrategyOverlay/);
   }
   const charging = read('src-ts/runtime-executables/ems/modules/charging-management.ts');
-  assert.match(charging, /strategyOwnsAutoTarget/);
+  assert.match(charging, /strategyOwnsAutoTarget|applyStrategyOverlay/,
+    'Charging management must keep operating strategies inside the central Auto arbitration.');
   assert.equal(charging.includes('!(w.strategyOverlay && w.strategyOverlay.eligible === true)'), false, 'standard fallback must keep the existing Auto target logic');
   const main = read('src-ts/runtime-executables/main.ts');
   assert.match(main, /customResources:[\s\S]*normalizeCustomResource/);

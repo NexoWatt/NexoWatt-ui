@@ -63,6 +63,21 @@ export const DEFAULT_MAIN_SETTING_DEFINITIONS: readonly MainSettingDefinition[] 
   { key: 'weatherEnabled', stateId: 'settings.weatherEnabled', kind: 'boolean' },
   { key: 'weatherUsageMode', stateId: 'settings.weatherUsageMode', kind: 'string' },
   { key: 'weatherApiKey', stateId: 'settings.weatherApiKey', kind: 'string' },
+  { key: 'forecastSourceMode', stateId: 'settings.forecastSourceMode', kind: 'string' },
+  { key: 'openMeteoTimezone', stateId: 'settings.openMeteoTimezone', kind: 'string' },
+  { key: 'pvForecastArrays', stateId: 'settings.pvForecastArrays', kind: 'string' },
+  { key: 'openMeteoPvEnabled', stateId: 'settings.openMeteoPvEnabled', kind: 'boolean' },
+  { key: 'forecastFallbackToDatapoints', stateId: 'settings.forecastFallbackToDatapoints', kind: 'boolean' },
+  { key: 'openMeteoLatitude', stateId: 'settings.openMeteoLatitude', kind: 'number', min: -90, max: 90 },
+  { key: 'openMeteoLongitude', stateId: 'settings.openMeteoLongitude', kind: 'number', min: -180, max: 180 },
+  { key: 'forecastUpdateIntervalMin', stateId: 'settings.forecastUpdateIntervalMin', kind: 'number', min: 5, max: 180 },
+  { key: 'forecastHorizonHours', stateId: 'settings.forecastHorizonHours', kind: 'number', min: 6, max: 72 },
+  { key: 'pvForecastPlanningSafetyPct', stateId: 'settings.pvForecastPlanningSafetyPct', kind: 'number', min: 30, max: 100 },
+  { key: 'pvForecastInstalledKwp', stateId: 'settings.pvForecastInstalledKwp', kind: 'number', min: 0, max: 100000 },
+  { key: 'pvForecastTiltDeg', stateId: 'settings.pvForecastTiltDeg', kind: 'number', min: 0, max: 90 },
+  { key: 'pvForecastAzimuthDeg', stateId: 'settings.pvForecastAzimuthDeg', kind: 'number', min: -180, max: 180 },
+  { key: 'pvForecastLossPercent', stateId: 'settings.pvForecastLossPercent', kind: 'number', min: 0, max: 60 },
+  { key: 'pvForecastInverterLimitW', stateId: 'settings.pvForecastInverterLimitW', kind: 'number', min: 0, max: 100000000 },
 
   // Endkunden-UI / Anzeigeparameter. Diese lokalen States werden vom Frontend gelesen
   // und berühren keine Installer-DP-Zuordnung.

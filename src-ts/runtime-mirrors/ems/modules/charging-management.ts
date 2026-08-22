@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 15f7907502817f45d4cee927d5a306962e2b9073deec600e92e30c56ce915173
+ * Original-Hash: 6e8c47ca2ac4ef416379287a8007f97aba655fd7fb154650f74e3f63d7726e99
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:abdac201719cc649359e56e5c56bb12674baba37c3680ccd8b90bd6df453c8d9
+ * Quell-Hash: sha256:fb22bc68860a613c70c76d0a6dde8d8a18ba6d9ed279393ea29788a6bd89df9e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -70,6 +70,7 @@ const {
     normalizeStrategyAutoSource,
     resolveChargingStrategyOverlay,
 } = require('../services/operating-strategy-runtime');
+const { buildRuntimeGoalPlanMap, goalPlanStateRows, resolvePlanEffectiveMode, applyGoalPlan, applyStrategyOverlay, resolveGoalCommandStatus } = require('../services/forecast-target-runtime-bridge');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -5353,9 +5354,24 @@ class ChargingManagementModule extends BaseModule {
         await mk('goalActive', 'Zeit-Ziel aktiv (berechnet)', 'boolean', 'indicator');
         await mk('goalRemainingMin', 'Restzeit (min)', 'number', 'value');
         await mk('goalRequiredPowerW', 'Benötigte Leistung (W)', 'number', 'value.power');
+        await mk('goalRequiredEnergyWh', 'Benötigte Restenergie (Wh)', 'number', 'value.energy');
         await mk('goalDesiredPowerW', 'Ziel-Leistung (W)', 'number', 'value.power');
         await mk('goalShortfallW', 'Leistungsdefizit (W)', 'number', 'value.power');
         await mk('goalStatus', 'Zeit-Ziel Status', 'string', 'text');
+        await mk('goalPlanAction', 'Zeit-Ziel Planaktion', 'string', 'text');
+        await mk('goalPlanReason', 'Zeit-Ziel Planungsgrund', 'string', 'text');
+        await mk('goalPlanSource', 'Zeit-Ziel Planquelle', 'string', 'text');
+        await mk('goalPlanTargetPowerW', 'Zeit-Ziel Leistung jetzt (W)', 'number', 'value.power');
+        await mk('goalPlanPlannedPvWh', 'Zeit-Ziel geplante PV-Energie (Wh)', 'number', 'value.energy');
+        await mk('goalPlanPlannedGridWh', 'Zeit-Ziel geplante Netzenergie (Wh)', 'number', 'value.energy');
+        await mk('goalPlanLatestStartTs', 'Zeit-Ziel spätester sicherer Start', 'number', 'value.time');
+        await mk('goalPlanNextWindowStartTs', 'Zeit-Ziel nächstes Ladefenster Start', 'number', 'value.time');
+        await mk('goalPlanNextWindowEndTs', 'Zeit-Ziel nächstes Ladefenster Ende', 'number', 'value.time');
+        await mk('goalPlanDeadlineOverride', 'Zeit-Ziel Deadline-Override', 'boolean', 'indicator');
+        await mk('goalPlanTargetReachable', 'Zeit-Ziel erreichbar', 'boolean', 'indicator');
+        await mk('goalPlanPvForecastUsed', 'Zeit-Ziel PV-Prognose verwendet', 'boolean', 'indicator');
+        await mk('goalPlanPriceForecastUsed', 'Zeit-Ziel Preisprognose verwendet', 'boolean', 'indicator');
+        await mk('goalPlanFallbackMode', 'Zeit-Ziel Fallbackmodus', 'string', 'text');
 
         // Defaults for writable goal states (do not overwrite user choice)
         try {
@@ -7167,6 +7183,7 @@ class ChargingManagementModule extends BaseModule {
             let goalSocAvailable = false;
             let goalRemainingMin = 0;
             let goalRequiredW = 0;
+            let goalRequiredWh = 0;
             let goalDesiredW = 0;
             let goalShortfallW = 0;
             let goalUrgency = 0;
@@ -7509,6 +7526,7 @@ class ChargingManagementModule extends BaseModule {
                                     // Required average power to reach target SoC by deadline
                                     const remH = Math.max(0.05, remMsClamped / 3600000); // >= 3 min
                                     const requiredWh = (batteryKwh * 1000) * (goalDeltaSocPct / 100);
+                                    goalRequiredWh = requiredWh;
                                     const reqW = requiredWh / remH;
                                     goalRequiredW = clamp(reqW, 0, maxPW);
 
@@ -7544,6 +7562,7 @@ class ChargingManagementModule extends BaseModule {
 
                             const remH = Math.max(0.05, remMsClamped / 3600000); // >= 3 min
                             const requiredWh = (batteryKwh * 1000) * (goalDeltaSocPct / 100);
+                            goalRequiredWh = requiredWh;
                             const reqW = requiredWh / remH;
                             goalRequiredW = clamp(reqW, 0, maxPW);
 
@@ -7563,6 +7582,7 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.goalActive`, !!goalActive, true);
                 await this._queueState(`${ch}.goalRemainingMin`, goalRemainingMin || 0, true);
                 await this._queueState(`${ch}.goalRequiredPowerW`, Math.round(goalRequiredW || 0), true);
+                await this._queueState(`${ch}.goalRequiredEnergyWh`, Math.round(goalRequiredWh || 0), true);
                 await this._queueState(`${ch}.goalDesiredPowerW`, Math.round(goalDesiredW || 0), true);
                 await this._queueState(`${ch}.goalShortfallW`, Math.round(goalShortfallW || 0), true);
                 await this._queueState(`${ch}.goalStatus`, String(goalStatus || 'inactive'), true);
@@ -7694,6 +7714,7 @@ class ChargingManagementModule extends BaseModule {
                 goalDeltaSocPct,
                 goalRemainingMin,
                 goalRequiredW,
+                goalRequiredWh,
                 goalDesiredW,
                 goalUrgency,
                 goalOverdue,
@@ -7830,21 +7851,29 @@ class ChargingManagementModule extends BaseModule {
         // unbekannten Tarif. Bei deaktiviertem Dynamiktarif darf NT allein freigeben.
         // Der Zeit-Ziel-Planer kann die Wirtschaftssperre erst am Latest-Start lösen.
         let tariffDynamicStale = false;
+        let tariffCurrentState = 'unknown';
+        let tariffCurrentPriceEurKwh = null;
+        let tariffCurrentPriceFresh = false;
         try {
             const stNfEn = await this._getStateCached('tarif.netFeeEnabled');
             const stNfMode = await this._getStateCached('tarif.netFeeMode');
             const stTariffActive = await this._getStateCached('tarif.aktiv');
             const stTariffStale = await this._getStateCached('tarif.dynamicTariffStale');
             const stTariffState = await this._getStateCached('tarif.state');
+            const stTariffPrice = await this._getStateCached('tarif.preisAktuellEurProKwh');
+            const stTariffFresh = await this._getStateCached('tarif.currentPriceFresh');
             const nfEnabled = stNfEn ? !!stNfEn.val : false;
             const nfMode = stNfMode ? String(stNfMode.val || '') : '';
             const tariffActive = stTariffActive ? !!stTariffActive.val : false;
             tariffDynamicStale = stTariffStale ? !!stTariffStale.val : false;
-            const tariffState = stTariffState ? String(stTariffState.val || 'unknown').trim().toLowerCase().replace(/ü/g, 'ue') : 'unknown';
+            tariffCurrentState = stTariffState ? String(stTariffState.val || 'unknown').trim().toLowerCase().replace(/ü/g, 'ue') : 'unknown';
+            const currentPrice = stTariffPrice ? Number(stTariffPrice.val) : NaN;
+            tariffCurrentPriceEurKwh = Number.isFinite(currentPrice) ? currentPrice : null;
+            tariffCurrentPriceFresh = stTariffFresh ? !!stTariffFresh.val : (tariffCurrentPriceEurKwh !== null && !tariffDynamicStale);
             if (nfEnabled && nfMode === 'HT') gridChargeAllowedRaw = false;
             else if (nfEnabled && nfMode === 'NT') {
                 if (!tariffActive) gridChargeAllowedRaw = true;
-                else if (tariffDynamicStale || tariffState === 'teuer' || !['guenstig', 'neutral'].includes(tariffState)) gridChargeAllowedRaw = false;
+                else if (tariffDynamicStale || tariffCurrentState === 'teuer' || !['guenstig', 'neutral'].includes(tariffCurrentState)) gridChargeAllowedRaw = false;
             }
         } catch { /* cm.gridChargeAllowed remains authoritative */ }
 
@@ -7946,13 +7975,12 @@ class ChargingManagementModule extends BaseModule {
         // Reichen die erwarteten Tarif‑Freigaben bis zur Deadline aus?
         // Falls nein → Notfall: Override (damit das Ziel trotzdem erreicht wird).
 
-        /** @type {null|{active:boolean,modeInt:number|null,prioInt:number|null,allowEvcsCheap:boolean,ref:number|null,exp:number|null,cheap:number|null,cheapManual:number|null,segments:Array<{startMs:number,endMs:number,priceEurKwh:number,allowGrid:boolean}>}} */
+        /** @type {null|{active:boolean,fresh:boolean,modeInt:number|null,prioInt:number|null,allowEvcsCheap:boolean,ref:number|null,exp:number|null,cheap:number|null,cheapManual:number|null,segments:Array<{startMs:number,endMs:number,priceEurKwh:number,state:string,allowGrid:boolean}>}} */
         let tariffForecast = null;
         const goalForecastReserveMs = Math.round(goalForecastReserveMin * 60 * 1000);
 
-        if (forcePvSurplusOnly && !pvSurplusOnlyCfg && goalTariffOverrideMode === 'forecast') {
-            const anyGoal = wbList.some((w) => w && w.controlAvailable && w.goalActive && Number.isFinite(Number(w.goalFinishTs)) && Number(w.goalFinishTs) > now);
-            if (anyGoal) {
+        const anyGoal = wbList.some((w) => w && w.controlAvailable && w.goalActive && Number.isFinite(Number(w.goalFinishTs)) && Number(w.goalFinishTs) > now);
+        if (anyGoal) {
                 const maxGoalFinishTs = wbList.reduce((m, w) => {
                     const ts = (w && w.goalActive) ? Number(w.goalFinishTs) : NaN;
                     return Number.isFinite(ts) ? Math.max(m, ts) : m;
@@ -8027,11 +8055,15 @@ class ChargingManagementModule extends BaseModule {
                             else allowGrid = true;
                         }
 
-                        segs.push({ startMs, endMs, priceEurKwh: p, allowGrid });
+                        segs.push({ startMs, endMs, priceEurKwh: p, state, allowGrid });
                     }
 
+                    if (active && tariffCurrentPriceFresh && tariffCurrentPriceEurKwh !== null && !segs.some((segment) => segment.startMs <= now && segment.endMs > now)) {
+                        segs.unshift({ startMs: now, endMs: Math.min(horizonEndMs, now + 15 * 60000), priceEurKwh: tariffCurrentPriceEurKwh, state: tariffCurrentState, allowGrid: gridChargeAllowedRaw });
+                    }
                     tariffForecast = {
                         active,
+                        fresh: !tariffDynamicStale,
                         modeInt: Number.isFinite(modeInt) ? Number(modeInt) : null,
                         prioInt: Number.isFinite(prioInt) ? Number(prioInt) : null,
                         allowEvcsCheap: !!allowEvcsCheap,
@@ -8044,7 +8076,6 @@ class ChargingManagementModule extends BaseModule {
                 } catch (_e) {
                     tariffForecast = null;
                 }
-            }
         }
 
         /**
@@ -10414,13 +10445,36 @@ if (components.length) {
             if (typeof cap === 'number' && Number.isFinite(cap) && cap > 0) stationCapW.set(sk, cap);
         }
 
+        const goalPlanBySafe = buildRuntimeGoalPlanMap({
+            now, wallboxes: sorted, budgetW, staticBudgetW,
+            infrastructureCapacityW: cfg.infrastructureCapacityW,
+            totalActualW: totalFreshActualPowerW,
+            loadRestW: this._getAdapterNumberFromCache('derived.core.building.loadRestW', null),
+            loadTotalW: this._getAdapterNumberFromCache('derived.core.building.loadTotalW', null),
+            fallbackLoadW: this._getAdapterNumberFromCache('consumptionTotal', 0),
+            pvSnapshot: this.adapter && this.adapter._pvForecast,
+            currentPvSurplusW: typeof pvPhysicalCapW === 'number' && Number.isFinite(pvPhysicalCapW) ? pvPhysicalCapW : 0,
+            economicGateActive: forcePvSurplusOnly && !pvSurplusOnlyCfg, hardPvOnly: pvSurplusOnlyCfg,
+            tariffForecast, reserveMs: goalForecastReserveMs,
+            energySafetyFactor: goalForecastSafetyFactor,
+        });
+        for (const w of sorted) {
+            const plan = goalPlanBySafe.get(String(w.safe || '')) || null;
+            w.goalPlan = plan;
+            try {
+                for (const [suffix, value] of goalPlanStateRows(plan, w)) await this._queueState(`${w.ch}.${suffix}`, value, true);
+            } catch { /* diagnostics must not stop control */ }
+        }
+
         // Solange das bereits durch NVP, Phasen, §14a, Tarif und Peak-Shaving
         // begrenzte EVCS-Budget alle technischen Mindestleistungen tragen kann,
         // reservieren wir diese Basis fuer alle verbundenen Auto-/Boost-/Min+PV-
         // Ladepunkte. Erst der darueber liegende Leistungsanteil wird nach der
         // bestehenden Prioritaet verteilt. Reines PV-Laden bleibt PV-Grant-gefuehrt.
         const minimumServicePlan = computeChargingMinimumServicePlan({
-            wallboxes: sorted,
+            wallboxes: sorted.map((w) => w.goalPlan && ['wait', 'complete'].includes(String(w.goalPlan.action || ''))
+                ? { ...w, vehicleDemandConfirmed: false, vehicleStartEligible: false }
+                : w),
             totalBudgetW: budgetW,
             stationCaps: stationCapW,
         });
@@ -10508,7 +10562,9 @@ if (components.length) {
         };
 
         for (const w of sorted) {
-            const effMode = String(w.effectiveMode || 'normal');
+            const selectedMode = normalizeWallboxModeOverride(w.userMode);
+            const goalPlan = w.goalPlan && typeof w.goalPlan === 'object' ? w.goalPlan : null;
+            const effMode = resolvePlanEffectiveMode(w.userMode, w.effectiveMode, goalPlan, w.strategyOverlay, w.userAutoSource);
             const isPvOnly = effMode === 'pv';
             const isMinPv = effMode === 'minpv';
             const isBoost = effMode === 'boost';
@@ -10760,70 +10816,36 @@ if (components.length) {
                 // ignore
             }
 
-            // Zeit-Ziel Laden: Wenn aktiv, die Leistung auf den errechneten Durchschnitt begrenzen
-            // (so können mehrere Fahrzeuge im Depot parallel "bis Uhrzeit X" geplant werden).
-            const strategyOwnsAutoTarget = !!(w.strategyOverlay
-                && (w.strategyOverlay.active === true || w.strategyOverlay.fallbackPause === true));
-            if (w.goalActive && w.goalDesiredW > 0 && effMode !== 'boost'
-                && !strategyOwnsAutoTarget) {
+            const planned = applyGoalPlan({
+                plan: goalPlan, userMode: w.userMode, effectiveMode: effMode,
+                targetW, targetA, minPowerW: w.minPW, maxPowerW: w.maxPW,
+                totalAvailableW: fairTotalAvailW, stationAvailableW: fairStationAvailW,
+            });
+            targetW = planned.targetW; targetA = planned.targetA;
+            if (planned.reasonHint === 'no-setpoint') reason = ReasonCodes.NO_SETPOINT;
+            else if (planned.reasonHint === 'allocated') reason = ReasonCodes.ALLOCATED;
+            else if (planned.reasonHint === 'below-min') reason = ReasonCodes.BELOW_MIN;
+            else if (planned.reasonHint === 'budget') reason = pickBudgetReason();
+
+            if (!goalPlan && w.goalActive && w.goalDesiredW > 0 && effMode !== 'boost') {
                 let desired = Math.min(w.maxPW, Math.max(0, w.goalDesiredW));
-
-                // Smart‑Ziel: wenn der Preis gerade klar "günstig" ist, darf das Ziel-Laden etwas früher vorladen,
-                // um in teureren Phasen später weniger laden zu müssen. Das bleibt ein Cap (kein Zwang),
-                // Budgets/Stationslimits bleiben dominant.
-                if (goalStrategy === 'smart' && isCheapNow && !isPvOnly) {
-                    desired = Math.min(w.maxPW, desired * goalCheapBoostFactor);
-                }
-                desired = computeGoalPowerCapW({
-                    mode: effMode,
-                    desiredW: desired,
-                    minPvBaseW,
-                    maxPowerW: w.maxPW,
-                });
-                if (Number.isFinite(desired) && desired >= 0) {
-                    // Nur begrenzen (nicht nach oben erzwingen) – PV-/Budget- und Stationslimits bleiben gültig.
-                    // Min+PV bleibt dabei mindestens auf seiner technischen/netzgestuetzten Basis.
-                    if (targetW > desired + 1) {
-                        targetW = desired;
-                    }
-                }
+                if (goalStrategy === 'smart' && isCheapNow && !isPvOnly) desired = Math.min(w.maxPW, desired * goalCheapBoostFactor);
+                desired = computeGoalPowerCapW({ mode: effMode, desiredW: desired, minPvBaseW, maxPowerW: w.maxPW });
+                if (Number.isFinite(desired) && desired >= 0 && targetW > desired + 1) targetW = desired;
             }
 
-            // Betriebsstrategie ist ausschließlich ein zusätzlicher Auto-Cap bzw.
-            // eine explizite Auto-Pause. Sie kann niemals Boost, Manuell, PV oder
-            // Min+PV überschreiben und niemals ein durch Budget/Station/§14a kleineres
-            // Ergebnis nach oben anheben. Das Lademanagement bleibt Single Writer.
-            if (normalizeWallboxModeOverride(w.userMode) === 'auto'
-                && normalizeStrategyAutoSource(w.userAutoSource) === 'strategy') {
-                const strategy = w.strategyOverlay && typeof w.strategyOverlay === 'object' ? w.strategyOverlay : {};
-                const action = String(strategy.action || 'standard').trim().toLowerCase();
-                const strategyPause = strategy.fallbackPause === true
-                    || ['pause', 'off', 'block', 'disable', 'stop'].includes(action);
-                if (strategyPause) {
-                    targetW = 0;
-                    targetA = 0;
-                    reason = ReasonCodes.NO_SETPOINT;
-                } else if (strategy.active === true) {
-                    const requestedCapW = Number(strategy.targetPowerW);
-                    const maxCapW = Number(strategy.maxPowerW);
-                    let capW = Number.isFinite(requestedCapW) ? Math.max(0, requestedCapW) : null;
-                    if (Number.isFinite(maxCapW) && maxCapW >= 0) capW = capW === null ? Math.max(0, maxCapW) : Math.min(capW, Math.max(0, maxCapW));
-                    if (capW !== null) {
-                        if (capW > 0 && w.minPW > 0 && capW + 1 < w.minPW) {
-                            targetW = 0;
-                            targetA = 0;
-                            reason = ReasonCodes.BELOW_MIN;
-                        } else if (targetW > capW + 1) {
-                            targetW = capW;
-                        }
-                    }
-                }
-            }
+            const strategyApplied = applyStrategyOverlay({
+                plan: goalPlan, strategy: w.strategyOverlay,
+                userMode: w.userMode, autoSource: w.userAutoSource,
+                targetW, targetA, minPowerW: w.minPW,
+            });
+            targetW = strategyApplied.targetW; targetA = strategyApplied.targetA;
+            if (strategyApplied.reasonHint === 'no-setpoint') reason = ReasonCodes.NO_SETPOINT;
+            else if (strategyApplied.reasonHint === 'below-min') reason = ReasonCodes.BELOW_MIN;
 
                         // Zeit‑Ziel Laden: Wenn nach dem Einstecken auf eine frische SoC‑Aktualisierung gewartet wird,
             // pausieren wir die Ladung temporär (verhindert Start mit stalen/falschen Zielwerten).
-            if (!strategyOwnsAutoTarget
-                && shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)) {
+            if (shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)) {
                 targetW = 0;
                 targetA = 0;
                 reason = ReasonCodes.NO_SETPOINT;
@@ -11420,31 +11442,13 @@ if (components.length) {
 
             // Ziel-Laden: Shortfall & Status Update (nach Quantisierung/Ramp)
             try {
-                let goalShortfallNow = 0;
-                let goalStatusNow = String(w.goalStatus || (w.goalEnabled ? 'active' : 'inactive'));
-
-                if (!w.goalEnabled) {
-                    goalStatusNow = 'inactive';
-                    goalShortfallNow = 0;
-                } else if (w.goalStatus === 'reached' || w.goalStatus === 'no_index' || w.goalStatus === 'no_deadline') {
-                    goalStatusNow = String(w.goalStatus);
-                    goalShortfallNow = 0;
-                } else if (w.goalActive && w.goalDesiredW > 0) {
-                    goalShortfallNow = Math.max(0, Math.round(w.goalDesiredW - cmdW));
-                    if (w.goalOverdue) {
-                        goalStatusNow = 'overdue';
-                    // Allow some measurement/rounding deviation (e.g. 200–300 W) before flagging "Unterversorgung".
-                    } else if (goalShortfallNow > 300) {
-                        goalStatusNow = 'shortfall';
-                    } else {
-                        goalStatusNow = 'active';
-                    }
-                } else {
-                    goalShortfallNow = 0;
-                }
-
-                await this._queueState(`${w.ch}.goalShortfallW`, goalShortfallNow, true);
-                await this._queueState(`${w.ch}.goalStatus`, goalStatusNow, true);
+                const goalCommandStatus = resolveGoalCommandStatus({
+                    goalEnabled: w.goalEnabled, goalStatus: w.goalStatus,
+                    goalActive: w.goalActive, goalDesiredW: w.goalDesiredW,
+                    goalOverdue: w.goalOverdue, plan: w.goalPlan, commandW: cmdW,
+                });
+                await this._queueState(`${w.ch}.goalShortfallW`, goalCommandStatus.shortfallW, true);
+                await this._queueState(`${w.ch}.goalStatus`, goalCommandStatus.status, true);
             } catch {
                 // ignore
             }

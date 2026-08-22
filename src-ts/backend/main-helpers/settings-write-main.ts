@@ -25,6 +25,23 @@ export const MAIN_CUSTOMER_SETTING_KEYS = [
   'aiAdvisorQuietHoursStart',
   'aiAdvisorQuietHoursEnd',
   'weatherEnabled',
+  'weatherUsageMode',
+  'weatherApiKey',
+  'forecastSourceMode',
+  'openMeteoTimezone',
+  'pvForecastArrays',
+  'openMeteoPvEnabled',
+  'forecastFallbackToDatapoints',
+  'openMeteoLatitude',
+  'openMeteoLongitude',
+  'forecastUpdateIntervalMin',
+  'forecastHorizonHours',
+  'pvForecastPlanningSafetyPct',
+  'pvForecastInstalledKwp',
+  'pvForecastTiltDeg',
+  'pvForecastAzimuthDeg',
+  'pvForecastLossPercent',
+  'pvForecastInverterLimitW',
   'dynamicTariff',
   'netFeeEnabled',
 ] as const;
@@ -64,7 +81,11 @@ export function normalizeMainSettingValue(key: string, value: unknown): string |
   }
   if (cleanKey.endsWith('Pct')) {
     const n = Number(value);
-    return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+  }
+  if (/^(openMeteoLatitude|openMeteoLongitude|forecastUpdateIntervalMin|forecastHorizonHours|pvForecastInstalledKwp|pvForecastTiltDeg|pvForecastAzimuthDeg|pvForecastInverterLimitW)$/.test(cleanKey)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
   }
   return String(value ?? '').trim();
 }

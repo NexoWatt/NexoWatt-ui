@@ -193,6 +193,8 @@ function resolveChargingStrategyOverlay(adapter, sourceIds, options = {}) {
         targetSocPct: null,
         targetEnergyKWh: null,
         deadline: 0,
+        requirement: 'should',
+        priority: 50,
         energySourcePolicy: 'pv-preferred',
         fallback,
         fallbackPause: false,
@@ -223,6 +225,8 @@ function resolveChargingStrategyOverlay(adapter, sourceIds, options = {}) {
         targetSocPct: Number.isFinite(Number(request.targetSocPct)) ? clamp(request.targetSocPct, 0, 100) : null,
         targetEnergyKWh: Number.isFinite(Number(request.targetEnergyKWh)) ? Math.max(0, Number(request.targetEnergyKWh)) : null,
         deadline: Math.max(0, num(request.deadline, 0)),
+        requirement: ['must', 'should', 'can'].includes(text(request.requirement || request.className, 'should').toLowerCase()) ? text(request.requirement || request.className, 'should').toLowerCase() : 'should',
+        priority: clamp(request.priority, 0, 100),
         energySourcePolicy: text(request.energySourcePolicy, 'pv-preferred'),
         reason: text(request.reason || request.name, 'strategy-request-active'),
     };

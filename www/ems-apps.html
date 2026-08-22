@@ -831,6 +831,17 @@
         </div>
       </div>
 
+      <div class="nw-config-card" data-card="pv-forecast-fallback">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">PV-Prognose – Datenpunkt-Fallback</div>
+          <div class="nw-config-card__subtitle">Optionaler externer Forecast, wenn Open-Meteo nicht genutzt wird oder im Modus „Automatisch“ ausfällt.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-empty" style="margin-bottom:8px;">Erwartet JSON-Kurven für heute und morgen, z. B. aus forecast.solar, Solcast oder einem eigenen Adapter. Fehlen beide Quellen, bleibt Zeit-Ziel über den konservativen Latest-Start-Fallback funktionsfähig.</div>
+          <div id="dpPvForecast" class="nw-config-list"></div>
+        </div>
+      </div>
+
       <div class="nw-config-card" data-card="weather">
         <div class="nw-config-card__header">
           <div class="nw-config-card__title">Wetter</div>
@@ -2284,6 +2295,5 @@
 
   <script src="/static/cockpit-shell.js"></script>
 
-<script src="forecast-settings.js" defer></script>
 </body>
 </html>

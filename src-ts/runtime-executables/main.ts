@@ -21,6 +21,7 @@ const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnost
 const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
+const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast');
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
  * Zweck: Lädt den ersten echten TypeScript-Helfer für kleine main.js-Aufgaben.
@@ -221,6 +222,7 @@ class NexoWattVis extends utils.Adapter {
 
     // EMS engine (Sprint 2)
     this.emsEngine = null;
+    this._openMeteoPvForecastRuntime = null;
 
     // Direkte, zeitkritische EEBUS/CLS -> §14a Adapter-API. Die Instanz
     // existiert bereits vor onReady, akzeptiert Regelbefehle aber erst nach
@@ -2764,6 +2766,21 @@ class NexoWattVis extends utils.Adapter {
       weatherEnabled: { type: 'boolean', role: 'state', def: false },
       weatherUsageMode: { type: 'string', role: 'text', def: 'private' },
       weatherApiKey: { type: 'string', role: 'text', def: '' },
+      forecastSourceMode: { type: 'string', role: 'text', def: 'auto' },
+      openMeteoPvEnabled: { type: 'boolean', role: 'state', def: false },
+      forecastFallbackToDatapoints: { type: 'boolean', role: 'state', def: true },
+      openMeteoLatitude: { type: 'number', role: 'value.gps.latitude', def: 0 },
+      openMeteoLongitude: { type: 'number', role: 'value.gps.longitude', def: 0 },
+      openMeteoTimezone: { type: 'string', role: 'text', def: 'auto' },
+      forecastUpdateIntervalMin: { type: 'number', role: 'value.interval', def: 30 },
+      forecastHorizonHours: { type: 'number', role: 'value.interval', def: 48 },
+      pvForecastPlanningSafetyPct: { type: 'number', role: 'value.percent', def: 85 },
+      pvForecastInstalledKwp: { type: 'number', role: 'value.power', def: 0 },
+      pvForecastTiltDeg: { type: 'number', role: 'value', def: 30 },
+      pvForecastAzimuthDeg: { type: 'number', role: 'value', def: 0 },
+      pvForecastLossPercent: { type: 'number', role: 'value.percent', def: 14 },
+      pvForecastInverterLimitW: { type: 'number', role: 'value.power', def: 0 },
+      pvForecastArrays: { type: 'string', role: 'json', def: '[]' },
 
       // EVCS defaults mirrored into runtime settings (written by syncSettingsConfigToStates())
       evcsCount: { type: 'number', role: 'value', def: 0 },
@@ -3885,7 +3902,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.195',
+        liveControlVersion: '0.8.197',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -11396,6 +11413,7 @@ async onReady() {
 
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
+      try { this._openMeteoPvForecastRuntime = startOpenMeteoPvForecastRuntime(this); } catch (e) { this.log.warn('PV forecast runtime failed: ' + (e && e.message ? e.message : e)); }
       // EVCS (multi wallbox) model states
       await this.ensureEvcsStates();
       await this.ensureRfidStates();
@@ -20810,7 +20828,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.195',
+      apiVersion: '0.8.197',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21003,7 +21021,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.195';
+  commandPayload.version = '0.8.197';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22240,7 +22258,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.195').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.197').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -26388,8 +26406,10 @@ return res.json(out);
       'netFeeQ4NtStart','netFeeQ4NtEnd','netFeeQ4HtStart','netFeeQ4HtEnd',
       // EVCS defaults
       'evcsMaxPower','evcsCount',
-      // Weather App (FIS settings)
-      'weatherEnabled','weatherUsageMode','weatherApiKey'
+      // Weather App + optional customer PV forecast (FIS settings)
+      'weatherEnabled','weatherUsageMode','weatherApiKey','forecastSourceMode','openMeteoPvEnabled','forecastFallbackToDatapoints',
+      'openMeteoLatitude','openMeteoLongitude','openMeteoTimezone','forecastUpdateIntervalMin','forecastHorizonHours','pvForecastPlanningSafetyPct',
+      'pvForecastInstalledKwp','pvForecastTiltDeg','pvForecastAzimuthDeg','pvForecastLossPercent','pvForecastInverterLimitW','pvForecastArrays'
     ];
     const storageFarmLocalKeys = [
       'enabled', 'mode', 'configJson', 'groupsJson',
@@ -26638,6 +26658,9 @@ return res.json(out);
             this.startWeatherService();
             this.nwUpdateWeather('settings').catch(() => {});
           }
+        }
+        if (key && /^settings[.](forecastSourceMode|openMeteoPvEnabled|forecastFallbackToDatapoints|openMeteoLatitude|openMeteoLongitude|openMeteoTimezone|forecastUpdateIntervalMin|forecastHorizonHours|pvForecastPlanningSafetyPct|pvForecastInstalledKwp|pvForecastTiltDeg|pvForecastAzimuthDeg|pvForecastLossPercent|pvForecastInverterLimitW|pvForecastArrays)$/.test(key)) {
+          try { this._openMeteoPvForecastRuntime && this._openMeteoPvForecastRuntime.refresh().catch(() => {}); } catch (_eForecast) {}
         }
       } catch (_e) {}
 
@@ -33507,6 +33530,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // keinen neuen adapter.setTimeout mehr anlegen.
     this._nwShuttingDown = true;
     this._nwShutdownStartedAt = Date.now();
+    try { if (this._openMeteoPvForecastRuntime) this._openMeteoPvForecastRuntime.stop(); } catch (_eForecast) {}
+    this._openMeteoPvForecastRuntime = null;
 
     try { this._nwStopConnectionHeartbeat(); } catch (_eBeat) {}
     try { this._nwSetInfoConnection(false, 'unload').catch(() => {}); } catch (_eConn) {}

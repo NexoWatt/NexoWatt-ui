@@ -1,12 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.196",
+    "version": "0.8.197",
     "news": {
-      "0.8.196": {
-        "en": "Forecast-aware auto and target charging planner with optional Open-Meteo weather/PV source and datapoint fallback.",
-        "de": "Prognosegestützter Auto- und Zeit-Ziel-Planer mit optionaler Open-Meteo-Wetter-/PV-Quelle und Datenpunkt-Fallback.",
-        "nl": "Voorspellingsgestuurde auto- en doellader met optionele Open-Meteo bron en datapuntfallback."
+      "0.8.197": {
+        "de": "RC72 integriert die Wetter-/PV-Prognose sichtbar unter Einstellungen → Wetter-App. Kunden wählen Automatisch, nur Open-Meteo, nur AppCenter-Datenpunkte oder Deaktiviert und konfigurieren PV-Leistung, Neigung, Ausrichtung, Verluste, Standort und Planungssicherheit. Die vorhandene AppCenter-Zuordnung bleibt als eigenständige Quelle und Fallback erhalten. Der Auto-Zeit-Ziel-Planer nutzt 15-Minuten-PV-/Preisfenster, wartet ohne unnötige Frühladung und startet spätestens zur sicheren Zielerreichung. Fehlende optionale Module blockieren Auto nicht. Netz-, Stations-, Phasen-, §14a-, RFID- und Safety-Grenzen bleiben immer übergeordnet.",
+        "en": "RC72 integrates weather/PV forecasting visibly under Settings → Weather App. Customers can select Automatic, Open-Meteo only, AppCenter datapoints only or Disabled and configure PV capacity, tilt, azimuth, losses, location and planning safety. The existing AppCenter mapping remains an independent source and fallback. The Auto target-time planner uses 15-minute PV/price windows, avoids unnecessary early charging and starts no later than required for the target. Missing optional modules never block Auto. Grid, station, phase, §14a, RFID and safety constraints always retain priority.",
+        "nl": "RC72 integreert de weer-/PV-prognose zichtbaar onder Instellingen → Weer-app. Klanten kiezen Automatisch, alleen Open-Meteo, alleen AppCenter-datapunten of Uitgeschakeld en configureren PV-vermogen, helling, azimut, verliezen, locatie en planningsveiligheid. De bestaande AppCenter-koppeling blijft een zelfstandige bron en fallback. De Auto-doeltijdplanner gebruikt PV-/prijsvensters van 15 minuten, vermijdt onnodig vroeg laden en start uiterlijk wanneer nodig voor het doel. Ontbrekende optionele modules blokkeren Auto niet. Net-, stations-, fase-, §14a-, RFID- en veiligheidsgrenzen blijven altijd leidend."
       },
       "0.8.195": {
         "de": "RC70 korrigiert die Ladepunktanzeige im LIVE-Dashboard: Der Status zeigt jetzt den vom Kunden gewählten Modus und nicht mehr den internen Auto-Untermodus. Ein Ladepunkt auf Auto erscheint daher nicht fälschlich als PV, während Gründe wie „Wartet auf PV-Überschuss“ weiterhin korrekt bleiben. Der Link „Details“ ist nur noch bei mindestens zwei aktiven Ladepunkten sichtbar; bei einem einzelnen Ladepunkt wird er vollständig deaktiviert. Die Änderung ist rein lesend und verändert keine Regelungs- oder Hardware-Writer-Logik.",
@@ -430,18 +430,7 @@
         "timeoutMs": 2000,
         "pollIntervalMs": 1000
       }
-    },
-    "forecastSourceMode": "auto",
-    "openMeteoWeatherEnabled": true,
-    "openMeteoPvEnabled": false,
-    "forecastFallbackToDatapoints": true,
-    "openMeteoLatitude": 0,
-    "openMeteoLongitude": 0,
-    "openMeteoTimezone": "auto",
-    "forecastUpdateIntervalMin": 30,
-    "forecastHorizonHours": 48,
-    "pvForecastArrays": [],
-    "pvForecastCurveDp": ""
+    }
   },
   "instanceObjects": [
     {

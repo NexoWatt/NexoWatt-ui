@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 09a8ee6f1e917a392306ed6cb28283b6c5263b2f7376f50e4945d1c2a9fc962b
+ * Original-Hash: ba24af63f2c7b49d7e1e65959e1e6029e9941011981c9b2dce53433b3e718350
  */
 
 /**
@@ -414,14 +414,19 @@ function assertTechnicalStart(result, name, basis = 'currentA') {
     vehicleSoc: 50, goalTargetSocPct: 60,
   });
   assert.strictEqual(cheapStandard.goalActive, true);
-  assert(cheapStandard.targetPowerW >= 4100, 'Time-target standard must request a drivable minimum.');
+  assert.strictEqual(cheapStandard.targetPowerW, 0,
+    'Forecast-aware target charging must not start immediately when a safe later slot exists.');
+  assert.strictEqual(cheapStandard.goalStatus, 'waiting_window',
+    'A deliberate future target window must be reported as waiting_window, not shortfall.');
 
   const cheapSmart = await tickScenario({
     status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',
     gridAllowed: true, tariffState: 'guenstig', deadlineHours: 10,
     vehicleSoc: 50, goalTargetSocPct: 60,
   });
-  assert(cheapSmart.targetPowerW > cheapStandard.targetPowerW, 'Smart cheap-tariff precharge must be stronger than standard target charging.');
+  assert.strictEqual(cheapSmart.targetPowerW, 0,
+    'Smart mode must use the same forecast-aware slot plan instead of charging unnecessarily early.');
+  assert.strictEqual(cheapSmart.goalStatus, 'waiting_window');
 
   const expensiveFar = await tickScenario({
     status: 'C1', userMode: 'auto', goalEnabled: true, goalStrategy: 'smart',

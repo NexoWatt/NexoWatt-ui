@@ -32,6 +32,21 @@ export const CUSTOMER_SETTING_KEYS = [
   'weatherEnabled',
   'weatherUsageMode',
   'weatherApiKey',
+  'forecastSourceMode',
+  'openMeteoTimezone',
+  'pvForecastArrays',
+  'openMeteoPvEnabled',
+  'forecastFallbackToDatapoints',
+  'openMeteoLatitude',
+  'openMeteoLongitude',
+  'forecastUpdateIntervalMin',
+  'forecastHorizonHours',
+  'pvForecastPlanningSafetyPct',
+  'pvForecastInstalledKwp',
+  'pvForecastTiltDeg',
+  'pvForecastAzimuthDeg',
+  'pvForecastLossPercent',
+  'pvForecastInverterLimitW',
 ] as const;
 
 export type CustomerSettingKey = (typeof CUSTOMER_SETTING_KEYS)[number];

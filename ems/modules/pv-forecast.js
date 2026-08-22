@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/pv-forecast.ts
- * Quell-Hash: sha256:68026f8ff3d9e483f67d5d71379495fd5c8e01cba7079408c881bcec37b9138d
+ * Quell-Hash: sha256:bfebf4872da8fa954301b686054862407065b54e22aee04dea394901784ad172
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15,31 +15,6 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/modules/pv-forecast.js
- * Rolle im Projekt: PV-Prognose.
- * Zweck: Erzeugt PV-Ertragsprognosen als Grundlage für KI, Speicher und flexible Lasten.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: PV-Prognosemodul: verarbeitet Prognosewerte, Peaks und Energieerwartung für EMS und KI-Berater.
- * Zusammenhänge:
- * - Wetter/Forecast-States fließen in ai-advisor.js und core-limits.js ein.
- * - App-Center konfiguriert Quellen und Schwellwerte.
- * Wartungshinweise:
- * - Prognosequalität/Fallbacks müssen konservativ bleiben, damit Regelungen nicht überoptimieren.
- */
-
 'use strict';
 
 const { BaseModule } = require('./base');
@@ -142,6 +117,10 @@ class PvForecastModule extends BaseModule {
     await mk('forecast.pv.peakWNext24h', 'PV Forecast Peak nächste 24h (W)', 'number', 'value.power');
     await mk('forecast.pv.statusText', 'PV Forecast Status', 'string', 'text');
     await mk('forecast.pv.curveJson', 'PV Forecast Kurve (JSON, gekürzt)', 'string', 'json');
+    await mk('forecast.pv.source', 'PV Forecast Quelle', 'string', 'text');
+    await mk('forecast.pv.fallbackActive', 'PV Forecast Fallback aktiv', 'boolean', 'indicator');
+    await mk('forecast.pv.planningSafetyPct', 'PV Forecast Planungssicherheit (%)', 'number', 'value.percent');
+    await mk('forecast.pv.confidencePct', 'PV Forecast Vertrauen (%)', 'number', 'value.percent');
 
     // Register mapped forecast datapoints (App-Center)
     if (this.dp && typeof this.dp.upsert === 'function') {
@@ -703,70 +682,60 @@ class PvForecastModule extends BaseModule {
   async tick() {
     const now = Date.now();
 
-    // Read mapped DPs (raw JSON)
-    let rawToday = null;
-    let rawTomorrow = null;
-    let ageToday = Number.POSITIVE_INFINITY;
-    let ageTomorrow = Number.POSITIVE_INFINITY;
-
-    if (this.dp) {
-      const vT = this.dp.getRaw('pv.forecastTodayJson');
-      const vM = this.dp.getRaw('pv.forecastTomorrowJson');
-
-      rawToday = vT;
-      rawTomorrow = vM;
-      ageToday = this.dp.getAgeMs('pv.forecastTodayJson');
-      ageTomorrow = this.dp.getAgeMs('pv.forecastTomorrowJson');
-    }
-
-    const hasAnyMapping = (rawToday !== null && rawToday !== undefined) || (rawTomorrow !== null && rawTomorrow !== undefined);
-    if (!hasAnyMapping) {
-      // Nothing mapped -> keep adapter snapshot consistent but do not spam logs.
-      if (!this._warnedNoMapping) {
-        this.adapter.log.info('[PvForecast] Kein PV-Forecast gemappt (App-Center → Tarife). PV-aware Netzladen bleibt deaktiviert.');
-        this._warnedNoMapping = true;
-      }
-
-      this.adapter._pvForecast = {
-        ts: now,
-        valid: false,
-        ageMs: null,
-        points: 0,
-        kwhNext6h: 0,
-        kwhNext12h: 0,
-        kwhNext24h: 0,
-        peakWNext24h: 0,
-        curve: [],
-      };
-
-      await this._setIfChanged('forecast.pv.valid', false);
-      await this._setIfChanged('forecast.pv.points', 0);
-      await this._setIfChanged('forecast.pv.ageMs', null);
-      await this._setIfChanged('forecast.pv.kwhNext6h', 0);
-      await this._setIfChanged('forecast.pv.kwhNext12h', 0);
-      await this._setIfChanged('forecast.pv.kwhNext24h', 0);
-      await this._setIfChanged('forecast.pv.peakWNext24h', 0);
-      await this._setIfChanged('forecast.pv.statusText', 'Kein PV Forecast gemappt');
-      await this._setIfChanged('forecast.pv.curveJson', '[]');
+    const cachedSetting = (key, fallback) => {
+      try {
+        const entry = this.adapter && this.adapter.stateCache && this.adapter.stateCache[`settings.${key}`];
+        return entry && entry.value !== undefined && entry.value !== null ? entry.value : fallback;
+      } catch (_e) { return fallback; }
+    };
+    const sourceMode = String(cachedSetting('forecastSourceMode', 'auto') || 'auto').trim().toLowerCase();
+    const openMeteoEnabled = cachedSetting('openMeteoPvEnabled', false) === true;
+    const fallbackEnabled = cachedSetting('forecastFallbackToDatapoints', true) !== false;
+    const integrated = this.adapter && this.adapter._openMeteoPvForecast && typeof this.adapter._openMeteoPvForecast === 'object'
+      ? this.adapter._openMeteoPvForecast : null;
+    const integratedAgeMs = integrated && Number.isFinite(Number(integrated.ts)) ? Math.max(0, now - Number(integrated.ts)) : Number.POSITIVE_INFINITY;
+    const useIntegrated = sourceMode !== 'disabled' && sourceMode !== 'datapoint' && openMeteoEnabled
+      && integrated && integrated.valid === true && Array.isArray(integrated.curve) && integrated.curve.length > 0 && integratedAgeMs <= 2 * 3600000;
+    if (sourceMode === 'disabled') {
+      this.adapter._pvForecast = { ts: now, valid: false, ageMs: null, source: 'disabled', planningSafetyPct: 85, confidencePct: 0, points: 0, kwhNext6h: 0, kwhNext12h: 0, kwhNext24h: 0, peakWNext24h: 0, curve: [] };
+      await this._setIfChanged('forecast.pv.valid', false); await this._setIfChanged('forecast.pv.source', 'disabled'); await this._setIfChanged('forecast.pv.fallbackActive', false); await this._setIfChanged('forecast.pv.statusText', 'PV-Prognose deaktiviert');
       return;
     }
 
-    // Ensure warnings reset when mapping appears
-    this._warnedNoMapping = false;
-
-    const strToday = (typeof rawToday === 'string') ? rawToday : (rawToday && typeof rawToday === 'object') ? JSON.stringify(rawToday) : '';
-    const strTomorrow = (typeof rawTomorrow === 'string') ? rawTomorrow : (rawTomorrow && typeof rawTomorrow === 'object') ? JSON.stringify(rawTomorrow) : '';
-
-    const parsedToday = this._safeJsonParse(strToday);
-    const parsedTomorrow = this._safeJsonParse(strTomorrow);
-
+    let ageToday = Number.POSITIVE_INFINITY;
+    let ageTomorrow = Number.POSITIVE_INFINITY;
     let segs = [];
     let parseErrs = [];
-    if (parsedToday.ok) segs = segs.concat(this._extractSegmentsFromParsed(parsedToday.value));
-    else if (strToday && parsedToday.err) parseErrs.push(`heute: ${parsedToday.err}`);
-
-    if (parsedTomorrow.ok) segs = segs.concat(this._extractSegmentsFromParsed(parsedTomorrow.value));
-    else if (strTomorrow && parsedTomorrow.err) parseErrs.push(`morgen: ${parsedTomorrow.err}`);
+    let forecastSource = useIntegrated ? 'open-meteo-gti' : 'appcenter-mapping';
+    let fallbackActive = false;
+    let planningSafetyPct = useIntegrated ? Math.max(30, Math.min(100, Number(integrated.planningSafetyPct) || 85)) : 85;
+    if (useIntegrated) {
+      segs = integrated.curve.slice();
+      ageToday = integratedAgeMs;
+      ageTomorrow = integratedAgeMs;
+    } else {
+      let rawToday = null;
+      let rawTomorrow = null;
+      if (this.dp) {
+        rawToday = this.dp.getRaw('pv.forecastTodayJson'); rawTomorrow = this.dp.getRaw('pv.forecastTomorrowJson');
+        ageToday = this.dp.getAgeMs('pv.forecastTodayJson'); ageTomorrow = this.dp.getAgeMs('pv.forecastTomorrowJson');
+      }
+      const hasAnyMapping = rawToday !== null && rawToday !== undefined || rawTomorrow !== null && rawTomorrow !== undefined;
+      const mayFallback = sourceMode !== 'open-meteo' && (sourceMode === 'datapoint' || fallbackEnabled);
+      if (!hasAnyMapping || !mayFallback) {
+        if (!this._warnedNoMapping) { this.adapter.log.info('[PvForecast] Keine nutzbare PV-Prognosequelle verfügbar.'); this._warnedNoMapping = true; }
+        this.adapter._pvForecast = { ts: now, valid: false, ageMs: null, source: useIntegrated ? 'open-meteo-gti' : 'none', planningSafetyPct, confidencePct: 0, points: 0, kwhNext6h: 0, kwhNext12h: 0, kwhNext24h: 0, peakWNext24h: 0, curve: [] };
+        await this._setIfChanged('forecast.pv.valid', false); await this._setIfChanged('forecast.pv.source', 'none'); await this._setIfChanged('forecast.pv.fallbackActive', sourceMode === 'auto'); await this._setIfChanged('forecast.pv.statusText', openMeteoEnabled ? 'Open-Meteo nicht verfügbar und kein AppCenter-Forecast gemappt' : 'Kein PV Forecast gemappt'); await this._setIfChanged('forecast.pv.curveJson', '[]');
+        return;
+      }
+      this._warnedNoMapping = false;
+      fallbackActive = sourceMode === 'auto' && openMeteoEnabled;
+      const strToday = typeof rawToday === 'string' ? rawToday : rawToday && typeof rawToday === 'object' ? JSON.stringify(rawToday) : '';
+      const strTomorrow = typeof rawTomorrow === 'string' ? rawTomorrow : rawTomorrow && typeof rawTomorrow === 'object' ? JSON.stringify(rawTomorrow) : '';
+      const parsedToday = this._safeJsonParse(strToday); const parsedTomorrow = this._safeJsonParse(strTomorrow);
+      if (parsedToday.ok) segs = segs.concat(this._extractSegmentsFromParsed(parsedToday.value)); else if (strToday && parsedToday.err) parseErrs.push(`heute: ${parsedToday.err}`);
+      if (parsedTomorrow.ok) segs = segs.concat(this._extractSegmentsFromParsed(parsedTomorrow.value)); else if (strTomorrow && parsedTomorrow.err) parseErrs.push(`morgen: ${parsedTomorrow.err}`);
+    }
 
     // Normalize & sort
     segs = segs
@@ -832,14 +801,19 @@ class PvForecastModule extends BaseModule {
       const ageTxt = (ageEff !== null && ageEff > 0)
         ? (ageEff > 3600000 ? `${Math.round(ageEff / 3600000)}h alt` : `${Math.round(ageEff / 60000)}min alt`)
         : 'frisch';
-      statusText = `PV Forecast ok: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}${scaledFromKw ? ' (kW erkannt)' : ''}`;
+      statusText = `PV Forecast ok [${forecastSource}]: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}${scaledFromKw ? ' (kW erkannt)' : ''}`;
     }
 
     // Publish snapshot for other modules (synchronous access)
+    const confidencePct = ageEff === null ? 70 : Math.max(0, Math.min(100, Math.round(100 * Math.max(0, 1 - ageEff / (6 * 3600000)))));
     this.adapter._pvForecast = {
       ts: now,
       valid,
       ageMs: ageEff,
+      source: forecastSource,
+      fallbackActive,
+      planningSafetyPct,
+      confidencePct,
       points: segs.length,
       kwhNext6h: kwh6,
       kwhNext12h: kwh12,
@@ -857,6 +831,10 @@ class PvForecastModule extends BaseModule {
     await this._setIfChanged('forecast.pv.kwhNext24h', Number.isFinite(kwh24) ? Number(kwh24.toFixed(3)) : 0);
     await this._setIfChanged('forecast.pv.peakWNext24h', Math.round(peakW));
     await this._setIfChanged('forecast.pv.statusText', statusText);
+    await this._setIfChanged('forecast.pv.source', forecastSource);
+    await this._setIfChanged('forecast.pv.fallbackActive', fallbackActive);
+    await this._setIfChanged('forecast.pv.planningSafetyPct', planningSafetyPct);
+    await this._setIfChanged('forecast.pv.confidencePct', confidencePct);
 
     if (curveHash !== this._lastCurveHash) {
       this._lastCurveHash = curveHash;

@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: c624ee134ed3bf0094543dc39a6ad852a8908c8ab15fab9a56d7f5b9fde8b534
+ * Original-Hash: 3d0086a0516b239739d08744642e7332d47eb149f91591011f3c1579e5f218d7
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -66,7 +66,6 @@
 
 
 'use strict';
-const { startForecastRuntime } = require('./ems/services/open-meteo-forecast-runtime');
 
 
 /**
@@ -11763,7 +11762,6 @@ async migrateNativeConfig() {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 async onReady() {
-    try { this._nwForecastRuntime = startForecastRuntime(this); } catch (e) { this.log.warn(`Forecast runtime start failed: ${e && e.message || e}`); }
     try {
       await this.migrateNativeConfig();
       await this.ensureInfoConnectionState();
@@ -33948,7 +33946,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   onUnload(callback) {
-    try { if (this._nwForecastRuntime) this._nwForecastRuntime.stop(); } catch (e) { /* best effort */ }
     // Der Guard muss vor jedem asynchronen State-/Timer-Aufruf gesetzt werden. Besonders
     // info.connection und noch laufende StateChange-/EMS-Callbacks dürfen beim Shutdown
     // keinen neuen adapter.setTimeout mehr anlegen.

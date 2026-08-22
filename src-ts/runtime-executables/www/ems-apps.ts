@@ -103,6 +103,7 @@
     flowConsumers: document.getElementById('flowConsumers'),
     flowProducers: document.getElementById('flowProducers'),
     dpTariffs: document.getElementById('dpTariffs'),
+    dpPvForecast: document.getElementById('dpPvForecast'),
     dpLive: document.getElementById('dpLive'),
     dpWeather: document.getElementById('dpWeather'),
     storageTable: document.getElementById('storageTable'),
@@ -836,14 +837,12 @@
     { key: 'priceCurrent', label: 'Tarif Preis aktuell (€/kWh)', placeholder: 'Provider-State (optional)' },
     { key: 'priceAverage', label: 'Tarif Preis Durchschnitt (€/kWh)', placeholder: 'Provider-State (optional)' },
     { key: 'priceTodayJson', label: 'Stundenpreise heute (JSON)', placeholder: 'Provider-State (optional)' },
-    { key: 'priceTomorrowJson', label: 'Stundenpreise morgen (JSON)', placeholder: 'Provider-State (optional)' },
-
-    // PV Forecast (für PV-aware Netzladen / Speicher-Optimierung)
-    // Erwartet: JSON (String) vom Forecast-Provider (z.B. forecast.solar / Solcast / eigener Adapter)
-    { key: 'pvForecastTodayJson', label: 'PV Forecast heute (JSON)', placeholder: 'Provider-State (optional)' },
-    { key: 'pvForecastTomorrowJson', label: 'PV Forecast morgen (JSON)', placeholder: 'Provider-State (optional)' }
+    { key: 'priceTomorrowJson', label: 'Stundenpreise morgen (JSON)', placeholder: 'Provider-State (optional)' }
   ];
-
+  const PV_FORECAST_DP_FIELDS = [
+    { key: 'pvForecastTodayJson', label: 'PV-Prognose heute (JSON)', placeholder: 'Forecast-Provider-State (optional)' },
+    { key: 'pvForecastTomorrowJson', label: 'PV-Prognose morgen (JSON)', placeholder: 'Forecast-Provider-State (optional)' }
+  ];
 
   // ------------------------------
   // Direkte dynamische Tarifprovider
@@ -11576,6 +11575,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { idPrefix: 'tar_' }
       );
     }
+    if (els.dpPvForecast) buildDpTable(els.dpPvForecast, PV_FORECAST_DP_FIELDS,
+      (key) => dps[key], (key, val) => {
+        currentConfig.datapoints = currentConfig.datapoints || {};
+        currentConfig.datapoints[key] = val;
+      }, { idPrefix: 'pvfc_' });
 
     // Live-Kacheln
     if (els.dpLive) {

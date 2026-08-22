@@ -1,15 +1,13 @@
-NexoWatt EOS 0.8.196 RC71 – Forecast-Aware Auto Target Planner – Publish-Fix
+NexoWatt EOS 0.8.197 RC72 – Wetter-/PV-Prognose und forecast-aware Auto-/Zeit-Ziel-Planer
 
-1. ZIP vollständig in einen neuen, leeren Projektordner entpacken.
-2. Im Projektordner ausführen: npm publish
+1. ZIP vollständig in einen frischen Projektordner entpacken.
+2. Optional: npm ci
+3. npm publish
 
-Der Publish-Guard prüft:
-- ob Version 0.8.196 auf npm noch frei ist,
+Der vorhandene prepublishOnly-Guard prüft automatisch:
+- ob Version 0.8.197 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
-- ob das Release-Manifest exakt der package.json-files-Liste entspricht,
-- ob alle freigegebenen Produktdateien unverändert sind.
+- ob das Release-Artefaktmanifest exakt zu package.json.files passt,
+- ob keine freigegebene Produktdatei verändert wurde.
 
-Wichtig:
-- Nicht die frühere RC71-ZIP verwenden.
-- In dieser Publish-Fix-ZIP wurden Manifest und npm-Dateiliste neu synchronisiert.
-- Die RC71-Runtime-Dateien für Forecast-Planer, Open-Meteo-Forecast und Forecast-Einstellungen sind im npm-Paket enthalten.
+RC72 ergänzt sichtbare Kunden-Einstellungen unter Wetter-App, Open-Meteo-/AppCenter-Quellenwahl, normalisierte PV-Prognosen und den 15-Minuten-Zeit-Ziel-Planer. Fehlende optionale Module blockieren Auto nicht. Harte Netz-, Stations-, Phasen-, §14a- und Safety-Grenzen bleiben unverändert übergeordnet.
