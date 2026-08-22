@@ -1,3 +1,13 @@
+## 0.8.199 - 2026-08-22
+
+- RC74 behebt die dauerhaft stehenbleibende PV-Prognoseanzeige „Wird geladen …“. Das kundenseitige Statusmodul wird jetzt ausschließlich unter `/static/forecast-settings.js` geladen und zeigt Open-Meteo- oder AppCenter-Werte einschließlich Fehlergrund an.
+- Open-Meteo-PV-Prognose startet direkt nach dem Adapterstart und wird nach Änderungen an Quelle, Aktivierung, Standort, Intervall oder PV-Flächen sofort neu berechnet; das eingestellte Intervall gilt erst für die folgenden zyklischen Abrufe.
+- Standortauflösung erweitert: manuelle Koordinaten, Systemkoordinaten sowie Ort/Postleitzahl aus `system.config` mit Open-Meteo-Geocoding-Fallback und zeitlich begrenztem Cache.
+- Endkunden-Experten-JSON vollständig durch einen responsiven PV-Flächeneditor ersetzt. Über `+ PV-Fläche hinzufügen` können mehrere Dachflächen mit Name, kWp, Neigung, Himmelsrichtung, Verlusten und optionaler Wechselrichtergrenze gepflegt werden.
+- Ausrichtung wird als Nord, Nordost, Ost, Südost, Süd, Südwest, West oder Nordwest gewählt; der bestehende `settings.pvForecastArrays`-Datenvertrag und die Einzelanlagen-Kompatibilitätsstates bleiben intern erhalten.
+- Open-Meteo veröffentlicht zusätzliche Diagnosewerte für Quelle, verwendeten Standort, Aktualisierungszeit, Fehler und Prognosepunkte. Der AppCenter-Datenpunkt-Fallback bleibt unverändert nutzbar.
+- Keine neue Hardware-Schreibstrecke: Prognosen bleiben rein lesende Optimierungsdaten; Netz-, Stations-, Phasen-, §14a-, Safety- und Single-Writer-Grenzen bleiben unverändert.
+
 ## 0.8.198 - 2026-08-22
 
 - RC73 ergänzt unter `info.adminOverview.*` einen versionierten read-only EMS-Diagnosevertrag für die neue Live-Kachel des NexoWatt EOS Admin.

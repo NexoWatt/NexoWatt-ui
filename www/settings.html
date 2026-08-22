@@ -228,29 +228,68 @@
           </label>
 
           <div id="nwOpenMeteoPvFields">
-            <div class="nw-ai-customer-grid">
-              <label class="row nw-ai-setting-row"><span>Installierte PV‑Leistung (kWp)</span><input id="s_pvForecastInstalledKwp" data-scope="settings" data-key="pvForecastInstalledKwp" type="number" min="0" max="100000" step="0.01" value="0"></label>
-              <label class="row nw-ai-setting-row"><span>Dachneigung (°)</span><input id="s_pvForecastTiltDeg" data-scope="settings" data-key="pvForecastTiltDeg" type="number" min="0" max="90" step="1" value="30"></label>
-              <label class="row nw-ai-setting-row"><span>Ausrichtung (0° Süd, −90° Ost, +90° West)</span><input id="s_pvForecastAzimuthDeg" data-scope="settings" data-key="pvForecastAzimuthDeg" type="number" min="-180" max="180" step="1" value="0"></label>
-              <label class="row nw-ai-setting-row"><span>Anlagenverluste (%)</span><input id="s_pvForecastLossPercent" data-scope="settings" data-key="pvForecastLossPercent" type="number" min="0" max="60" step="0.1" value="14"></label>
-              <label class="row nw-ai-setting-row"><span>Wechselrichtergrenze (W; 0 = keine)</span><input id="s_pvForecastInverterLimitW" data-scope="settings" data-key="pvForecastInverterLimitW" type="number" min="0" max="100000000" step="100" value="0"></label>
-              <label class="row nw-ai-setting-row"><span>Planungssicherheit (%)</span><input id="s_pvForecastPlanningSafetyPct" data-scope="settings" data-key="pvForecastPlanningSafetyPct" type="number" min="30" max="100" step="1" value="85"></label>
-              <label class="row nw-ai-setting-row"><span>Breitengrad (0 = Systemstandort)</span><input id="s_openMeteoLatitude" data-scope="settings" data-key="openMeteoLatitude" type="number" min="-90" max="90" step="0.000001" value="0"></label>
-              <label class="row nw-ai-setting-row"><span>Längengrad (0 = Systemstandort)</span><input id="s_openMeteoLongitude" data-scope="settings" data-key="openMeteoLongitude" type="number" min="-180" max="180" step="0.000001" value="0"></label>
-              <label class="row nw-ai-setting-row"><span>Aktualisierung (Minuten)</span><input id="s_forecastUpdateIntervalMin" data-scope="settings" data-key="forecastUpdateIntervalMin" type="number" min="5" max="180" step="1" value="30"></label>
-              <label class="row nw-ai-setting-row"><span>Planungshorizont (Stunden)</span><input id="s_forecastHorizonHours" data-scope="settings" data-key="forecastHorizonHours" type="number" min="6" max="72" step="1" value="48"></label>
+            <section class="nw-pv-array-editor" aria-labelledby="nwPvArrayEditorTitle">
+              <div class="nw-pv-array-editor__header">
+                <div>
+                  <div class="nw-pv-array-editor__title" id="nwPvArrayEditorTitle">PV-Flächen</div>
+                  <small class="muted">Jede Dachausrichtung wird als eigene PV-Fläche erfasst. Die Prognose addiert alle Flächen automatisch.</small>
+                </div>
+                <button class="btn sm nw-pv-array-editor__add" id="nwPvArrayAdd" type="button">+ PV-Fläche hinzufügen</button>
+              </div>
+
+              <div class="nw-pv-array-table-wrap">
+                <table class="nw-pv-array-table" aria-describedby="nwPvArrayHelp">
+                  <thead>
+                    <tr>
+                      <th scope="col">Bezeichnung</th>
+                      <th scope="col">Leistung (kWp)</th>
+                      <th scope="col">Neigung (°)</th>
+                      <th scope="col">Ausrichtung</th>
+                      <th scope="col">Verluste (%)</th>
+                      <th scope="col">WR-Grenze (kW)</th>
+                      <th scope="col"><span class="sr-only">Aktion</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="nwPvArrayRows"></tbody>
+                </table>
+              </div>
+              <small class="muted" id="nwPvArrayHelp">Die Wechselrichtergrenze ist optional. 0 bedeutet: keine zusätzliche Begrenzung.</small>
+              <small class="nw-pv-array-validation hidden" id="nwPvArrayValidation" role="status" aria-live="polite"></small>
+            </section>
+
+            <!-- Kompatibilitätsfelder: werden vom einfachen Tabelleneditor automatisch gepflegt. -->
+            <div class="hidden" aria-hidden="true">
+              <input id="s_pvForecastInstalledKwp" data-scope="settings" data-key="pvForecastInstalledKwp" type="number" min="0" max="100000" step="0.01" value="0" tabindex="-1">
+              <input id="s_pvForecastTiltDeg" data-scope="settings" data-key="pvForecastTiltDeg" type="number" min="0" max="90" step="1" value="30" tabindex="-1">
+              <input id="s_pvForecastAzimuthDeg" data-scope="settings" data-key="pvForecastAzimuthDeg" type="number" min="-180" max="180" step="1" value="0" tabindex="-1">
+              <input id="s_pvForecastLossPercent" data-scope="settings" data-key="pvForecastLossPercent" type="number" min="0" max="60" step="0.1" value="14" tabindex="-1">
+              <input id="s_pvForecastInverterLimitW" data-scope="settings" data-key="pvForecastInverterLimitW" type="number" min="0" max="100000000" step="100" value="0" tabindex="-1">
+              <textarea id="s_pvForecastArrays" data-scope="settings" data-key="pvForecastArrays" rows="1" spellcheck="false" tabindex="-1">[]</textarea>
             </div>
-            <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:800">Mehrere PV‑Flächen / Experten‑JSON</summary><textarea id="s_pvForecastArrays" data-scope="settings" data-key="pvForecastArrays" rows="6" spellcheck="false" style="width:100%;margin-top:8px;font-family:ui-monospace,Consolas,monospace">[]</textarea></details>
+
+            <details class="nw-pv-forecast-advanced">
+              <summary>Standort und Planung</summary>
+              <div class="nw-ai-customer-grid">
+                <label class="row nw-ai-setting-row"><span>Planungssicherheit (%)</span><input id="s_pvForecastPlanningSafetyPct" data-scope="settings" data-key="pvForecastPlanningSafetyPct" type="number" min="30" max="100" step="1" value="85"></label>
+                <label class="row nw-ai-setting-row"><span>Aktualisierung (Minuten)</span><input id="s_forecastUpdateIntervalMin" data-scope="settings" data-key="forecastUpdateIntervalMin" type="number" min="5" max="180" step="1" value="30"></label>
+                <label class="row nw-ai-setting-row"><span>Planungshorizont (Stunden)</span><input id="s_forecastHorizonHours" data-scope="settings" data-key="forecastHorizonHours" type="number" min="6" max="72" step="1" value="48"></label>
+                <label class="row nw-ai-setting-row"><span>Breitengrad (optional)</span><input id="s_openMeteoLatitude" data-scope="settings" data-key="openMeteoLatitude" type="number" min="-90" max="90" step="0.000001" value="0"></label>
+                <label class="row nw-ai-setting-row"><span>Längengrad (optional)</span><input id="s_openMeteoLongitude" data-scope="settings" data-key="openMeteoLongitude" type="number" min="-180" max="180" step="0.000001" value="0"></label>
+              </div>
+              <small class="muted nw-pv-forecast-advanced__help">Bleiben Breiten- und Längengrad auf 0, übernimmt NexoWatt EOS den Anlagenstandort automatisch aus der Systemkonfiguration. Ist dort nur Ort oder Postleitzahl hinterlegt, wird der Standort automatisch aufgelöst.</small>
+            </details>
           </div>
 
           <div class="nw-settings-section-title" style="margin-top:18px">Prognosestatus</div>
           <div class="nw-ai-customer-grid">
-            <div class="row nw-ai-setting-row"><span>Status</span><strong id="nwForecastStatus">Wird geladen …</strong></div>
+            <div class="row nw-ai-setting-row"><span>Status</span><strong id="nwForecastStatus">Adapterdaten werden verbunden …</strong></div>
             <div class="row nw-ai-setting-row"><span>Quelle</span><strong id="nwForecastSource">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Standort</span><strong id="nwForecastLocation">—</strong></div>
             <div class="row nw-ai-setting-row"><span>Letzte Aktualisierung</span><strong id="nwForecastUpdated">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 6 h</span><strong id="nwForecast6h">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 12 h</span><strong id="nwForecast12h">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 24 h</span><strong id="nwForecast24h">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Prognosepunkte</span><strong id="nwForecastPoints">—</strong></div>
           </div>
           <small id="nwForecastError" class="muted hidden" style="display:block;margin-top:8px;color:#ffbd59"></small>
         </div>
@@ -845,7 +884,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
   <script src="/static/cockpit-shell.js"></script>
-<script src="forecast-settings.js" defer></script>
+<script src="/static/forecast-settings.js" defer></script>
 <script src="/static/nw-shell.js"></script>
 </body>
 </html>

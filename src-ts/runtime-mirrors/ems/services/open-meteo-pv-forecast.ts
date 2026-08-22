@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 886a315d2083abacba308da638705ae0c61a3b7e7a2c136a8ce85bf84c78d04a
+ * Original-Hash: b077fba82c10c76d33363d0458308bf2254083840dffb08cf170b3589d7420fb
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/open-meteo-pv-forecast.ts
- * Quell-Hash: sha256:e6d0ddffa011bf69f343af1b3c510033d399e4f5222d4b899758d6afb2d2a5bf
+ * Quell-Hash: sha256:0d03d559352bf1e7d32b854bb3956b27877295bbf28fcf2dcbd495bbebb4d3ec
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -243,6 +243,138 @@ async function loadSettings(adapter) {
     };
 }
 /**
+ * Code-Teil: coordinate
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function coordinate(value) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value === 'string' && value.trim() === '')
+        return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+/**
+ * Code-Teil: validCoordinatePair
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function validCoordinatePair(latitude, longitude) {
+    return latitude !== null && longitude !== null
+        && latitude >= -90 && latitude <= 90
+        && longitude >= -180 && longitude <= 180
+        && !(Math.abs(latitude) < 1e-9 && Math.abs(longitude) < 1e-9);
+}
+/**
+ * Code-Teil: normalizeCountryCode
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function normalizeCountryCode(value) {
+    const raw = text(value, '').trim();
+    if (/^[a-z]{2}$/i.test(raw))
+        return raw.toUpperCase();
+    const normalized = raw.toLowerCase();
+    const map = {
+        deutschland: 'DE', germany: 'DE', de: 'DE',
+        niederlande: 'NL', netherlands: 'NL', holland: 'NL', nl: 'NL',
+        österreich: 'AT', oesterreich: 'AT', austria: 'AT', at: 'AT',
+        schweiz: 'CH', switzerland: 'CH', suisse: 'CH', ch: 'CH',
+        belgien: 'BE', belgium: 'BE', be: 'BE',
+        luxemburg: 'LU', luxembourg: 'LU', lu: 'LU',
+    };
+    return map[normalized] || '';
+}
+/**
+ * Code-Teil: systemLocationHints
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function systemLocationHints(common) {
+    const address = common.address && typeof common.address === 'object' ? common.address : {};
+    const city = text(common.city ?? common.town ?? common.location ?? address.city ?? address.town, '').trim();
+    const postalCode = text(common.postalCode ?? common.postcode ?? common.zip ?? common.zipCode ?? address.postalCode ?? address.postcode ?? address.zip, '').trim();
+    const country = text(common.country ?? address.country, '').trim();
+    const countryCode = normalizeCountryCode(common.countryCode ?? address.countryCode ?? country);
+    return { city, postalCode, country, countryCode };
+}
+/**
+ * Code-Teil: geocodeSystemLocation
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function geocodeSystemLocation(adapter, settings, common) {
+    const hints = systemLocationHints(common);
+    const candidates = Array.from(new Set([hints.postalCode, hints.city].filter((value) => value.length >= 2)));
+    if (!candidates.length)
+        return null;
+    if (settings.weatherUsageMode === 'commercial' && !settings.weatherApiKey)
+        return null;
+    const cacheKey = JSON.stringify({ candidates, countryCode: hints.countryCode, commercial: settings.weatherUsageMode === 'commercial' });
+    const cached = adapter._nwOpenMeteoGeocodeCache;
+    if (cached && cached.key === cacheKey && Date.now() - cached.ts < 24 * 3600000)
+        return cached.value;
+    const baseUrl = settings.weatherUsageMode === 'commercial'
+        ? 'https://customer-geocoding-api.open-meteo.com/v1/search'
+        : 'https://geocoding-api.open-meteo.com/v1/search';
+    const apiKey = settings.weatherUsageMode === 'commercial' ? `&apikey=${encodeURIComponent(settings.weatherApiKey)}` : '';
+    const countryFilter = hints.countryCode ? `&countryCode=${encodeURIComponent(hints.countryCode)}` : '';
+    for (const candidate of candidates) {
+        const url = `${baseUrl}?name=${encodeURIComponent(candidate)}&count=10&language=de&format=json${countryFilter}${apiKey}`;
+        try {
+            const data = await requestJson(adapter, url);
+            const results = Array.isArray(data?.results) ? data.results : [];
+            if (!results.length)
+                continue;
+            const preferred = hints.postalCode
+                ? results.find((item) => Array.isArray(item?.postcodes) && item.postcodes.map(String).includes(hints.postalCode)) || results[0]
+                : results[0];
+            const latitude = coordinate(preferred?.latitude);
+            const longitude = coordinate(preferred?.longitude);
+            if (!validCoordinatePair(latitude, longitude))
+                continue;
+            const name = [preferred?.name, preferred?.admin1, preferred?.country].map((item) => text(item, '').trim()).filter(Boolean).filter((item, index, all) => all.indexOf(item) === index).join(', ')
+                || [hints.postalCode, hints.city, hints.country].filter(Boolean).join(' ');
+            const value = { latitude, longitude: longitude, name, source: 'system-geocoding' };
+            adapter._nwOpenMeteoGeocodeCache = { key: cacheKey, ts: Date.now(), value };
+            return value;
+        }
+        catch { /* try the next location hint */ }
+    }
+    return null;
+}
+/**
  * Code-Teil: resolveLocation
  *
  * Zweck:
@@ -254,23 +386,43 @@ async function loadSettings(adapter) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 async function resolveLocation(adapter, settings) {
-    if (Math.abs(settings.latitude) > 1e-9 || Math.abs(settings.longitude) > 1e-9) {
-        return { latitude: settings.latitude, longitude: settings.longitude };
+    if (validCoordinatePair(settings.latitude, settings.longitude)) {
+        return {
+            latitude: settings.latitude,
+            longitude: settings.longitude,
+            name: `${settings.latitude.toFixed(5)}, ${settings.longitude.toFixed(5)}`,
+            source: 'manual',
+        };
     }
     try {
         const geo = await adapter._nwGetSystemGeo?.();
-        const latitude = finite(geo?.lat, Number.NaN);
-        const longitude = finite(geo?.lon, Number.NaN);
-        if (Number.isFinite(latitude) && Number.isFinite(longitude))
-            return { latitude, longitude };
+        const latitude = coordinate(geo?.lat);
+        const longitude = coordinate(geo?.lon);
+        if (validCoordinatePair(latitude, longitude)) {
+            return {
+                latitude,
+                longitude: longitude,
+                name: text(geo?.locName, '').trim() || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+                source: 'system-coordinates',
+            };
+        }
     }
     catch { /* optional */ }
     try {
         const system = await adapter.getForeignObjectAsync?.('system.config');
-        const latitude = finite(system?.common?.latitude, Number.NaN);
-        const longitude = finite(system?.common?.longitude, Number.NaN);
-        if (Number.isFinite(latitude) && Number.isFinite(longitude))
-            return { latitude, longitude };
+        const common = system?.common && typeof system.common === 'object' ? system.common : {};
+        const latitude = coordinate(common.latitude);
+        const longitude = coordinate(common.longitude);
+        if (validCoordinatePair(latitude, longitude)) {
+            const hints = systemLocationHints(common);
+            return {
+                latitude,
+                longitude: longitude,
+                name: [hints.postalCode, hints.city, hints.country].filter(Boolean).join(' ') || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+                source: 'system-coordinates',
+            };
+        }
+        return await geocodeSystemLocation(adapter, settings, common);
     }
     catch { /* optional */ }
     return null;
@@ -381,6 +533,27 @@ function seriesValue(data, key, index) {
     return Array.isArray(data?.hourly?.[key]) ? finite(data.hourly[key][index], 0) : 0;
 }
 /**
+ * Code-Teil: forecastTimestamp
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function forecastTimestamp(value) {
+    if (typeof value === 'number' && Number.isFinite(value))
+        return value < 1e12 ? value * 1000 : value;
+    const raw = text(value, '').trim();
+    if (/^\d{10,13}$/.test(raw)) {
+        const numeric = Number(raw);
+        return raw.length <= 10 ? numeric * 1000 : numeric;
+    }
+    return Date.parse(raw);
+}
+/**
  * Code-Teil: buildOpenMeteoPvCurve
  *
  * Zweck:
@@ -396,8 +569,8 @@ function buildOpenMeteoPvCurve(data, settings, location, nowMs) {
     const horizonEnd = nowMs + settings.horizonHours * 3600000;
     const curve = [];
     for (let index = 0; index < times.length - 1; index += 1) {
-        const startHour = Date.parse(String(times[index] ?? ''));
-        const endHour = Date.parse(String(times[index + 1] ?? ''));
+        const startHour = forecastTimestamp(times[index]);
+        const endHour = forecastTimestamp(times[index + 1]);
         if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour <= startHour || startHour > horizonEnd)
             continue;
         for (let quarter = 0; quarter < 4; quarter += 1) {
@@ -466,13 +639,18 @@ function integrateKwh(curve, nowMs, hours) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function invalidSnapshot(nowMs, error, settings) {
+function invalidSnapshot(nowMs, error, settings, location) {
     return {
         ts: nowMs, valid: false, source: 'open-meteo-gti', ageMs: 0, points: 0,
         configuredKwp: settings?.arrays.reduce((sum, item) => sum + item.kwp, 0) ?? 0,
         planningSafetyPct: settings?.planningSafetyPct ?? 85,
         kwhNext6h: 0, kwhNext12h: 0, kwhNext24h: 0, peakWNext24h: 0,
-        statusText: error, error, curve: [],
+        statusText: error, error,
+        latitude: location?.latitude ?? 0,
+        longitude: location?.longitude ?? 0,
+        locationText: location?.name ?? '',
+        locationSource: location?.source ?? 'none',
+        curve: [],
     };
 }
 /**
@@ -505,19 +683,22 @@ async function ensureState(adapter, id, type, role, unit) {
  */
 async function publish(adapter, value) {
     const definitions = [
-        ['valid', 'boolean', 'indicator'], ['updatedAt', 'number', 'value.time'], ['ageMs', 'number', 'value.interval', 'ms'],
+        ['valid', 'boolean', 'indicator'], ['source', 'string', 'text'], ['updatedAt', 'number', 'value.time'], ['ageMs', 'number', 'value.interval', 'ms'],
         ['points', 'number', 'value'], ['kwhNext6h', 'number', 'value.energy', 'kWh'], ['kwhNext12h', 'number', 'value.energy', 'kWh'],
         ['kwhNext24h', 'number', 'value.energy', 'kWh'], ['peakWNext24h', 'number', 'value.power', 'W'],
         ['configuredKwp', 'number', 'value.power', 'kWp'], ['planningSafetyPct', 'number', 'value.percent', '%'],
+        ['latitude', 'number', 'value.gps.latitude', '°'], ['longitude', 'number', 'value.gps.longitude', '°'],
+        ['locationText', 'string', 'text'], ['locationSource', 'string', 'text'],
         ['statusText', 'string', 'text'], ['error', 'string', 'text'], ['curveJson', 'string', 'json'],
     ];
     for (const [key, type, role, unit] of definitions)
         await ensureState(adapter, `forecast.openMeteoPv.${key}`, type, role, unit);
     const states = {
-        valid: value.valid, updatedAt: value.ts, ageMs: value.ageMs, points: value.points,
+        valid: value.valid, source: value.source, updatedAt: value.ts, ageMs: value.ageMs, points: value.points,
         kwhNext6h: Number(value.kwhNext6h.toFixed(3)), kwhNext12h: Number(value.kwhNext12h.toFixed(3)),
         kwhNext24h: Number(value.kwhNext24h.toFixed(3)), peakWNext24h: value.peakWNext24h,
         configuredKwp: value.configuredKwp, planningSafetyPct: value.planningSafetyPct,
+        latitude: value.latitude, longitude: value.longitude, locationText: value.locationText, locationSource: value.locationSource,
         statusText: value.statusText, error: value.error, curveJson: JSON.stringify(value.curve.slice(0, 384)),
     };
     for (const [key, state] of Object.entries(states)) {
@@ -553,15 +734,15 @@ async function refresh(adapter) {
         await publish(adapter, value);
         return value;
     }
-    const location = await resolveLocation(adapter, settings);
-    if (!location) {
-        const value = invalidSnapshot(nowMs, 'Anlagenstandort nicht konfiguriert', settings);
+    if (settings.weatherUsageMode === 'commercial' && !settings.weatherApiKey) {
+        const value = invalidSnapshot(nowMs, 'Gewerbliche Open-Meteo-Nutzung benötigt einen API-Key', settings);
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
         return value;
     }
-    if (settings.weatherUsageMode === 'commercial' && !settings.weatherApiKey) {
-        const value = invalidSnapshot(nowMs, 'Gewerbliche Open-Meteo-Nutzung benötigt einen API-Key', settings);
+    const location = await resolveLocation(adapter, settings);
+    if (!location) {
+        const value = invalidSnapshot(nowMs, 'Anlagenstandort nicht konfiguriert', settings);
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
         return value;
@@ -573,8 +754,10 @@ async function refresh(adapter) {
         const apiKey = settings.weatherUsageMode === 'commercial' ? `&apikey=${encodeURIComponent(settings.weatherApiKey)}` : '';
         const forecastDays = Math.min(5, Math.max(2, Math.ceil(settings.horizonHours / 24) + 1));
         const hourly = 'temperature_2m,shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover';
+        // UNIX timestamps in GMT remove any dependency on the controller OS timezone.
+        // The customer-facing weather widget keeps its own local-time request.
         const url = `${baseUrl}?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`
-            + `&hourly=${hourly}&forecast_days=${forecastDays}&timezone=${encodeURIComponent(settings.timezone)}${apiKey}`;
+            + `&hourly=${hourly}&forecast_days=${forecastDays}&timezone=GMT&timeformat=unixtime${apiKey}`;
         const data = await requestJson(adapter, url);
         if (!data || data.error)
             throw new Error(text(data?.reason, 'Open-Meteo API error'));
@@ -587,7 +770,10 @@ async function refresh(adapter) {
             kwhNext6h: integrateKwh(curve, nowMs, 6), kwhNext12h: integrateKwh(curve, nowMs, 12),
             kwhNext24h: integrateKwh(curve, nowMs, 24),
             peakWNext24h: curve.filter((segment) => segment.t < nowMs + 24 * 3600000).reduce((max, segment) => Math.max(max, segment.w), 0),
-            statusText: `Open-Meteo PV-Prognose aktiv (${curve.length} Punkte)`, error: '', curve,
+            statusText: `Open-Meteo PV-Prognose aktiv (${curve.length} Punkte)`, error: '',
+            latitude: location.latitude, longitude: location.longitude,
+            locationText: location.name, locationSource: location.source,
+            curve,
         };
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
@@ -602,7 +788,7 @@ async function refresh(adapter) {
             await publish(adapter, stale);
             return stale;
         }
-        const value = invalidSnapshot(nowMs, message, settings);
+        const value = invalidSnapshot(nowMs, message, settings, location);
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
         return value;

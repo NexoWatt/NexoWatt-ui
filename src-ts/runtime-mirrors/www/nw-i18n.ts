@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 409ab21f930db0ecbe4a179071ea5548c6a3cb7ea38c991018eb688296231bad
+ * Original-Hash: d6fcff05b180862898af17e8f3e6c229a98b991891d90f96e8d25d2b34ba97fc
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-i18n.ts
- * Quell-Hash: sha256:0ac15bbb260b164677cbb962869bab52d0b55231009c1e2b06392838df22cdd8
+ * Quell-Hash: sha256:0710bb37dca04bfb9ab3f6baa84027a5ea3510253101cdde924a679cb59732a5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,7 +61,7 @@
     const SUPPORTED_LANGUAGES = new Set(['de', 'nl', 'en']);
     const DEFAULT_LANGUAGE = 'de';
     const POLL_INTERVAL_MS = 3000;
-    const CATALOG_VERSION = '0.8.198';
+    const CATALOG_VERSION = '0.8.199';
     const TEXT_ATTRS = ['title', 'aria-label', 'placeholder'];
     const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'CODE', 'PRE', 'NOSCRIPT', 'SVG', 'PATH']);
     const sourceTextByNode = new WeakMap();

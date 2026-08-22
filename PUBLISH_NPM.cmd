@@ -1,12 +1,10 @@
 @echo off
-echo NexoWatt EOS 0.8.198 RC73 wird geprueft und auf npm veroeffentlicht ...
+echo NexoWatt EOS 0.8.199 RC74 wird geprueft und auf npm veroeffentlicht ...
 npm publish
 if errorlevel 1 (
   echo.
-  echo FEHLER: Publish wurde abgebrochen. Bitte die Ausgabe oben pruefen.
-  pause
+  echo Publish fehlgeschlagen. Bitte die Fehlermeldung oben pruefen.
   exit /b 1
 )
 echo.
-echo NexoWatt EOS 0.8.198 wurde erfolgreich veroeffentlicht.
-pause
+echo NexoWatt EOS 0.8.199 wurde erfolgreich veroeffentlicht.

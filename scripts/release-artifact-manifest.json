@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.198",
+  "version": "0.8.199",
   "files": [
     {
       "path": "LICENSE",
@@ -242,6 +242,11 @@
       "path": "docs/RC73_EOS_ADMIN_EMS_OVERVIEW_DE.md",
       "size": 2241,
       "sha256": "74821dc1d180fbccd76e75cae39bb05faec409c8c195eff95aa10ddb2b86ea67"
+    },
+    {
+      "path": "docs/RC74_PV_FORECAST_CUSTOMER_UI_DE.md",
+      "size": 2640,
+      "sha256": "b64948002231a1f9db8316e169e58dd993d0ab731acff27965cbe15295e05d19"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -615,8 +620,8 @@
     },
     {
       "path": "ems/services/open-meteo-pv-forecast.js",
-      "size": 19693,
-      "sha256": "886a315d2083abacba308da638705ae0c61a3b7e7a2c136a8ce85bf84c78d04a"
+      "size": 25999,
+      "sha256": "b077fba82c10c76d33363d0458308bf2254083840dffb08cf170b3589d7420fb"
     },
     {
       "path": "ems/services/operating-strategy-runtime.js",
@@ -676,12 +681,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "9e3b72eba80088da1fdf14fc00b6c98c0fcb11700f89d77356b031d1ab8849d3"
+      "sha256": "ab955edf725043313f57ee14af73f2a25ae24ee0a8b10468940b38b9a69d615d"
     },
     {
       "path": "io-package.json",
-      "size": 24762,
-      "sha256": "3941e6f204abd30392dfe1ebb2f182eb30a5832173f7de5546554d79e06da99a"
+      "size": 24956,
+      "sha256": "24418379d1d8f417eba2f22f7a6df768b63e5d5ee4cd8f4a1a371a3f78742807"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -925,8 +930,8 @@
     },
     {
       "path": "main.js",
-      "size": 1721969,
-      "sha256": "929937bdc9a92918871086faace109ef3430ca23b3af92345cd8257d171779cc"
+      "size": 1722015,
+      "sha256": "588f831f39406eac950d1b3a84a492c5928c4f9c18fe4108a2b194bcf390d68a"
     },
     {
       "path": "www/admin-guard.js",
@@ -1061,7 +1066,7 @@
     {
       "path": "www/dc-station-display.js",
       "size": 53547,
-      "sha256": "f3b4db741f19a86cb4835ae808bb4b2570d9f67f1f9e7c40c432303f175d4a1a"
+      "sha256": "0c5f0740ada46f531a83e120c45a163f1ef2ec06abfb44078ba861b4d928f766"
     },
     {
       "path": "www/ems-apps-nvp-diagnostics.js",
@@ -1125,8 +1130,8 @@
     },
     {
       "path": "www/forecast-settings.js",
-      "size": 3781,
-      "sha256": "bb1ae59acd504d1af202c6c53c0da79ad65ad303801081946d929aebb0f2d6b9"
+      "size": 23537,
+      "sha256": "e3537d28cd607cabdcd573a65e895a9d8546cef10d3e70d8f9a236c2ce9e92b2"
     },
     {
       "path": "www/history.html",
@@ -1206,7 +1211,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "83d6d3ea14b5a1e71d1c0e8fbda750ec1fb57476ba28751956d7af7cf787ea8e"
+      "sha256": "8c351af8ccc4f785587db69702729bbe1644065be19c9e4afc31a05aa38358cc"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1241,7 +1246,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "409ab21f930db0ecbe4a179071ea5548c6a3cb7ea38c991018eb688296231bad"
+      "sha256": "d6fcff05b180862898af17e8f3e6c229a98b991891d90f96e8d25d2b34ba97fc"
     },
     {
       "path": "www/nw-shell.js",
@@ -1251,7 +1256,7 @@
     {
       "path": "www/operating-strategies-appcenter.js",
       "size": 93113,
-      "sha256": "47df3d4abfb705760ae6038548dd9aa3c0174f501f2fb96d426dd25a1059a308"
+      "sha256": "9090e6a7c57dbaec0577eb0aa70fff59d75e2fe319b025602919ae8de3379945"
     },
     {
       "path": "www/operating-strategies-rule-builder.js",
@@ -1290,8 +1295,8 @@
     },
     {
       "path": "www/settings.html",
-      "size": 58808,
-      "sha256": "bfd120a81f87bd7d95f3c7fb1af296bad79637ea8127c0ada4831aa6185373bb"
+      "size": 60731,
+      "sha256": "668c380f7333f4e002218843c0615e3b1b6559b04e1ef034692db43327057443"
     },
     {
       "path": "www/simulation.html",
@@ -1375,8 +1380,8 @@
     },
     {
       "path": "www/styles.css",
-      "size": 340184,
-      "sha256": "313afd07d78144d9367039265adf67060e22b626023cd6c5d291b571a19050b4"
+      "size": 344421,
+      "sha256": "76d4e97ef3e8c2547671d9e44e66ca15ac3d35edb4fce164f9df33cdabcb917c"
     },
     {
       "path": "www/sw.js",

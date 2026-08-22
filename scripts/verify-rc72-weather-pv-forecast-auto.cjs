@@ -359,7 +359,7 @@ assert.equal(buildMainSettingsWritePlan({ scope: 'settings', key: 'openMeteoPvEn
 assert.equal(buildMainSettingsWritePlan({ scope: 'settings', key: 'pvForecastArrays', value: '[{"kwp":5}]' }).plan.value, '[{"kwp":5}]');
 
 assert(settingsHtml.includes('id="nwForecastSettingsBlock"'));
-assert(settingsHtml.includes('<script src="forecast-settings.js" defer></script>'));
+assert(settingsHtml.includes('<script src="/static/forecast-settings.js" defer></script>'));
 assert.equal([...fs.readdirSync(path.join(ROOT, 'www')).filter((name) => name.endsWith('.html'))]
   .filter((name) => fs.readFileSync(path.join(ROOT, 'www', name), 'utf8').includes('forecast-settings.js')).length, 1);
 assert(settingsHelper.includes('nwOpenMeteoPvFields'));
@@ -469,7 +469,7 @@ if (CHROMIUM) {
     })()`);
     assert.equal(visible.hidden, false);
     assert.equal(visible.status, 'Prognose aktiv');
-    assert.equal(visible.source, 'open-meteo-gti');
+    assert.equal(visible.source, 'Open-Meteo');
     assert.match(visible.e6, /12[,.]5/);
     const datapoint = await cdp.eval(`(() => {
       const source=document.getElementById('s_forecastSourceMode'); source.value='datapoint'; source.dispatchEvent(new Event('change'));

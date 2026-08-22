@@ -1,12 +1,12 @@
-NexoWatt EOS 0.8.198 RC73 – EMS Live-Diagnose für EOS Admin
+NexoWatt EOS 0.8.199 RC74 – Open-Meteo PV-Prognose und einfache PV-Flächenverwaltung
 
-1. ZIP vollständig in einen frischen Projektordner entpacken.
+1. ZIP vollständig in einen neuen, leeren Projektordner entpacken.
 2. Optional: npm ci
 3. npm publish
 
 Der prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.198 auf npm noch frei ist,
+- ob Version 0.8.199 auf npm noch frei ist,
 - ob package.json.files und Release-Manifest exakt übereinstimmen,
 - ob alle freigegebenen Produktdateien vollständig und unverändert sind.
 
-RC73 ergänzt ausschließlich einen versionierten, rein lesenden EMS-Diagnosevertrag unter info.adminOverview.*. Die vorhandenen Regler, Safety-Grenzen und Hardware-Writer bleiben unverändert.
+RC74 repariert die Open-Meteo-PV-Prognose, ersetzt die Kunden-JSON-Eingabe durch eine PV-Flächentabelle und behält AppCenter-Fallback sowie alle Safety-/Single-Writer-Grenzen unverändert bei.

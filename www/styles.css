@@ -13240,3 +13240,194 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   body.nw-page-ems-apps .nw-charging-audit__subhead{align-items:flex-start;flex-direction:column;}
   body.nw-page-ems-apps .nw-charging-audit__subhead span{text-align:left;}
 }
+
+/* RC74: einfacher Endkunden-Editor für mehrere PV-Flächen */
+.sr-only{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+.nw-pv-array-editor{
+  margin-top:14px;
+  padding:16px;
+  border:1px solid rgba(80,170,255,.18);
+  border-radius:16px;
+  background:linear-gradient(135deg,rgba(3,18,32,.72),rgba(4,36,58,.42));
+}
+.nw-pv-array-editor__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:14px;
+}
+.nw-pv-array-editor__title{
+  margin-bottom:4px;
+  font-size:1rem;
+  font-weight:900;
+}
+.nw-pv-array-editor__add{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.nw-pv-array-table-wrap{
+  width:100%;
+  overflow-x:auto;
+  border:1px solid rgba(80,170,255,.14);
+  border-radius:14px;
+}
+.nw-pv-array-table{
+  width:100%;
+  min-width:950px;
+  border-collapse:collapse;
+  table-layout:fixed;
+}
+.nw-pv-array-table th,
+.nw-pv-array-table td{
+  padding:10px 8px;
+  border-bottom:1px solid rgba(80,170,255,.12);
+  text-align:left;
+  vertical-align:middle;
+}
+.nw-pv-array-table th{
+  color:rgba(225,238,249,.76);
+  font-size:.74rem;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.nw-pv-array-table tbody tr:last-child td{
+  border-bottom:0;
+}
+.nw-pv-array-table input,
+.nw-pv-array-table select{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.nw-pv-array-table th:nth-child(1){width:18%;}
+.nw-pv-array-table th:nth-child(2){width:13%;}
+.nw-pv-array-table th:nth-child(3){width:11%;}
+.nw-pv-array-table th:nth-child(4){width:18%;}
+.nw-pv-array-table th:nth-child(5){width:12%;}
+.nw-pv-array-table th:nth-child(6){width:15%;}
+.nw-pv-array-table th:nth-child(7){width:54px;}
+.nw-pv-array-remove{
+  width:38px;
+  min-width:38px;
+  height:38px;
+  padding:0;
+  border-radius:10px;
+  border:1px solid rgba(255,108,108,.36);
+  background:rgba(103,17,25,.35);
+  color:#ffd8d8;
+  font-size:1.15rem;
+  font-weight:900;
+  cursor:pointer;
+}
+.nw-pv-array-remove:disabled{
+  opacity:.32;
+  cursor:not-allowed;
+}
+.nw-pv-array-validation{
+  display:block;
+  margin-top:10px;
+  color:#ffbd59;
+  font-weight:700;
+}
+.nw-pv-forecast-advanced{
+  margin-top:14px;
+  border:1px solid rgba(80,170,255,.14);
+  border-radius:14px;
+  background:rgba(3,18,32,.36);
+}
+.nw-pv-forecast-advanced > summary{
+  padding:13px 14px;
+  cursor:pointer;
+  font-weight:850;
+}
+.nw-pv-forecast-advanced[open] > summary{
+  border-bottom:1px solid rgba(80,170,255,.12);
+}
+.nw-pv-forecast-advanced .nw-ai-customer-grid{
+  padding:0 14px 14px;
+}
+.nw-pv-forecast-advanced__help{
+  display:block;
+  padding:0 14px 14px;
+}
+#nwForecastStatus[data-state="ok"]{color:#43e89a;}
+#nwForecastStatus[data-state="warning"]{color:#ffbd59;}
+#nwForecastStatus[data-state="off"]{color:rgba(225,238,249,.62);}
+
+@media (max-width: 920px){
+  .nw-pv-array-editor__header{
+    flex-direction:column;
+  }
+  .nw-pv-array-editor__add{
+    width:100%;
+  }
+  .nw-pv-array-table-wrap{
+    overflow:visible;
+    border:0;
+  }
+  .nw-pv-array-table{
+    min-width:0;
+  }
+  .nw-pv-array-table thead{
+    display:none;
+  }
+  .nw-pv-array-table,
+  .nw-pv-array-table tbody,
+  .nw-pv-array-table tr,
+  .nw-pv-array-table td{
+    display:block;
+    width:100%;
+  }
+  .nw-pv-array-table tr{
+    box-sizing:border-box;
+    margin-bottom:12px;
+    padding:10px;
+    border:1px solid rgba(80,170,255,.16);
+    border-radius:14px;
+    background:rgba(3,18,32,.58);
+  }
+  .nw-pv-array-table td{
+    display:grid;
+    grid-template-columns:minmax(120px,42%) minmax(0,1fr);
+    align-items:center;
+    gap:10px;
+    box-sizing:border-box;
+    padding:7px 4px;
+    border-bottom:1px solid rgba(80,170,255,.08);
+  }
+  .nw-pv-array-table td::before{
+    content:attr(data-label);
+    color:rgba(225,238,249,.72);
+    font-size:.78rem;
+    font-weight:800;
+  }
+  .nw-pv-array-table td:last-child{
+    display:flex;
+    justify-content:flex-end;
+    border-bottom:0;
+  }
+  .nw-pv-array-table td:last-child::before{
+    display:none;
+  }
+}
+
+@media (max-width: 560px){
+  .nw-pv-array-editor{
+    padding:12px;
+  }
+  .nw-pv-array-table td{
+    grid-template-columns:1fr;
+    gap:5px;
+  }
+}
