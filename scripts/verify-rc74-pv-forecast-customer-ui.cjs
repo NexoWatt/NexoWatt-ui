@@ -24,7 +24,7 @@ const { startOpenMeteoPvForecastRuntime } = require('../ems/services/open-meteo-
 // ---------------------------------------------------------------------------
 // Auslieferungs- und UI-Verträge
 // ---------------------------------------------------------------------------
-assert(settingsHtml.includes('<script src="/static/forecast-settings.js" defer></script>'), 'Forecast-Helfer muss über /static ausgeliefert werden');
+assert(/<script\s+src="\/static\/forecast-settings\.js(?:\?[^"]*)?"\s+defer><\/script>/.test(settingsHtml), 'Forecast-Helfer muss über /static ausgeliefert werden');
 assert(!settingsHtml.includes('<script src="forecast-settings.js" defer></script>'), 'defekter relativer Forecast-Scriptpfad darf nicht zurückkehren');
 assert(settingsHtml.includes('id="nwPvArrayRows"'));
 assert(settingsHtml.includes('id="nwPvArrayAdd"'));

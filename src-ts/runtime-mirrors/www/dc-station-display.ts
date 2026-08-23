@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0c5f0740ada46f531a83e120c45a163f1ef2ec06abfb44078ba861b4d928f766
+ * Original-Hash: aa6b616dfa54c5d60cbb91cbecea107c3d50da12dfa608d2c75acbaf29d0af2a
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dc-station-display.ts
- * Quell-Hash: sha256:1b1ca2b7d87fe93aa8a60d99ff5a66459b89c3a40b0dce362ae418f278f5e021
+ * Quell-Hash: sha256:abc0c216dfdf60eefc21409f65f1a82cda6f671aeaf84608089e672a763eb8be
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -755,7 +755,7 @@
             if (!token)
                 return;
             await fetchJson('/api/display/station/' + encodeURIComponent(token) + '/heartbeat', {
-                method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.199' }),
+                method: 'POST', body: JSON.stringify({ ts: Date.now(), width: window.innerWidth || 0, height: window.innerHeight || 0, visibility: document.visibilityState || 'visible', language: lang(), appVersion: '0.8.200' }),
                 headers: { 'Content-Type': 'application/json' },
             });
         }
@@ -1136,7 +1136,7 @@
     </header>${bannerHtml(viewPayload, opts)}${renderStatusStrip(viewPayload)}${renderSummary(viewPayload)}
     <section class="nw-lp-section"><header><strong>${escapeHtml(t('connectors'))} (${connectors.length})</strong><div class="nw-status-legend"><span data-tone="charging">● ${escapeHtml(t('charging'))}</span><span data-tone="ready">● ${escapeHtml(t('ready'))}</span><span data-tone="inactive">● ${escapeHtml(t('inactive'))}</span><span data-tone="waiting">● ${escapeHtml(t('waiting'))}</span></div></header><div class="nw-connector-grid ${countClass} ${layoutClass}">${connectors.map((c) => renderConnector(c, station)).join('') || `<section class="nw-display-status"><h1>${escapeHtml(t('unavailable'))}</h1><p>${escapeHtml(t('noConnectors'))}</p></section>`}</div></section>
     <section class="nw-insights-grid">${renderDecisionPanel(viewPayload)}${renderWarningsPanel(viewPayload, opts)}</section>
-    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.199')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
+    <footer class="nw-display-footer"><span>NexoWatt EOS · Energy Operation System</span><span>${escapeHtml(display.apiVersion || '0.8.200')}</span><span>${escapeHtml(t('directHardwareWrite'))}</span></footer>`;
         app.querySelectorAll('[data-command]').forEach((btn) => btn.addEventListener('click', () => {
             const extra = {};
             if (btn.hasAttribute('data-value'))

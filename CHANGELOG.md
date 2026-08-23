@@ -1,3 +1,13 @@
+## 0.8.200 - 2026-08-22
+
+- RC75 übernimmt den PV-Prognosestandort zentral aus EOS Admin beziehungsweise `system.config`. Sind dort nur Ort oder Postleitzahl vorhanden, werden Koordinaten über die Open-Meteo-Geocoding-API aufgelöst; alte manuelle Forecast-Koordinaten bleiben nur als Migrationsfallback erhalten.
+- PV-Anlagendaten bleiben im Endkundenbereich jederzeit sichtbar und editierbar – auch während verzögerter Settings-Hydrierung oder bei ausgewählter AppCenter-Quelle. Der Kunde verwaltet mehrere PV-Flächen weiterhin über Tabelle und Plus-Schaltfläche, ohne JSON-Eingabe.
+- Open-Meteo wird erst dann als aktive Prognose angezeigt, wenn eine zukünftige Kurve mit positiven Leistungspunkten vorhanden ist. Ein leerer oder nur formal gültiger Provider-Snapshot meldet jetzt verständlich „Prognose noch ohne Werte“.
+- Forecast-Diagnose um letzten Abrufversuch, letzten erfolgreichen Abruf, positive Prognosepunkte, aktuelle Prognoseleistung, Standortquelle, Standorttext, Koordinaten und Fehlergrund erweitert. Die Kundenanzeige liest bei aktiver Open-Meteo-Quelle direkt den aktuellen Provider-Snapshot und wartet nicht auf einen späteren EMS-Zyklus.
+- Browser-Cache für `forecast-settings.js` versioniert. Sichtbarkeit, PV-Flächentabelle und Status werden nach asynchroner State-Hydrierung gemeinsam nachgezogen.
+- Open-Meteo und AppCenter werden unverändert auf den zentralen `forecast.pv`-/`adapter._pvForecast`-Vertrag normalisiert. Auto-/Zeit-Ziel-, Budget-, Speicher-/Speicherfarm-, Thermik-, Betriebsstrategien- und Admin-Diagnoselogiken nutzen denselben Vertrag; reale Messwerte und alle Netz-, Stations-, Phasen-, §14a-, Parkregler-, RFID-, Safety- und Single-Writer-Grenzen bleiben übergeordnet.
+- Neuer RC75-Regressionsverbund prüft EOS-Admin-Standort, Geocoding, mehrere Dachflächen, direkte GTI-Abfragen, sichtbare Tabelle vor/nach Settings-Hydrierung, valide Energie-/Punktwerte und zentrale EMS-Verknüpfung.
+
 ## 0.8.199 - 2026-08-22
 
 - RC74 behebt die dauerhaft stehenbleibende PV-Prognoseanzeige „Wird geladen …“. Das kundenseitige Statusmodul wird jetzt ausschließlich unter `/static/forecast-settings.js` geladen und zeigt Open-Meteo- oder AppCenter-Werte einschließlich Fehlergrund an.

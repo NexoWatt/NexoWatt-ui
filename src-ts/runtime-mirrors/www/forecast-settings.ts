@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e3537d28cd607cabdcd573a65e895a9d8546cef10d3e70d8f9a236c2ce9e92b2
+ * Original-Hash: 3abeee92b5bd63c542a3033fd4b8658ac7108478a4a0138465877edeee78da5c
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/forecast-settings.ts
- * Quell-Hash: sha256:327063ea282d33c0d870b99722bf5178dc4a6b87fa5d635067607cd521fc7014
+ * Quell-Hash: sha256:5bcef1cd49e316870aec007d6a0fb7a7b4941d848c2ba5b3ed4e1966a259b346
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -747,6 +747,27 @@
         return raw;
     };
 /**
+ * Code-Teil: normalizeSourceMode
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const normalizeSourceMode = (value) => {
+        const source = String(value || 'auto').trim().toLowerCase();
+        if (['open-meteo', 'openmeteo', 'weather'].includes(source))
+            return 'open-meteo';
+        if (['datapoint', 'mapping', 'appcenter', 'app-center'].includes(source))
+            return 'datapoint';
+        if (['disabled', 'off', 'aus'].includes(source))
+            return 'disabled';
+        return 'auto';
+    };
+/**
  * Code-Teil: updateVisibility
  *
  * Zweck:
@@ -758,12 +779,19 @@
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
     const updateVisibility = () => {
-        const source = String(byId('s_forecastSourceMode')?.value || stateValue('settings.forecastSourceMode', 'auto') || 'auto');
-        const enabledInput = byId('s_openMeteoPvEnabled');
-        const enabled = enabledInput ? enabledInput.checked : asBoolean(stateValue('settings.openMeteoPvEnabled', false), false);
+        const sourceInput = byId('s_forecastSourceMode');
+        const source = normalizeSourceMode(stateValue('settings.forecastSourceMode', sourceInput?.value || 'auto'));
         const fields = byId('nwOpenMeteoPvFields');
-        if (fields)
-            fields.classList.toggle('hidden', !enabled || !['auto', 'open-meteo'].includes(source));
+        // PV-Anlagendaten müssen auch vor dem Einschalten sichtbar und editierbar
+        // sein. Die zentrale Settings-Runtime hydriert Checkboxen erst nach dem
+        // DOMContentLoaded-Handler und sendet dabei kein change-Event. Deshalb wird
+        // die Sichtbarkeit bei jedem Statuszyklus neu synchronisiert und hängt nur
+        // von der ausgewählten Quelle ab.
+        if (fields) {
+            fields.classList.remove('hidden');
+            fields.setAttribute('aria-hidden', 'false');
+            fields.classList.toggle('is-not-used', !['auto', 'open-meteo'].includes(source));
+        }
         const fallback = byId('s_forecastFallbackToDatapoints')?.closest('.row');
         if (fallback)
             fallback.classList.toggle('hidden', source !== 'auto');
@@ -780,10 +808,22 @@
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
     const updateStatus = () => {
-        const effectiveValid = asBoolean(stateValue('forecast.pv.valid', false), false);
-        const openValid = asBoolean(stateValue('forecast.openMeteoPv.valid', false), false);
-        const useOpenSnapshot = !effectiveValid && openValid;
-        const valid = effectiveValid || openValid;
+        updateVisibility();
+        const effectiveValidFlag = asBoolean(stateValue('forecast.pv.valid', false), false);
+        const openValidFlag = asBoolean(stateValue('forecast.openMeteoPv.valid', false), false);
+        const effectivePointsRaw = stateValue('forecast.pv.points', undefined);
+        const openPointsRaw = stateValue('forecast.openMeteoPv.points', undefined);
+        const effectivePointsKnown = effectivePointsRaw !== undefined && Number.isFinite(Number(effectivePointsRaw));
+        const openPointsKnown = openPointsRaw !== undefined && Number.isFinite(Number(openPointsRaw));
+        const effectiveValid = effectiveValidFlag && (!effectivePointsKnown || Number(effectivePointsRaw) > 0);
+        const openValid = openValidFlag && (!openPointsKnown || Number(openPointsRaw) > 0);
+        const effectiveSourceRaw = String(stateValue('forecast.pv.source', '') || '').trim().toLowerCase();
+        const effectiveUsesOpenMeteo = effectiveSourceRaw.includes('open-meteo');
+        // Ist Open-Meteo die kanonische Quelle, werden Status, Standort und Energie
+        // direkt aus dem Provider-Snapshot gelesen. Dieser ist sofort aktuell,
+        // während forecast.pv.* erst im nächsten EMS-Zyklus nachziehen kann.
+        const useOpenSnapshot = openValid && (!effectiveValid || effectiveUsesOpenMeteo);
+        const valid = useOpenSnapshot ? openValid : (effectiveValid || openValid);
         const hasForecastStates = hasState('forecast.pv.valid') || hasState('forecast.openMeteoPv.valid');
         const source = useOpenSnapshot
             ? stateValue('forecast.openMeteoPv.source', 'open-meteo-gti')
@@ -791,7 +831,9 @@
         const ageMs = useOpenSnapshot
             ? stateValue('forecast.openMeteoPv.ageMs', Number.NaN)
             : firstStateValue(['forecast.pv.ageMs', 'forecast.openMeteoPv.ageMs'], Number.NaN);
-        const updatedAt = stateValue('forecast.openMeteoPv.updatedAt', Number.NaN);
+        const updatedAt = useOpenSnapshot
+            ? stateValue('forecast.openMeteoPv.updatedAt', Number.NaN)
+            : firstStateValue(['forecast.pv.updatedAt', 'forecast.openMeteoPv.updatedAt'], Number.NaN);
         const openStatusText = firstStateValue(['forecast.openMeteoPv.error', 'forecast.openMeteoPv.statusText'], '');
         const statusText = useOpenSnapshot
             ? firstStateValue(['forecast.openMeteoPv.statusText', 'forecast.openMeteoPv.error'], '')
@@ -809,6 +851,12 @@
             if (valid) {
                 label = 'Prognose aktiv';
                 state = 'ok';
+            }
+            else if ((effectiveValidFlag || openValidFlag)
+                && ((effectivePointsKnown && Number(effectivePointsRaw) <= 0)
+                    || (openPointsKnown && Number(openPointsRaw) <= 0))) {
+                label = 'Prognose noch ohne Werte';
+                state = 'warning';
             }
             else if (mode === 'disabled') {
                 label = 'Deaktiviert';
@@ -863,10 +911,14 @@
         }
         const location = byId('nwForecastLocation');
         if (location) {
-            const label = String(firstStateValue(['forecast.openMeteoPv.locationText'], '') || '').trim();
-            const lat = Number(stateValue('forecast.openMeteoPv.latitude', Number.NaN));
-            const lon = Number(stateValue('forecast.openMeteoPv.longitude', Number.NaN));
-            location.textContent = label || (Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : '—');
+            const label = String(firstStateValue(['forecast.openMeteoPv.locationText', 'forecast.pv.locationText'], '') || '').trim();
+            const locationSource = String(firstStateValue(['forecast.openMeteoPv.locationSource', 'forecast.pv.locationSource'], '') || '').trim().toLowerCase();
+            const lat = Number(firstStateValue(['forecast.openMeteoPv.latitude', 'forecast.pv.latitude'], Number.NaN));
+            const lon = Number(firstStateValue(['forecast.openMeteoPv.longitude', 'forecast.pv.longitude'], Number.NaN));
+            const coordinates = Number.isFinite(lat) && Number.isFinite(lon) && (Math.abs(lat) > 1e-9 || Math.abs(lon) > 1e-9)
+                ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : '';
+            const adminFallback = locationSource.startsWith('system') ? 'EOS Admin / Systemstandort' : '';
+            location.textContent = label || coordinates || adminFallback || 'EOS Admin / Systemstandort';
         }
         const message = friendlyMessage(statusText);
         if (error) {
@@ -900,8 +952,17 @@
         setupArrayEditor();
         updateVisibility();
         updateStatus();
-        window.setInterval(updateStatus, 3000);
+        window.setInterval(() => {
+            // Settings werden asynchron aus /api/state hydriert. Sichtbarkeit,
+            // Tabelleninhalt und Status deshalb gemeinsam nachziehen.
+            updateVisibility();
+            updateStatus();
+        }, 3000);
     };
+    try {
+        window.nwForecastSettings = { setup, updateVisibility, updateStatus, hydrateEditor };
+    }
+    catch { /* optional */ }
     if (document.readyState === 'loading')
         document.addEventListener('DOMContentLoaded', setup, { once: true });
     else

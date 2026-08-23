@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b077fba82c10c76d33363d0458308bf2254083840dffb08cf170b3589d7420fb
+ * Original-Hash: dcb9a6c98e23bc08205a21c1c7d05bcb26bca13a3a7760c73707dc0f3ff88e8f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/open-meteo-pv-forecast.ts
- * Quell-Hash: sha256:0d03d559352bf1e7d32b854bb3956b27877295bbf28fcf2dcbd495bbebb4d3ec
+ * Quell-Hash: sha256:b89e57803f1cf150a2388665b8dc7548d85f7342ffe4555b11cd500cb7b4ee3c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -48,12 +48,78 @@
  */
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PV_FORECAST_DIAGNOSTIC_STATES = void 0;
+exports.buildPvForecastDiagnostics = buildPvForecastDiagnostics;
+exports.publishPvForecastDiagnostics = publishPvForecastDiagnostics;
 exports.normalizeOpenMeteoPvArrays = normalizeOpenMeteoPvArrays;
 exports.openMeteoSolarPosition = openMeteoSolarPosition;
 exports.openMeteoPlaneOfArrayIrradiance = openMeteoPlaneOfArrayIrradiance;
 exports.buildOpenMeteoPvCurve = buildOpenMeteoPvCurve;
+exports.buildOpenMeteoTiltedPvCurve = buildOpenMeteoTiltedPvCurve;
 exports.startOpenMeteoPvForecastRuntime = startOpenMeteoPvForecastRuntime;
 const https = require('node:https');
+exports.PV_FORECAST_DIAGNOSTIC_STATES = [
+    ['updatedAt', 'PV Forecast letzte erfolgreiche Aktualisierung', 'number', 'value.time'],
+    ['lastAttemptAt', 'PV Forecast letzter Abrufversuch', 'number', 'value.time'],
+    ['lastSuccessAt', 'PV Forecast letzter erfolgreicher Abruf', 'number', 'value.time'],
+    ['positivePoints', 'PV Forecast Punkte mit Ertrag', 'number', 'value'],
+    ['powerNowW', 'PV Forecast Leistung jetzt (W)', 'number', 'value.power'],
+    ['locationText', 'PV Forecast Standort', 'string', 'text'],
+    ['locationSource', 'PV Forecast Standortquelle', 'string', 'text'],
+    ['latitude', 'PV Forecast Breitengrad', 'number', 'value.gps.latitude'],
+    ['longitude', 'PV Forecast Längengrad', 'number', 'value.gps.longitude'],
+    ['error', 'PV Forecast Fehler', 'string', 'text'],
+];
+/**
+ * Code-Teil: buildPvForecastDiagnostics
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function buildPvForecastDiagnostics(input = {}) {
+    const provider = input.integrated && typeof input.integrated === 'object' ? input.integrated : null;
+    const useProvider = input.useIntegrated === true;
+    const now = finite(input.now, Date.now());
+    const mappedAgeMs = input.mappedAgeMs;
+    const mappedUpdatedAt = mappedAgeMs === null || mappedAgeMs === undefined
+        ? now : Math.max(0, now - Math.max(0, finite(mappedAgeMs, 0)));
+    const providerUpdatedAt = provider ? finite(provider.lastSuccessAt ?? provider.ts, 0) : 0;
+    const updatedAt = useProvider ? (providerUpdatedAt || now) : mappedUpdatedAt;
+    return {
+        updatedAt,
+        lastAttemptAt: useProvider && provider ? finite(provider.lastAttemptAt ?? provider.ts, updatedAt) : updatedAt,
+        lastSuccessAt: useProvider && provider ? finite(provider.lastSuccessAt ?? provider.ts, updatedAt) : updatedAt,
+        positivePoints: Math.max(0, Math.round(finite(input.positivePoints, 0))),
+        powerNowW: Math.max(0, finite(input.powerNowW, 0)),
+        locationText: useProvider && provider ? text(provider.locationText, '') : '',
+        locationSource: useProvider && provider ? text(provider.locationSource, '') : '',
+        latitude: useProvider && provider ? finite(provider.latitude, 0) : 0,
+        longitude: useProvider && provider ? finite(provider.longitude, 0) : 0,
+        error: text(input.error ?? (useProvider && provider ? provider.error : ''), ''),
+    };
+}
+/**
+ * Code-Teil: publishPvForecastDiagnostics
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function publishPvForecastDiagnostics(setter, diagnostics) {
+    for (const [key] of exports.PV_FORECAST_DIAGNOSTIC_STATES) {
+        const value = key === 'powerNowW' ? Math.round(diagnostics[key]) : diagnostics[key];
+        await setter(`forecast.pv.${key}`, value);
+    }
+}
 const SLOT_MS = 15 * 60 * 1000;
 const DEFAULT_ERROR = 'open-meteo-pv-not-started';
 /**
@@ -386,14 +452,8 @@ async function geocodeSystemLocation(adapter, settings, common) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 async function resolveLocation(adapter, settings) {
-    if (validCoordinatePair(settings.latitude, settings.longitude)) {
-        return {
-            latitude: settings.latitude,
-            longitude: settings.longitude,
-            name: `${settings.latitude.toFixed(5)}, ${settings.longitude.toFixed(5)}`,
-            source: 'manual',
-        };
-    }
+    // Zentrale Standortquelle ist immer der EOS Admin / system.config. Manuell
+    // gespeicherte Altkoordinaten bleiben nur als rückwärtskompatibler Fallback.
     try {
         const geo = await adapter._nwGetSystemGeo?.();
         const latitude = coordinate(geo?.lat);
@@ -422,9 +482,19 @@ async function resolveLocation(adapter, settings) {
                 source: 'system-coordinates',
             };
         }
-        return await geocodeSystemLocation(adapter, settings, common);
+        const geocoded = await geocodeSystemLocation(adapter, settings, common);
+        if (geocoded)
+            return geocoded;
     }
     catch { /* optional */ }
+    if (validCoordinatePair(settings.latitude, settings.longitude)) {
+        return {
+            latitude: settings.latitude,
+            longitude: settings.longitude,
+            name: `${settings.latitude.toFixed(5)}, ${settings.longitude.toFixed(5)}`,
+            source: 'legacy-manual-fallback',
+        };
+    }
     return null;
 }
 /**
@@ -611,6 +681,67 @@ function buildOpenMeteoPvCurve(data, settings, location, nowMs) {
     return curve.sort((a, b) => a.t - b.t).slice(0, 384);
 }
 /**
+ * Code-Teil: tiltedForecastBlock
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function tiltedForecastBlock(data) {
+    const block = data?.minutely_15 && typeof data.minutely_15 === 'object'
+        ? data.minutely_15
+        : (data?.hourly && typeof data.hourly === 'object' ? data.hourly : null);
+    if (!block)
+        return null;
+    const time = Array.isArray(block.time) ? block.time : [];
+    const irradiance = Array.isArray(block.global_tilted_irradiance) ? block.global_tilted_irradiance : [];
+    const temperature = Array.isArray(block.temperature_2m) ? block.temperature_2m : [];
+    return time.length && irradiance.length ? { time, irradiance, temperature } : null;
+}
+/**
+ * Builds the plant curve directly from Open-Meteo Global Tilted Irradiance.
+ * Each PV surface is requested with its own tilt/azimuth and then summed. This
+ * avoids local solar-position conversion errors and follows Open-Meteo's
+ * documented 0° south / -90° east / +90° west convention exactly.
+ */
+function buildOpenMeteoTiltedPvCurve(responses, settings, nowMs) {
+    const horizonEnd = nowMs + settings.horizonHours * 3600000;
+    const powerByTimestamp = new Map();
+    const durationByTimestamp = new Map();
+    for (const response of responses) {
+        const block = tiltedForecastBlock(response.data);
+        if (!block)
+            continue;
+        const count = Math.min(block.time.length, block.irradiance.length);
+        for (let index = 0; index < count; index += 1) {
+            const timestamp = forecastTimestamp(block.time[index]);
+            const nextTimestamp = index + 1 < count ? forecastTimestamp(block.time[index + 1]) : timestamp + SLOT_MS;
+            if (!Number.isFinite(timestamp) || !Number.isFinite(nextTimestamp) || nextTimestamp <= timestamp)
+                continue;
+            if (nextTimestamp <= nowMs - SLOT_MS || timestamp > horizonEnd)
+                continue;
+            const gti = Math.max(0, finite(block.irradiance[index], 0));
+            const ambient = finite(block.temperature[index], 20);
+            const cellTemperature = ambient + 0.03 * gti;
+            const temperatureFactor = clamp(1 - 0.004 * (cellTemperature - 25), 0.7, 1.1, 1);
+            let powerW = response.array.kwp * 1000 * (gti / 1000)
+                * (1 - response.array.lossPercent / 100) * temperatureFactor;
+            if (response.array.inverterLimitW > 0)
+                powerW = Math.min(powerW, response.array.inverterLimitW);
+            powerByTimestamp.set(timestamp, (powerByTimestamp.get(timestamp) || 0) + Math.max(0, powerW));
+            durationByTimestamp.set(timestamp, Math.min(60 * 60 * 1000, Math.max(5 * 60 * 1000, nextTimestamp - timestamp)));
+        }
+    }
+    return [...powerByTimestamp.entries()]
+        .map(([t, w]) => ({ t, dtMs: durationByTimestamp.get(t) || SLOT_MS, w: Math.round(w) }))
+        .sort((a, b) => a.t - b.t)
+        .slice(0, 384);
+}
+/**
  * Code-Teil: integrateKwh
  *
  * Zweck:
@@ -641,7 +772,7 @@ function integrateKwh(curve, nowMs, hours) {
  */
 function invalidSnapshot(nowMs, error, settings, location) {
     return {
-        ts: nowMs, valid: false, source: 'open-meteo-gti', ageMs: 0, points: 0,
+        ts: nowMs, valid: false, source: 'open-meteo-gti', ageMs: 0, points: 0, positivePoints: 0, requestCount: 0, lastAttemptAt: nowMs, lastSuccessAt: 0,
         configuredKwp: settings?.arrays.reduce((sum, item) => sum + item.kwp, 0) ?? 0,
         planningSafetyPct: settings?.planningSafetyPct ?? 85,
         kwhNext6h: 0, kwhNext12h: 0, kwhNext24h: 0, peakWNext24h: 0,
@@ -684,7 +815,9 @@ async function ensureState(adapter, id, type, role, unit) {
 async function publish(adapter, value) {
     const definitions = [
         ['valid', 'boolean', 'indicator'], ['source', 'string', 'text'], ['updatedAt', 'number', 'value.time'], ['ageMs', 'number', 'value.interval', 'ms'],
-        ['points', 'number', 'value'], ['kwhNext6h', 'number', 'value.energy', 'kWh'], ['kwhNext12h', 'number', 'value.energy', 'kWh'],
+        ['points', 'number', 'value'], ['positivePoints', 'number', 'value'], ['requestCount', 'number', 'value'],
+        ['lastAttemptAt', 'number', 'value.time'], ['lastSuccessAt', 'number', 'value.time'],
+        ['kwhNext6h', 'number', 'value.energy', 'kWh'], ['kwhNext12h', 'number', 'value.energy', 'kWh'],
         ['kwhNext24h', 'number', 'value.energy', 'kWh'], ['peakWNext24h', 'number', 'value.power', 'W'],
         ['configuredKwp', 'number', 'value.power', 'kWp'], ['planningSafetyPct', 'number', 'value.percent', '%'],
         ['latitude', 'number', 'value.gps.latitude', '°'], ['longitude', 'number', 'value.gps.longitude', '°'],
@@ -695,6 +828,7 @@ async function publish(adapter, value) {
         await ensureState(adapter, `forecast.openMeteoPv.${key}`, type, role, unit);
     const states = {
         valid: value.valid, source: value.source, updatedAt: value.ts, ageMs: value.ageMs, points: value.points,
+        positivePoints: value.positivePoints, requestCount: value.requestCount, lastAttemptAt: value.lastAttemptAt, lastSuccessAt: value.lastSuccessAt,
         kwhNext6h: Number(value.kwhNext6h.toFixed(3)), kwhNext12h: Number(value.kwhNext12h.toFixed(3)),
         kwhNext24h: Number(value.kwhNext24h.toFixed(3)), peakWNext24h: value.peakWNext24h,
         configuredKwp: value.configuredKwp, planningSafetyPct: value.planningSafetyPct,
@@ -742,37 +876,87 @@ async function refresh(adapter) {
     }
     const location = await resolveLocation(adapter, settings);
     if (!location) {
-        const value = invalidSnapshot(nowMs, 'Anlagenstandort nicht konfiguriert', settings);
+        const value = invalidSnapshot(nowMs, 'Anlagenstandort im EOS Admin / in system.config nicht konfiguriert', settings);
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
         return value;
     }
+    const baseUrl = settings.weatherUsageMode === 'commercial'
+        ? 'https://customer-api.open-meteo.com/v1/forecast'
+        : 'https://api.open-meteo.com/v1/forecast';
+    const apiKey = settings.weatherUsageMode === 'commercial'
+        ? `&apikey=${encodeURIComponent(settings.weatherApiKey)}`
+        : '';
+    const forecastSlots = Math.min(384, Math.max(24, Math.ceil(settings.horizonHours * 4) + 4));
+    const responses = [];
+    const requestErrors = [];
     try {
-        const baseUrl = settings.weatherUsageMode === 'commercial'
-            ? 'https://customer-api.open-meteo.com/v1/forecast'
-            : 'https://api.open-meteo.com/v1/forecast';
-        const apiKey = settings.weatherUsageMode === 'commercial' ? `&apikey=${encodeURIComponent(settings.weatherApiKey)}` : '';
-        const forecastDays = Math.min(5, Math.max(2, Math.ceil(settings.horizonHours / 24) + 1));
-        const hourly = 'temperature_2m,shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover';
-        // UNIX timestamps in GMT remove any dependency on the controller OS timezone.
-        // The customer-facing weather widget keeps its own local-time request.
-        const url = `${baseUrl}?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`
-            + `&hourly=${hourly}&forecast_days=${forecastDays}&timezone=GMT&timeformat=unixtime${apiKey}`;
-        const data = await requestJson(adapter, url);
-        if (!data || data.error)
-            throw new Error(text(data?.reason, 'Open-Meteo API error'));
-        const curve = buildOpenMeteoPvCurve(data, settings, location, nowMs);
+        // Open-Meteo calculates Global Tilted Irradiance directly for the supplied
+        // surface orientation. Each PV surface is requested separately and summed
+        // afterwards. This avoids timezone/solar-position conversion errors and
+        // follows the provider's documented azimuth convention exactly.
+        const settled = await Promise.allSettled(settings.arrays.map(async (array) => {
+            const url = `${baseUrl}?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`
+                + `&minutely_15=global_tilted_irradiance,temperature_2m&forecast_minutely_15=${forecastSlots}`
+                + `&tilt=${encodeURIComponent(array.tiltDeg)}&azimuth=${encodeURIComponent(array.azimuthDeg)}`
+                + `&timezone=GMT&timeformat=unixtime${apiKey}`;
+            const data = await requestJson(adapter, url);
+            if (!data || data.error)
+                throw new Error(text(data?.reason, 'Open-Meteo API error'));
+            if (!tiltedForecastBlock(data))
+                throw new Error(`Keine Global-Tilted-Irradiance für ${array.name}`);
+            return { array, data };
+        }));
+        for (let index = 0; index < settled.length; index += 1) {
+            const entry = settled[index];
+            if (entry?.status === 'fulfilled')
+                responses.push(entry.value);
+            else
+                requestErrors.push(`${settings.arrays[index]?.name || `PV-Fläche ${index + 1}`}: ${text(entry?.reason?.message, entry?.reason)}`);
+        }
+        let curve = buildOpenMeteoTiltedPvCurve(responses, settings, nowMs);
+        // Compatibility fallback for providers/models that temporarily do not
+        // return minutely_15 GTI. The older GHI/DNI/DHI conversion is retained as a
+        // second attempt, not as the normal path.
+        if (curve.length === 0) {
+            const forecastDays = Math.min(5, Math.max(2, Math.ceil(settings.horizonHours / 24) + 1));
+            const hourly = 'temperature_2m,shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover';
+            const fallbackUrl = `${baseUrl}?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`
+                + `&hourly=${hourly}&forecast_days=${forecastDays}&timezone=GMT&timeformat=unixtime${apiKey}`;
+            const fallbackData = await requestJson(adapter, fallbackUrl);
+            if (!fallbackData || fallbackData.error)
+                throw new Error(text(fallbackData?.reason, 'Open-Meteo fallback API error'));
+            curve = buildOpenMeteoPvCurve(fallbackData, settings, location, nowMs);
+        }
+        const positivePoints = curve.filter((segment) => segment.w > 0).length;
         if (curve.length === 0)
             throw new Error('Keine zukünftigen Einstrahlungswerte verfügbar');
+        if (positivePoints === 0)
+            throw new Error('Open-Meteo lieferte nur 0-Werte für den Planungshorizont');
         const value = {
-            ts: nowMs, valid: true, source: 'open-meteo-gti', ageMs: 0, points: curve.length,
-            configuredKwp: settings.arrays.reduce((sum, item) => sum + item.kwp, 0), planningSafetyPct: settings.planningSafetyPct,
-            kwhNext6h: integrateKwh(curve, nowMs, 6), kwhNext12h: integrateKwh(curve, nowMs, 12),
+            ts: nowMs,
+            valid: true,
+            source: 'open-meteo-gti',
+            ageMs: 0,
+            points: curve.length,
+            positivePoints,
+            requestCount: responses.length,
+            lastAttemptAt: nowMs,
+            lastSuccessAt: nowMs,
+            configuredKwp: settings.arrays.reduce((sum, item) => sum + item.kwp, 0),
+            planningSafetyPct: settings.planningSafetyPct,
+            kwhNext6h: integrateKwh(curve, nowMs, 6),
+            kwhNext12h: integrateKwh(curve, nowMs, 12),
             kwhNext24h: integrateKwh(curve, nowMs, 24),
-            peakWNext24h: curve.filter((segment) => segment.t < nowMs + 24 * 3600000).reduce((max, segment) => Math.max(max, segment.w), 0),
-            statusText: `Open-Meteo PV-Prognose aktiv (${curve.length} Punkte)`, error: '',
-            latitude: location.latitude, longitude: location.longitude,
-            locationText: location.name, locationSource: location.source,
+            peakWNext24h: curve
+                .filter((segment) => segment.t < nowMs + 24 * 3600000)
+                .reduce((max, segment) => Math.max(max, segment.w), 0),
+            statusText: `Open-Meteo PV-Prognose aktiv (${curve.length} Punkte, ${positivePoints} mit Ertrag)`,
+            error: requestErrors.length ? `Teilweise Forecast-Fehler: ${requestErrors.join(' | ')}` : '',
+            latitude: location.latitude,
+            longitude: location.longitude,
+            locationText: location.name,
+            locationSource: location.source,
             curve,
         };
         adapter._openMeteoPvForecast = value;
@@ -783,12 +967,24 @@ async function refresh(adapter) {
         const previous = adapter._openMeteoPvForecast;
         const message = text(error?.message, String(error));
         if (previous?.valid && previous.ts > 0) {
-            const stale = { ...previous, ageMs: Math.max(0, nowMs - previous.ts), statusText: `Letzte Prognose wird weiterverwendet: ${message}`, error: message };
+            const stale = {
+                ...previous,
+                ageMs: Math.max(0, nowMs - previous.ts),
+                requestCount: responses.length,
+                lastAttemptAt: nowMs,
+                lastSuccessAt: previous.lastSuccessAt || previous.ts,
+                statusText: `Letzte Prognose wird weiterverwendet: ${message}`,
+                error: message,
+            };
             adapter._openMeteoPvForecast = stale;
             await publish(adapter, stale);
             return stale;
         }
-        const value = invalidSnapshot(nowMs, message, settings, location);
+        const value = {
+            ...invalidSnapshot(nowMs, message, settings, location),
+            requestCount: responses.length,
+            lastAttemptAt: nowMs,
+        };
         adapter._openMeteoPvForecast = value;
         await publish(adapter, value);
         return value;

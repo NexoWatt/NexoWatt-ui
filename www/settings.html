@@ -268,15 +268,13 @@
             </div>
 
             <details class="nw-pv-forecast-advanced">
-              <summary>Standort und Planung</summary>
+              <summary>Planung</summary>
               <div class="nw-ai-customer-grid">
                 <label class="row nw-ai-setting-row"><span>Planungssicherheit (%)</span><input id="s_pvForecastPlanningSafetyPct" data-scope="settings" data-key="pvForecastPlanningSafetyPct" type="number" min="30" max="100" step="1" value="85"></label>
                 <label class="row nw-ai-setting-row"><span>Aktualisierung (Minuten)</span><input id="s_forecastUpdateIntervalMin" data-scope="settings" data-key="forecastUpdateIntervalMin" type="number" min="5" max="180" step="1" value="30"></label>
                 <label class="row nw-ai-setting-row"><span>Planungshorizont (Stunden)</span><input id="s_forecastHorizonHours" data-scope="settings" data-key="forecastHorizonHours" type="number" min="6" max="72" step="1" value="48"></label>
-                <label class="row nw-ai-setting-row"><span>Breitengrad (optional)</span><input id="s_openMeteoLatitude" data-scope="settings" data-key="openMeteoLatitude" type="number" min="-90" max="90" step="0.000001" value="0"></label>
-                <label class="row nw-ai-setting-row"><span>Längengrad (optional)</span><input id="s_openMeteoLongitude" data-scope="settings" data-key="openMeteoLongitude" type="number" min="-180" max="180" step="0.000001" value="0"></label>
               </div>
-              <small class="muted nw-pv-forecast-advanced__help">Bleiben Breiten- und Längengrad auf 0, übernimmt NexoWatt EOS den Anlagenstandort automatisch aus der Systemkonfiguration. Ist dort nur Ort oder Postleitzahl hinterlegt, wird der Standort automatisch aufgelöst.</small>
+              <small class="muted nw-pv-forecast-advanced__help">Der Anlagenstandort wird zentral aus dem EOS Admin beziehungsweise der zentralen EOS-Systemkonfiguration übernommen. Ort oder Postleitzahl werden bei Bedarf automatisch in Koordinaten aufgelöst.</small>
             </details>
           </div>
 
@@ -884,7 +882,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
   <script src="/static/cockpit-shell.js"></script>
-<script src="/static/forecast-settings.js" defer></script>
+<script src="/static/forecast-settings.js?v=0.8.200-rc75" defer></script>
 <script src="/static/nw-shell.js"></script>
 </body>
 </html>

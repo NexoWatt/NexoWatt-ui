@@ -344,7 +344,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 
 
 const settingKeys = [
   'forecastSourceMode', 'openMeteoPvEnabled', 'forecastFallbackToDatapoints',
-  'openMeteoLatitude', 'openMeteoLongitude', 'forecastUpdateIntervalMin',
+  'forecastUpdateIntervalMin',
   'forecastHorizonHours', 'pvForecastPlanningSafetyPct', 'pvForecastInstalledKwp',
   'pvForecastTiltDeg', 'pvForecastAzimuthDeg', 'pvForecastLossPercent',
   'pvForecastInverterLimitW', 'pvForecastArrays',
@@ -359,7 +359,10 @@ assert.equal(buildMainSettingsWritePlan({ scope: 'settings', key: 'openMeteoPvEn
 assert.equal(buildMainSettingsWritePlan({ scope: 'settings', key: 'pvForecastArrays', value: '[{"kwp":5}]' }).plan.value, '[{"kwp":5}]');
 
 assert(settingsHtml.includes('id="nwForecastSettingsBlock"'));
-assert(settingsHtml.includes('<script src="/static/forecast-settings.js" defer></script>'));
+assert(!settingsHtml.includes('data-key="openMeteoLatitude"'), 'Endkunde darf keine manuellen Koordinaten mehr pflegen müssen');
+assert(!settingsHtml.includes('data-key="openMeteoLongitude"'), 'Endkunde darf keine manuellen Koordinaten mehr pflegen müssen');
+assert(settingsHtml.includes('EOS Admin beziehungsweise der zentralen EOS-Systemkonfiguration'), 'zentraler Anlagenstandort muss erklärt werden');
+assert(/<script\s+src="\/static\/forecast-settings\.js(?:\?[^"]*)?"\s+defer><\/script>/.test(settingsHtml));
 assert.equal([...fs.readdirSync(path.join(ROOT, 'www')).filter((name) => name.endsWith('.html'))]
   .filter((name) => fs.readFileSync(path.join(ROOT, 'www', name), 'utf8').includes('forecast-settings.js')).length, 1);
 assert(settingsHelper.includes('nwOpenMeteoPvFields'));
@@ -456,6 +459,7 @@ if (CHROMIUM) {
     await cdp.eval(`document.documentElement.innerHTML=${JSON.stringify(html)}; window.latestState=${JSON.stringify({
       'forecast.pv.source': { value: 'open-meteo-gti' },
       'forecast.pv.valid': { value: true },
+      'forecast.pv.points': { value: 192 },
       'forecast.pv.ageMs': { value: 60_000 },
       'forecast.pv.kwhNext6h': { value: 12.5 },
       'forecast.pv.kwhNext12h': { value: 24.75 },
@@ -475,7 +479,7 @@ if (CHROMIUM) {
       const source=document.getElementById('s_forecastSourceMode'); source.value='datapoint'; source.dispatchEvent(new Event('change'));
       return {hidden:document.getElementById('nwOpenMeteoPvFields').classList.contains('hidden'),fallbackHidden:document.getElementById('s_forecastFallbackToDatapoints').closest('.row').classList.contains('hidden')};
     })()`);
-    assert.equal(datapoint.hidden, true);
+    assert.equal(datapoint.hidden, false, 'PV-Anlagendaten bleiben auch bei AppCenter-Quelle sichtbar/editierbar');
     assert.equal(datapoint.fallbackHidden, true);
   } finally {
     if (cdp) cdp.close();

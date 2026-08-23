@@ -35,6 +35,7 @@ const REQUIRED_COMMANDS = [
   'npm run test:dashboard-lp-status-typing',
   'npm run test:rc69-dashboard-lp-feedback',
   'npm run test:rc72-weather-pv-forecast-auto',
+  'npm run test:rc75-pv-forecast-admin-location',
   'npm run test:charging-infrastructure-budget',
   'npm run test:npm-version-free-guard',
   'npm run test:npm-version-free-runtime',
