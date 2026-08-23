@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.200",
+  "version": "0.8.201",
   "files": [
     {
       "path": "LICENSE",
@@ -254,6 +254,11 @@
       "sha256": "1edf1e8ae6c9a306394dc1ffd5ca578deba9766d9ceac7bb9a4999bccf0c65df"
     },
     {
+      "path": "docs/RC76_OPEN_METEO_PV_FORECAST_HARDENING_DE.md",
+      "size": 2731,
+      "sha256": "8610b416c2a941dd80ea981ea9dd9842dfe4d9b81d8fd617290973f8f4608309"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 18385,
       "sha256": "53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd"
@@ -415,8 +420,8 @@
     },
     {
       "path": "ems/modules/pv-forecast.js",
-      "size": 41274,
-      "sha256": "78b01b8f88c2bb9dc9eadfe907360f5e53e6666392eeb9ee604d13d9d9e88938"
+      "size": 41570,
+      "sha256": "36e62bfa46a6f5fa7ff440e1ddcfa21b1c050e280431324fcf3fa2246b895403"
     },
     {
       "path": "ems/modules/stage-a-diagnostics.js",
@@ -625,8 +630,8 @@
     },
     {
       "path": "ems/services/open-meteo-pv-forecast.js",
-      "size": 35242,
-      "sha256": "dcb9a6c98e23bc08205a21c1c7d05bcb26bca13a3a7760c73707dc0f3ff88e8f"
+      "size": 44626,
+      "sha256": "268fa7fafe3efd81664d245d0dde35470ba296015c83f15d4dbc1b9d4cdc60b2"
     },
     {
       "path": "ems/services/operating-strategy-runtime.js",
@@ -686,12 +691,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "03cdf99012b3d76267e7469848743f378ae72c78e552e47b6d7fb677d5cc59f8"
+      "sha256": "d86d61894de8b1d33e10f31514ec92ca79f1923f32384b81d820abae5c49f64b"
     },
     {
       "path": "io-package.json",
-      "size": 24942,
-      "sha256": "c6c0452e02a7a8766183fb372aec1a6dffc1a0cca3ceb43dddc5ff226f0aa5e0"
+      "size": 24198,
+      "sha256": "82ddecda5df4078d949391c157ba47e6cbcb4b17b8ffbb6cf92f326b718bf709"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -935,8 +940,8 @@
     },
     {
       "path": "main.js",
-      "size": 1722015,
-      "sha256": "5c1ca40bcf26c798e26747f8b0f5052363948fbe3495cbceb0c82f3bfc17dde6"
+      "size": 1721954,
+      "sha256": "df46b7f8fd7d22b3e405fb1f2919a450667fd3f22d6d5c5f6cb6719bccda0e7f"
     },
     {
       "path": "www/admin-guard.js",
@@ -1071,7 +1076,7 @@
     {
       "path": "www/dc-station-display.js",
       "size": 53547,
-      "sha256": "aa6b616dfa54c5d60cbb91cbecea107c3d50da12dfa608d2c75acbaf29d0af2a"
+      "sha256": "8a2c13bf655b8fb7e3386f6c47ebc47375f2493c146eb21d7ec0508273ca99f4"
     },
     {
       "path": "www/ems-apps-nvp-diagnostics.js",
@@ -1135,8 +1140,8 @@
     },
     {
       "path": "www/forecast-settings.js",
-      "size": 26764,
-      "sha256": "3abeee92b5bd63c542a3033fd4b8658ac7108478a4a0138465877edeee78da5c"
+      "size": 33657,
+      "sha256": "772a27e06372b462b801098658d215bf9acc309d952727f96a44f76b31016469"
     },
     {
       "path": "www/history.html",
@@ -1216,7 +1221,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "8c4f413187427e538b760fb6b8a7008cd7513f2e0742fd6234f4880df0c46376"
+      "sha256": "e9ce8c09ef990a74ccf662128f6b1921dc0855a4237582cc66f057f6f35f513b"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1251,7 +1256,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "218ce1d2a1f8c792a4e417a8ee0d61bd0fb01efbd00c7cae6ed77def032fd55b"
+      "sha256": "ae8a9b215a191956f484a6aeb99989d75776f207a8f002b56c5f99a5b2b4b1ce"
     },
     {
       "path": "www/nw-shell.js",
@@ -1261,7 +1266,7 @@
     {
       "path": "www/operating-strategies-appcenter.js",
       "size": 93113,
-      "sha256": "f2f8c504cfd00d0d840ffeaf056f6a4e8b1cba73a193877b40ba22e6b7a0aff8"
+      "sha256": "f81616b3dee950ed5485232a9b258017db3ef4d60d32ce26dff296d06d546b47"
     },
     {
       "path": "www/operating-strategies-rule-builder.js",
@@ -1300,8 +1305,8 @@
     },
     {
       "path": "www/settings.html",
-      "size": 60234,
-      "sha256": "8abc3eb576543569898fd67b70d55eb7409f2d3c0137d064f28c45311251ddd2"
+      "size": 60674,
+      "sha256": "891951cb77dc07efca54db8f744989c96ab0aa39ec84cd88d582fd0c62173d96"
     },
     {
       "path": "www/simulation.html",
@@ -1385,8 +1390,8 @@
     },
     {
       "path": "www/styles.css",
-      "size": 344421,
-      "sha256": "76d4e97ef3e8c2547671d9e44e66ca15ac3d35edb4fce164f9df33cdabcb917c"
+      "size": 347664,
+      "sha256": "7cfd6f87111509ea74468a6362007a04083a6c69851fba62fdc1153ef940b4cb"
     },
     {
       "path": "www/sw.js",

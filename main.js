@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:f5fe84afb2b326e13c6c89b0b4cccdb419a3a494ecde8b791c69daa77b6cf30c
+ * Quell-Hash: sha256:b5a338dc340d1e2941b248c4b248387340170c4e0597f743fa5caf5b845ffdb2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15,13 +15,8 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-/**
- * Executable TypeScript source: main.js
- * Canonical adapter runtime source; generate main.js with
- * `npm run sync:ts-runtime-executables`.
- */
+// Canonical main.js runtime source; generate with `npm run sync:ts-runtime-executables`.
 'use strict';
-
 const utils = require('@iobroker/adapter-core');
 const express = require('express');
 const path = require('path');
@@ -3918,7 +3913,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.200',
+        liveControlVersion: '0.8.201',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -20844,7 +20839,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.200',
+      apiVersion: '0.8.201',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21037,7 +21032,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.200';
+  commandPayload.version = '0.8.201';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22274,7 +22269,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.200').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.201').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });

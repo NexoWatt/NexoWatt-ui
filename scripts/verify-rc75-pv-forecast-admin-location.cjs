@@ -39,12 +39,12 @@ assert(settingsHtml.includes('+ PV-Fläche hinzufügen'));
 assert(!settingsHtml.includes('id="s_openMeteoLatitude"'), 'Manuelle Standortkoordinaten dürfen im Endkundenbereich nicht sichtbar sein');
 assert(!settingsHtml.includes('id="s_openMeteoLongitude"'), 'Manuelle Standortkoordinaten dürfen im Endkundenbereich nicht sichtbar sein');
 assert(!settingsHtml.includes('Mehrere PV-Flächen / Experten-JSON'));
-assert(settingsHtml.includes('/static/forecast-settings.js?v=0.8.200-rc75'));
+assert(settingsHtml.includes('/static/forecast-settings.js?v=0.8.201-rc76'));
 for (const label of ['Nord', 'Nordost', 'Ost', 'Südost', 'Süd', 'Südwest', 'West', 'Nordwest']) {
   assert(settingsTs.includes(`label: '${label}'`), `Ausrichtung ${label} fehlt`);
 }
 assert(settingsTs.includes("fields.classList.remove('hidden')"), 'PV-Anlagendaten müssen unabhängig von verzögerter Checkbox-Hydrierung sichtbar bleiben');
-assert(settingsTs.includes("location.textContent = label || coordinates || adminFallback || 'EOS Admin / Systemstandort'"));
+assert(settingsTs.includes("location.textContent = label || coordinates || adminFallback || 'Standort nicht aufgelöst'"));
 assert(backendTs.includes('global_tilted_irradiance,temperature_2m'));
 assert(backendTs.includes('&tilt='));
 assert(backendTs.includes('&azimuth='));

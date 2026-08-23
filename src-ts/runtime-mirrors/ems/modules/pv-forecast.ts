@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 78b01b8f88c2bb9dc9eadfe907360f5e53e6666392eeb9ee604d13d9d9e88938
+ * Original-Hash: 36e62bfa46a6f5fa7ff440e1ddcfa21b1c050e280431324fcf3fa2246b895403
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/pv-forecast.ts
- * Quell-Hash: sha256:764a8555d9aa93bf0066838b66aff46bc96c2e9172abed54b74492d7e43d29bb
+ * Quell-Hash: sha256:f970e780f0564799dcb945138ca294ee083257483a7abe5321e3d132f50e64b6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -818,7 +818,10 @@ class PvForecastModule extends BaseModule {
     const positivePoints = segs.filter((s) => s.w > 0 && (s.t + s.dtMs) > now).length;
     const currentSegment = segs.find((s) => s.t <= now && (s.t + s.dtMs) > now);
     const powerNowW = currentSegment ? Math.max(0, Number(currentSegment.w) || 0) : 0;
-    const valid = anyFuture && segs.length > 0 && (forecastSource !== 'open-meteo-gti' || positivePoints > 0);
+    // A complete all-zero radiation curve is still a valid forecast (night,
+    // snow cover or polar winter). Validity describes data availability, not
+    // whether the expected production is currently positive.
+    const valid = anyFuture && segs.length > 0;
 
     const ageMs = Math.min(
       Number.isFinite(ageToday) ? ageToday : Number.POSITIVE_INFINITY,
@@ -840,7 +843,9 @@ class PvForecastModule extends BaseModule {
       const ageTxt = (ageEff !== null && ageEff > 0)
         ? (ageEff > 3600000 ? `${Math.round(ageEff / 3600000)}h alt` : `${Math.round(ageEff / 60000)}min alt`)
         : 'frisch';
-      statusText = `PV Forecast ok [${forecastSource}]: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}${scaledFromKw ? ' (kW erkannt)' : ''}`;
+      statusText = positivePoints > 0
+        ? `PV Forecast ok [${forecastSource}]: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}${scaledFromKw ? ' (kW erkannt)' : ''}`
+        : `PV Forecast ok [${forecastSource}]: aktuell kein erwarteter PV-Ertrag im Planungshorizont, ${ageTxt}`;
     }
 
     // Publish snapshot for other modules (synchronous access)

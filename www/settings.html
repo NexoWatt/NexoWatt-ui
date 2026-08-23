@@ -247,7 +247,7 @@
                       <th scope="col">Ausrichtung</th>
                       <th scope="col">Verluste (%)</th>
                       <th scope="col">WR-Grenze (kW)</th>
-                      <th scope="col"><span class="sr-only">Aktion</span></th>
+                      <th scope="col" class="nw-pv-array-action-column"><span class="sr-only">Aktion</span></th>
                     </tr>
                   </thead>
                   <tbody id="nwPvArrayRows"></tbody>
@@ -283,11 +283,14 @@
             <div class="row nw-ai-setting-row"><span>Status</span><strong id="nwForecastStatus">Adapterdaten werden verbunden …</strong></div>
             <div class="row nw-ai-setting-row"><span>Quelle</span><strong id="nwForecastSource">—</strong></div>
             <div class="row nw-ai-setting-row"><span>Standort</span><strong id="nwForecastLocation">—</strong></div>
-            <div class="row nw-ai-setting-row"><span>Letzte Aktualisierung</span><strong id="nwForecastUpdated">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Letzte erfolgreiche Prognose</span><strong id="nwForecastUpdated">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Letzter Abrufversuch</span><strong id="nwForecastAttempt">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Abrufmodus</span><strong id="nwForecastRequestMode">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 6 h</span><strong id="nwForecast6h">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 12 h</span><strong id="nwForecast12h">—</strong></div>
             <div class="row nw-ai-setting-row"><span>PV nächste 24 h</span><strong id="nwForecast24h">—</strong></div>
             <div class="row nw-ai-setting-row"><span>Prognosepunkte</span><strong id="nwForecastPoints">—</strong></div>
+            <div class="row nw-ai-setting-row"><span>Punkte mit erwartetem Ertrag</span><strong id="nwForecastPositivePoints">—</strong></div>
           </div>
           <small id="nwForecastError" class="muted hidden" style="display:block;margin-top:8px;color:#ffbd59"></small>
         </div>
@@ -882,7 +885,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
   <script src="/static/cockpit-shell.js"></script>
-<script src="/static/forecast-settings.js?v=0.8.200-rc75" defer></script>
+<script src="/static/forecast-settings.js?v=0.8.201-rc76" defer></script>
 <script src="/static/nw-shell.js"></script>
 </body>
 </html>

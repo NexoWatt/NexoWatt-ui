@@ -11,9 +11,7 @@
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
  * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
  * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
- *
- * Wichtig für die Migration:
- * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * Wichtig für die Migration: Diese Datei enthält vorübergehend @ts-nocheck.
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
@@ -21,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 5c1ca40bcf26c798e26747f8b0f5052363948fbe3495cbceb0c82f3bfc17dde6
+ * Original-Hash: df46b7f8fd7d22b3e405fb1f2919a450667fd3f22d6d5c5f6cb6719bccda0e7f
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.

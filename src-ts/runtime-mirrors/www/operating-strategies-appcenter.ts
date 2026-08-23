@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f2f8c504cfd00d0d840ffeaf056f6a4e8b1cba73a193877b40ba22e6b7a0aff8
+ * Original-Hash: f81616b3dee950ed5485232a9b258017db3ef4d60d32ce26dff296d06d546b47
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/operating-strategies-appcenter.ts
- * Quell-Hash: sha256:f9ead836d09fd62157e268fd78c799541b0b8fe64c92fd8af281295a7c80dfbe
+ * Quell-Hash: sha256:9b051985da7658ec4e266c511c05877bcaac20ae1abc1299a49ecfe9319c02b8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -58,7 +58,7 @@
     'use strict';
     const FOUNDATION_VERSION = '0.8.177';
     const RULE_BUILDER_VERSION = '0.8.178';
-    const LIVE_CONTROL_VERSION = '0.8.200';
+    const LIVE_CONTROL_VERSION = '0.8.201';
     const APP_ID = 'operatingStrategies';
     const ROOT_ID = 'nwOperatingStrategiesRoot';
 /**

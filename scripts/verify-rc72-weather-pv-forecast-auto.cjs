@@ -32,7 +32,8 @@ const { DEFAULT_MAIN_SETTING_DEFINITIONS, buildMainSettingsWritePlan } = require
 
 const H = 3_600_000;
 const Q = 900_000;
-const NOW = Date.UTC(2026, 7, 22, 4, 0, 0);
+// Keep forecast fixtures in the active horizon independent of the calendar day.
+const NOW = Math.floor(Date.now() / H) * H;
 const DEADLINE = NOW + 12 * H;
 
 function onePlan(extra = {}, goalExtra = {}) {

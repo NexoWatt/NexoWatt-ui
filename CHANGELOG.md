@@ -1,3 +1,13 @@
+## 0.8.201 - 2026-08-23
+
+- RC76 stabilisiert die Open-Meteo-PV-Prognose mit einer dreistufigen Abrufkette: 15-Minuten-GTI, stündliche GTI und anschließend lokale PV-Berechnung aus GHI/DNI/DHI. Temporäre Transportfehler werden einmal wiederholt.
+- Eine vollständige Prognosekurve mit 0 W gilt jetzt als gültige Nacht-/Nullertragsprognose und nicht mehr als fehlende Datenquelle.
+- Letzte gültige Prognosen bleiben bei einem temporären Providerfehler nutzbar und werden mit `stale-error`, letztem Versuch, letztem Erfolg und Abrufmodus eindeutig diagnostiziert.
+- Der Standortname entspricht vorrangig dem bereits aufgelösten Wetter-App-Standort; EOS-Admin-/Systemstandort und Koordinaten bleiben Fallbacks.
+- Die PV-Flächenansicht reagiert jetzt auf die tatsächliche Containerbreite. Bei schmaler Fläche wird jede PV-Fläche als Karte dargestellt; WR-Grenze und Löschschaltfläche können nicht mehr überlappen. Bei nur einer PV-Fläche wird die Löschschaltfläche vollständig ausgeblendet.
+- Kundenstatus zeigt Abrufmodus, letzten Abrufversuch, letzte erfolgreiche Prognose sowie konkrete Open-Meteo- oder AppCenter-Fallbackfehler.
+- Neuer RC76-Regressionsverbund prüft GTI-Fallbacks, GHI/DNI/DHI-Berechnung, Nullertragskurven, Stale-Fallback, Standortname und reale Chromium-Layouts.
+
 ## 0.8.200 - 2026-08-22
 
 - RC75 übernimmt den PV-Prognosestandort zentral aus EOS Admin beziehungsweise `system.config`. Sind dort nur Ort oder Postleitzahl vorhanden, werden Koordinaten über die Open-Meteo-Geocoding-API aufgelöst; alte manuelle Forecast-Koordinaten bleiben nur als Migrationsfallback erhalten.

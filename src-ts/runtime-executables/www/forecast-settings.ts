@@ -40,6 +40,22 @@
     for (const key of keys) if (hasState(key)) return stateValue(key, fallback);
     return fallback;
   };
+  const firstNonEmptyTextState = (keys: string[], fallback = ''): string => {
+    for (const key of keys) {
+      if (!hasState(key)) continue;
+      const value = String(stateValue(key, '') ?? '').trim();
+      if (value) return value;
+    }
+    return fallback;
+  };
+  const firstFiniteStateValue = (keys: string[], fallback = Number.NaN): number => {
+    for (const key of keys) {
+      if (!hasState(key)) continue;
+      const value = Number(stateValue(key, Number.NaN));
+      if (Number.isFinite(value)) return value;
+    }
+    return fallback;
+  };
   const asBoolean = (value: unknown, fallback = false): boolean => {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value !== 0;
@@ -131,6 +147,8 @@
   let persistTimer: number | null = null;
   let lastHydrationFingerprint = '';
   let editorInitialized = false;
+  let editorResizeObserver: ResizeObserver | null = null;
+  let statusTimer: number | null = null;
 
   const collectRows = (): PvArrayRow[] => {
     const body = byId<HTMLTableSectionElement>('nwPvArrayRows');
@@ -150,9 +168,31 @@
 
   const updateRemoveButtons = (): void => {
     const body = byId<HTMLTableSectionElement>('nwPvArrayRows');
+    const editor = body?.closest<HTMLElement>('.nw-pv-array-editor') || null;
     if (!body) return;
     const buttons = Array.from(body.querySelectorAll<HTMLButtonElement>('.nw-pv-array-remove'));
-    buttons.forEach((button) => { button.disabled = buttons.length <= 1; });
+    const removable = buttons.length > 1;
+    editor?.classList.toggle('is-single-row', !removable);
+    buttons.forEach((button) => {
+      const cell = button.closest<HTMLTableCellElement>('.nw-pv-array-action-cell');
+      button.disabled = !removable;
+      button.hidden = !removable;
+      button.setAttribute('aria-hidden', removable ? 'false' : 'true');
+      button.tabIndex = removable ? 0 : -1;
+      if (cell) {
+        cell.hidden = !removable;
+        cell.setAttribute('aria-hidden', removable ? 'false' : 'true');
+      }
+    });
+  };
+
+  const syncEditorLayout = (): void => {
+    const editor = byId('nwPvArrayEditorTitle')?.closest<HTMLElement>('.nw-pv-array-editor') || null;
+    if (!editor) return;
+    // The settings content can be narrow even on a wide desktop because the
+    // navigation column consumes space. Use the actual component width instead
+    // of the browser viewport to switch safely to the card layout.
+    editor.classList.toggle('is-compact', editor.clientWidth < 1080);
   };
 
   const setLegacyField = (id: string, value: unknown): void => {
@@ -247,7 +287,9 @@
         renderRows(current.map((item, rowIndex) => ({ ...item, name: item.name || `PV-Fläche ${rowIndex + 1}` })));
         persistRows();
       });
-      row.appendChild(createCell('Aktion', remove));
+      const actionCell = createCell('Aktion', remove);
+      actionCell.classList.add('nw-pv-array-action-cell');
+      row.appendChild(actionCell);
 
       row.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach((control) => {
         control.addEventListener(control instanceof HTMLSelectElement ? 'change' : 'input', queuePersist);
@@ -256,6 +298,7 @@
       body.appendChild(row);
     });
     updateRemoveButtons();
+    syncEditorLayout();
     editorInitialized = true;
   };
 
@@ -294,6 +337,15 @@
       });
     }
     hydrateEditor(true);
+    const editor = byId('nwPvArrayEditorTitle')?.closest<HTMLElement>('.nw-pv-array-editor') || null;
+    if (editor && !editorResizeObserver && typeof ResizeObserver === 'function') {
+      editorResizeObserver = new ResizeObserver(syncEditorLayout);
+      editorResizeObserver.observe(editor);
+    } else if (editor && typeof ResizeObserver !== 'function' && editor.dataset.resizeFallback !== '1') {
+      editor.dataset.resizeFallback = '1';
+      window.addEventListener('resize', syncEditorLayout, { passive: true });
+    }
+    syncEditorLayout();
   };
 
   const formatEnergyKwh = (value: unknown): string => {
@@ -340,7 +392,9 @@
     if (message.includes('http 401') || message.includes('http 403')) return 'Open-Meteo hat den Zugriff abgelehnt. Bitte API-Schlüssel und Nutzungsart prüfen.';
     if (message.includes('http 429')) return 'Open-Meteo hat zu viele Anfragen gemeldet. NexoWatt versucht es beim nächsten Aktualisierungszyklus erneut.';
     if (message.includes('timeout')) return 'Open-Meteo antwortet derzeit nicht rechtzeitig. NexoWatt versucht es automatisch erneut.';
-    if (message.includes('keine zukünftigen einstrahlungswerte')) return 'Open-Meteo hat keine nutzbaren zukünftigen Einstrahlungswerte geliefert.';
+    if (message.includes('keine zukünftigen einstrahlungswerte')) return 'Open-Meteo hat keine nutzbare Prognosekurve geliefert. EOS versucht automatisch die stündliche GTI- und anschließend die Strahlungskomponenten-Abfrage.';
+    if (message.includes('keine global-tilted-irradiance')) return 'Open-Meteo hat für mindestens eine PV-Fläche keine geneigte Einstrahlung geliefert. Der alternative Abruf wird automatisch versucht.';
+    if (message.includes('open-meteo api error') || message.includes('fallback api error')) return 'Open-Meteo hat den Prognoseabruf abgelehnt. Abrufmodus und technischer Fehler stehen unten in der Statusanzeige.';
     if (message.includes('nicht verfügbar und kein appcenter') || message.includes('kein pv forecast gemappt')) return 'Open-Meteo liefert aktuell keine Prognose und im AppCenter ist keine Ersatzquelle zugeordnet.';
     if (message.includes('deaktiviert')) return 'Die PV-Prognose ist deaktiviert.';
     return raw;
@@ -375,65 +429,129 @@
 
   const updateStatus = (): void => {
     updateVisibility();
-    const effectiveValidFlag = asBoolean(stateValue('forecast.pv.valid', false), false);
-    const openValidFlag = asBoolean(stateValue('forecast.openMeteoPv.valid', false), false);
-    const effectivePointsRaw = stateValue('forecast.pv.points', undefined);
-    const openPointsRaw = stateValue('forecast.openMeteoPv.points', undefined);
-    const effectivePointsKnown = effectivePointsRaw !== undefined && Number.isFinite(Number(effectivePointsRaw));
-    const openPointsKnown = openPointsRaw !== undefined && Number.isFinite(Number(openPointsRaw));
-    const effectiveValid = effectiveValidFlag && (!effectivePointsKnown || Number(effectivePointsRaw) > 0);
-    const openValid = openValidFlag && (!openPointsKnown || Number(openPointsRaw) > 0);
+    const mode = normalizeSourceMode(stateValue(
+      'settings.forecastSourceMode',
+      byId<HTMLSelectElement>('s_forecastSourceMode')?.value || 'auto',
+    ));
+    const openEnabled = asBoolean(stateValue(
+      'settings.openMeteoPvEnabled',
+      byId<HTMLInputElement>('s_openMeteoPvEnabled')?.checked || false,
+    ), false);
+    const providerSelected = openEnabled && ['auto', 'open-meteo'].includes(mode);
+
+    const effectiveValid = asBoolean(stateValue('forecast.pv.valid', false), false);
+    const openValid = asBoolean(stateValue('forecast.openMeteoPv.valid', false), false);
     const effectiveSourceRaw = String(stateValue('forecast.pv.source', '') || '').trim().toLowerCase();
     const effectiveUsesOpenMeteo = effectiveSourceRaw.includes('open-meteo');
-    // Ist Open-Meteo die kanonische Quelle, werden Status, Standort und Energie
-    // direkt aus dem Provider-Snapshot gelesen. Dieser ist sofort aktuell,
-    // während forecast.pv.* erst im nächsten EMS-Zyklus nachziehen kann.
-    const useOpenSnapshot = openValid && (!effectiveValid || effectiveUsesOpenMeteo);
+    const providerRequestStatus = firstNonEmptyTextState(['forecast.openMeteoPv.requestStatus'], '');
+    const providerRequestMode = firstNonEmptyTextState(['forecast.openMeteoPv.requestMode'], '');
+    const providerError = firstNonEmptyTextState([
+      'forecast.openMeteoPv.error',
+      'forecast.openMeteoPv.statusText',
+    ], '');
+    const providerHasDiagnostics = [
+      'forecast.openMeteoPv.lastAttemptAt',
+      'forecast.openMeteoPv.requestStatus',
+      'forecast.openMeteoPv.statusText',
+      'forecast.openMeteoPv.error',
+      'forecast.openMeteoPv.points',
+      'forecast.openMeteoPv.locationText',
+    ].some(hasState);
+
+    // In Open-Meteo mode provider diagnostics must remain visible even when the
+    // request failed. In automatic mode a valid AppCenter fallback may replace
+    // the provider values, but the provider error is still shown as a warning.
+    const useOpenSnapshot = providerSelected && providerHasDiagnostics
+      && (mode === 'open-meteo' || effectiveUsesOpenMeteo || !effectiveValid);
     const valid = useOpenSnapshot ? openValid : (effectiveValid || openValid);
-    const hasForecastStates = hasState('forecast.pv.valid') || hasState('forecast.openMeteoPv.valid');
+    const hasForecastStates = hasState('forecast.pv.valid') || hasState('forecast.openMeteoPv.valid') || providerHasDiagnostics;
+
     const source = useOpenSnapshot
       ? stateValue('forecast.openMeteoPv.source', 'open-meteo-gti')
-      : firstStateValue(['forecast.pv.source', 'forecast.openMeteoPv.source'], 'none');
+      : firstNonEmptyTextState(['forecast.pv.source', 'forecast.openMeteoPv.source'], 'none');
     const ageMs = useOpenSnapshot
-      ? stateValue('forecast.openMeteoPv.ageMs', Number.NaN)
-      : firstStateValue(['forecast.pv.ageMs', 'forecast.openMeteoPv.ageMs'], Number.NaN);
+      ? firstFiniteStateValue(['forecast.openMeteoPv.ageMs'], Number.NaN)
+      : firstFiniteStateValue(['forecast.pv.ageMs', 'forecast.openMeteoPv.ageMs'], Number.NaN);
     const updatedAt = useOpenSnapshot
-      ? stateValue('forecast.openMeteoPv.updatedAt', Number.NaN)
-      : firstStateValue(['forecast.pv.updatedAt', 'forecast.openMeteoPv.updatedAt'], Number.NaN);
-    const openStatusText = firstStateValue(['forecast.openMeteoPv.error', 'forecast.openMeteoPv.statusText'], '');
+      ? firstFiniteStateValue([
+          openValid ? 'forecast.openMeteoPv.lastSuccessAt' : 'forecast.openMeteoPv.lastAttemptAt',
+          'forecast.openMeteoPv.updatedAt',
+        ], Number.NaN)
+      : firstFiniteStateValue(['forecast.pv.updatedAt', 'forecast.openMeteoPv.lastSuccessAt', 'forecast.openMeteoPv.updatedAt'], Number.NaN);
     const statusText = useOpenSnapshot
-      ? firstStateValue(['forecast.openMeteoPv.statusText', 'forecast.openMeteoPv.error'], '')
-      : (!valid && String(openStatusText || '').trim()
-          ? openStatusText
-          : firstStateValue(['forecast.pv.statusText', 'forecast.openMeteoPv.statusText', 'forecast.openMeteoPv.error'], ''));
-    const mode = String(stateValue('settings.forecastSourceMode', byId<HTMLSelectElement>('s_forecastSourceMode')?.value || 'auto') || 'auto').toLowerCase();
+      ? firstNonEmptyTextState(['forecast.openMeteoPv.error', 'forecast.openMeteoPv.statusText'], '')
+      : firstNonEmptyTextState(['forecast.pv.statusText', 'forecast.pv.error', 'forecast.openMeteoPv.error', 'forecast.openMeteoPv.statusText'], '');
+
+    const selectedPrefix = useOpenSnapshot ? 'forecast.openMeteoPv.' : 'forecast.pv.';
+    const pointsRaw = stateValue(`${selectedPrefix}points`, undefined);
+    const pointsKnown = pointsRaw !== undefined && Number.isFinite(Number(pointsRaw));
+    const pointsValue = pointsKnown ? Math.max(0, Math.round(Number(pointsRaw))) : Number.NaN;
 
     const status = byId('nwForecastStatus');
     const sourceNode = byId('nwForecastSource');
     const updated = byId('nwForecastUpdated');
     const error = byId('nwForecastError');
+    const attempt = byId('nwForecastAttempt');
+    const requestModeNode = byId('nwForecastRequestMode');
     if (status) {
       let label = 'Keine aktuelle Prognose';
       let state = 'warning';
-      if (valid) { label = 'Prognose aktiv'; state = 'ok'; }
-      else if ((effectiveValidFlag || openValidFlag)
-        && ((effectivePointsKnown && Number(effectivePointsRaw) <= 0)
-          || (openPointsKnown && Number(openPointsRaw) <= 0))) {
-        label = 'Prognose noch ohne Werte';
+      if (mode === 'disabled') {
+        label = 'Deaktiviert';
+        state = 'off';
+      } else if (valid && pointsKnown && pointsValue > 0) {
+        label = providerRequestStatus === 'ok-zero-production'
+          ? 'Prognose aktiv · aktuell 0 W erwartet'
+          : 'Prognose aktiv';
+        state = 'ok';
+      } else if (providerSelected && providerRequestStatus === 'loading') {
+        label = 'Open-Meteo wird abgefragt …';
+        state = 'off';
+      } else if (providerSelected && providerRequestStatus === 'configuration-error') {
+        label = 'Konfiguration unvollständig';
+        state = 'warning';
+      } else if (providerSelected && providerRequestStatus === 'disabled') {
+        label = 'Open-Meteo deaktiviert';
+        state = 'off';
+      } else if (providerSelected && ['error', 'stale-error'].includes(providerRequestStatus)) {
+        label = providerRequestStatus === 'stale-error'
+          ? 'Letzte Prognose wird weiterverwendet'
+          : 'Open-Meteo-Abruf fehlgeschlagen';
+        state = 'warning';
+      } else if ((effectiveValid || openValid) && pointsKnown && pointsValue === 0) {
+        label = 'Prognose noch ohne Kurve';
+        state = 'warning';
+      } else if (!hasForecastStates && Date.now() - startedAt < 12000) {
+        label = 'Adapterdaten werden verbunden …';
+        state = 'off';
+      } else if (!hasForecastStates) {
+        label = 'Keine Prognosedaten empfangen';
         state = 'warning';
       }
-      else if (mode === 'disabled') { label = 'Deaktiviert'; state = 'off'; }
-      else if (!hasForecastStates && Date.now() - startedAt < 12000) { label = 'Adapterdaten werden verbunden …'; state = 'off'; }
-      else if (!hasForecastStates) { label = 'Keine Prognosedaten empfangen'; state = 'warning'; }
       status.textContent = label;
       status.dataset.state = state;
     }
-    if (sourceNode) sourceNode.textContent = sourceLabel(source);
+    if (sourceNode) {
+      const base = sourceLabel(source);
+      sourceNode.textContent = providerSelected && useOpenSnapshot && !openValid && base === 'Open-Meteo'
+        ? 'Open-Meteo (Fehler)'
+        : base;
+    }
     if (updated) updated.textContent = formatAge(ageMs, updatedAt);
+    if (attempt) attempt.textContent = formatAge(Number.NaN, firstFiniteStateValue(['forecast.openMeteoPv.lastAttemptAt'], Number.NaN));
+    if (requestModeNode) {
+      const labels: Record<string, string> = {
+        'starting': 'Startet',
+        'minutely-gti': '15-Minuten GTI',
+        'hourly-gti': 'Stündliche GTI',
+        'hourly-components': 'GHI/DNI/DHI-Fallback',
+        'mixed-fallback': 'Gemischter GTI-/Strahlungs-Fallback',
+      };
+      requestModeNode.textContent = labels[providerRequestMode] || providerRequestMode || '—';
+    }
 
-    const prefix = useOpenSnapshot ? 'forecast.openMeteoPv.' : 'forecast.pv.';
     const energyValue = (suffix: string): unknown => {
-      const preferred = stateValue(`${prefix}${suffix}`, undefined);
+      const preferred = stateValue(`${selectedPrefix}${suffix}`, undefined);
       if (preferred !== undefined) return preferred;
       return firstStateValue([`forecast.pv.${suffix}`, `forecast.openMeteoPv.${suffix}`], Number.NaN);
     };
@@ -441,26 +559,37 @@
     const e12 = byId('nwForecast12h'); if (e12) e12.textContent = valid ? formatEnergyKwh(energyValue('kwhNext12h')) : '—';
     const e24 = byId('nwForecast24h'); if (e24) e24.textContent = valid ? formatEnergyKwh(energyValue('kwhNext24h')) : '—';
     const points = byId('nwForecastPoints');
-    if (points) {
-      const value = Number(energyValue('points'));
-      points.textContent = Number.isFinite(value) && value > 0 ? String(Math.round(value)) : '—';
+    if (points) points.textContent = pointsKnown ? String(pointsValue) : '—';
+    const positivePoints = byId('nwForecastPositivePoints');
+    if (positivePoints) {
+      const positiveRaw = stateValue(`${selectedPrefix}positivePoints`, undefined);
+      const positiveKnown = positiveRaw !== undefined && Number.isFinite(Number(positiveRaw));
+      positivePoints.textContent = positiveKnown ? String(Math.max(0, Math.round(Number(positiveRaw)))) : '—';
     }
+
     const location = byId('nwForecastLocation');
     if (location) {
-      const label = String(firstStateValue(['forecast.openMeteoPv.locationText', 'forecast.pv.locationText'], '') || '').trim();
-      const locationSource = String(firstStateValue(['forecast.openMeteoPv.locationSource', 'forecast.pv.locationSource'], '') || '').trim().toLowerCase();
-      const lat = Number(firstStateValue(['forecast.openMeteoPv.latitude', 'forecast.pv.latitude'], Number.NaN));
-      const lon = Number(firstStateValue(['forecast.openMeteoPv.longitude', 'forecast.pv.longitude'], Number.NaN));
+      const label = firstNonEmptyTextState(['forecast.openMeteoPv.locationText', 'forecast.pv.locationText', 'weatherLocation'], '');
+      const locationSource = firstNonEmptyTextState(['forecast.openMeteoPv.locationSource', 'forecast.pv.locationSource'], '').toLowerCase();
+      const lat = firstFiniteStateValue(['forecast.openMeteoPv.latitude', 'forecast.pv.latitude'], Number.NaN);
+      const lon = firstFiniteStateValue(['forecast.openMeteoPv.longitude', 'forecast.pv.longitude'], Number.NaN);
       const coordinates = Number.isFinite(lat) && Number.isFinite(lon) && (Math.abs(lat) > 1e-9 || Math.abs(lon) > 1e-9)
         ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : '';
       const adminFallback = locationSource.startsWith('system') ? 'EOS Admin / Systemstandort' : '';
-      location.textContent = label || coordinates || adminFallback || 'EOS Admin / Systemstandort';
+      location.textContent = label || coordinates || adminFallback || 'Standort nicht aufgelöst';
     }
 
-    const message = friendlyMessage(statusText);
+    let message = friendlyMessage(statusText);
+    // Automatic mode may be using a valid AppCenter fallback while Open-Meteo
+    // failed. Keep the system operational but explain the active fallback.
+    if (valid && mode === 'auto' && !useOpenSnapshot && providerSelected
+      && ['error', 'stale-error'].includes(providerRequestStatus) && providerError) {
+      message = `AppCenter-Fallback aktiv. Open-Meteo: ${friendlyMessage(providerError)}`;
+    }
     if (error) {
-      error.textContent = valid || mode === 'disabled' ? '' : message;
-      error.classList.toggle('hidden', valid || mode === 'disabled' || !message);
+      const show = mode !== 'disabled' && !!message && (!valid || message.startsWith('AppCenter-Fallback aktiv'));
+      error.textContent = show ? message : '';
+      error.classList.toggle('hidden', !show);
     }
 
     hydrateEditor(false);
@@ -471,22 +600,31 @@
     const enabled = byId<HTMLInputElement>('s_openMeteoPvEnabled');
     if (source && source.dataset.nwForecastBound !== '1') {
       source.dataset.nwForecastBound = '1';
-      source.addEventListener('change', () => { updateVisibility(); updateStatus(); });
+      source.addEventListener('change', () => { markRefreshPending(); updateVisibility(); updateStatus(); });
     }
     if (enabled && enabled.dataset.nwForecastBound !== '1') {
       enabled.dataset.nwForecastBound = '1';
-      enabled.addEventListener('change', () => { updateVisibility(); updateStatus(); });
+      enabled.addEventListener('change', () => { markRefreshPending(); updateVisibility(); updateStatus(); });
     }
     setupArrayEditor();
     updateVisibility();
     updateStatus();
-    window.setInterval(() => {
-      // Settings werden asynchron aus /api/state hydriert. Sichtbarkeit,
-      // Tabelleninhalt und Status deshalb gemeinsam nachziehen.
-      updateVisibility();
-      updateStatus();
-    }, 3000);
+    if (statusTimer === null) {
+      statusTimer = window.setInterval(() => {
+        // Settings werden asynchron aus /api/state hydriert. Sichtbarkeit,
+        // Tabelleninhalt und Status deshalb gemeinsam nachziehen.
+        updateVisibility();
+        updateStatus();
+      }, 3000);
+    }
   };
+
+  window.addEventListener('pagehide', () => {
+    if (statusTimer !== null) window.clearInterval(statusTimer);
+    statusTimer = null;
+    try { editorResizeObserver?.disconnect(); } catch { /* optional */ }
+    editorResizeObserver = null;
+  }, { once: true });
 
   try {
     (window as any).nwForecastSettings = { setup, updateVisibility, updateStatus, hydrateEditor };

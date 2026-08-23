@@ -1,12 +1,13 @@
-NexoWatt EOS 0.8.200 RC75 – zentrale Standortquelle und belastbare Open-Meteo-PV-Prognose
+NexoWatt EOS 0.8.201 RC76 – Open-Meteo PV-Forecast Hardening
 
-1. ZIP vollständig in einen neuen, leeren Projektordner entpacken.
-2. Einmal `npm ci` ausführen.
-3. Danach `npm publish` ausführen.
+1. ZIP vollständig in einen frischen Projektordner entpacken.
+2. Optional: npm ci
+3. npm publish
 
-Der prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.200 auf npm noch frei ist,
-- ob package.json.files und Release-Manifest exakt übereinstimmen,
-- ob alle freigegebenen Produktdateien vollständig und unverändert sind.
+Der vorhandene prepublishOnly-Guard prüft automatisch:
+- ob Version 0.8.201 auf npm noch frei ist,
+- ob alle Versionsdateien synchron sind,
+- ob das Release-Artefaktmanifest exakt passt,
+- ob keine freigegebene Produktdatei verändert wurde.
 
-RC75 übernimmt den Anlagenstandort zentral aus EOS Admin/ioBroker, hält die PV-Flächentabelle unabhängig von verzögerter Settings-Hydrierung sichtbar und zeigt Open-Meteo-Werte erst bei einer tatsächlich nutzbaren Prognosekurve als aktiv an. AppCenter-Fallback, Auto-/Zeit-Ziel-Planer und alle Safety-/Single-Writer-Grenzen bleiben erhalten.
+RC76 korrigiert die Open-Meteo-Fallbackkette, gültige 0-W-Prognosen, Standortnamen, Providerdiagnose und das responsive PV-Flächenlayout.

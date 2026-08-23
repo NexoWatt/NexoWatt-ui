@@ -13241,7 +13241,7 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   body.nw-page-ems-apps .nw-charging-audit__subhead span{text-align:left;}
 }
 
-/* RC74: einfacher Endkunden-Editor für mehrere PV-Flächen */
+/* RC76: einfacher, container-responsiver Endkunden-Editor für PV-Flächen */
 .sr-only{
   position:absolute!important;
   width:1px!important;
@@ -13256,6 +13256,8 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
 .nw-pv-array-editor{
   margin-top:14px;
   padding:16px;
+  container-type:inline-size;
+  container-name:nw-pv-array-editor;
   border:1px solid rgba(80,170,255,.18);
   border-radius:16px;
   background:linear-gradient(135deg,rgba(3,18,32,.72),rgba(4,36,58,.42));
@@ -13284,12 +13286,13 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
 }
 .nw-pv-array-table{
   width:100%;
-  min-width:950px;
+  min-width:1080px;
   border-collapse:collapse;
-  table-layout:fixed;
+  table-layout:auto;
 }
 .nw-pv-array-table th,
 .nw-pv-array-table td{
+  box-sizing:border-box;
   padding:10px 8px;
   border-bottom:1px solid rgba(80,170,255,.12);
   text-align:left;
@@ -13301,23 +13304,37 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   font-weight:800;
   letter-spacing:.02em;
 }
-.nw-pv-array-table tbody tr:last-child td{
-  border-bottom:0;
-}
+.nw-pv-array-table tbody tr:last-child td{border-bottom:0;}
 .nw-pv-array-table input,
 .nw-pv-array-table select{
   width:100%;
   min-width:0;
   box-sizing:border-box;
 }
-.nw-pv-array-table th:nth-child(1){width:18%;}
-.nw-pv-array-table th:nth-child(2){width:13%;}
-.nw-pv-array-table th:nth-child(3){width:11%;}
-.nw-pv-array-table th:nth-child(4){width:18%;}
-.nw-pv-array-table th:nth-child(5){width:12%;}
-.nw-pv-array-table th:nth-child(6){width:15%;}
-.nw-pv-array-table th:nth-child(7){width:54px;}
+.nw-pv-array-table th:nth-child(1),.nw-pv-array-table td:nth-child(1){min-width:180px;}
+.nw-pv-array-table th:nth-child(2),.nw-pv-array-table td:nth-child(2){min-width:130px;}
+.nw-pv-array-table th:nth-child(3),.nw-pv-array-table td:nth-child(3){min-width:105px;}
+.nw-pv-array-table th:nth-child(4),.nw-pv-array-table td:nth-child(4){min-width:160px;}
+.nw-pv-array-table th:nth-child(5),.nw-pv-array-table td:nth-child(5){min-width:120px;}
+.nw-pv-array-table th:nth-child(6),.nw-pv-array-table td:nth-child(6){min-width:160px;}
+.nw-pv-array-action-column,
+.nw-pv-array-action-cell{
+  width:68px!important;
+  min-width:68px!important;
+  max-width:68px!important;
+  text-align:center!important;
+}
+.nw-pv-array-editor.is-single-row .nw-pv-array-action-column,
+.nw-pv-array-editor.is-single-row .nw-pv-array-action-cell{
+  display:none!important;
+}
+.nw-pv-array-action-column[hidden],
+.nw-pv-array-action-cell[hidden]{display:none!important;}
+.nw-pv-array-action-cell{padding-left:12px!important;padding-right:12px!important;}
 .nw-pv-array-remove{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   width:38px;
   min-width:38px;
   height:38px;
@@ -13330,10 +13347,9 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   font-weight:900;
   cursor:pointer;
 }
-.nw-pv-array-remove:disabled{
-  opacity:.32;
-  cursor:not-allowed;
-}
+.nw-pv-array-remove:hover{border-color:rgba(255,108,108,.7);background:rgba(130,22,32,.5);}
+.nw-pv-array-remove:disabled{opacity:.32;cursor:not-allowed;}
+.nw-pv-array-remove[hidden]{display:none!important;}
 .nw-pv-array-validation{
   display:block;
   margin-top:10px;
@@ -13351,44 +13367,71 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   cursor:pointer;
   font-weight:850;
 }
-.nw-pv-forecast-advanced[open] > summary{
-  border-bottom:1px solid rgba(80,170,255,.12);
-}
-.nw-pv-forecast-advanced .nw-ai-customer-grid{
-  padding:0 14px 14px;
-}
-.nw-pv-forecast-advanced__help{
-  display:block;
-  padding:0 14px 14px;
-}
+.nw-pv-forecast-advanced[open] > summary{border-bottom:1px solid rgba(80,170,255,.12);}
+.nw-pv-forecast-advanced .nw-ai-customer-grid{padding:0 14px 14px;}
+.nw-pv-forecast-advanced__help{display:block;padding:0 14px 14px;}
 #nwForecastStatus[data-state="ok"]{color:#43e89a;}
 #nwForecastStatus[data-state="warning"]{color:#ffbd59;}
 #nwForecastStatus[data-state="off"]{color:rgba(225,238,249,.62);}
 
-@media (max-width: 920px){
-  .nw-pv-array-editor__header{
-    flex-direction:column;
-  }
-  .nw-pv-array-editor__add{
-    width:100%;
-  }
-  .nw-pv-array-table-wrap{
-    overflow:visible;
-    border:0;
-  }
-  .nw-pv-array-table{
-    min-width:0;
-  }
-  .nw-pv-array-table thead{
-    display:none;
-  }
+/* JS fallback for browsers without container queries. */
+.nw-pv-array-editor.is-compact .nw-pv-array-editor__header{flex-direction:column;}
+.nw-pv-array-editor.is-compact .nw-pv-array-editor__add{width:100%;}
+.nw-pv-array-editor.is-compact .nw-pv-array-table-wrap{overflow:visible;border:0;}
+.nw-pv-array-editor.is-compact .nw-pv-array-table{min-width:0;}
+.nw-pv-array-editor.is-compact .nw-pv-array-table thead{display:none;}
+.nw-pv-array-editor.is-compact .nw-pv-array-table,
+.nw-pv-array-editor.is-compact .nw-pv-array-table tbody,
+.nw-pv-array-editor.is-compact .nw-pv-array-table tr,
+.nw-pv-array-editor.is-compact .nw-pv-array-table td{display:block;width:100%;}
+.nw-pv-array-editor.is-compact .nw-pv-array-table tr{
+  box-sizing:border-box;
+  margin-bottom:12px;
+  padding:10px;
+  border:1px solid rgba(80,170,255,.16);
+  border-radius:14px;
+  background:rgba(3,18,32,.58);
+}
+.nw-pv-array-editor.is-compact .nw-pv-array-table td{
+  display:grid;
+  grid-template-columns:minmax(138px,40%) minmax(0,1fr);
+  align-items:center;
+  gap:10px;
+  min-width:0!important;
+  max-width:none!important;
+  width:auto!important;
+  padding:7px 4px;
+  border-bottom:1px solid rgba(80,170,255,.08);
+  text-align:left!important;
+}
+.nw-pv-array-editor.is-compact .nw-pv-array-table td::before{
+  content:attr(data-label);
+  color:rgba(225,238,249,.72);
+  font-size:.78rem;
+  font-weight:800;
+}
+.nw-pv-array-editor.is-compact .nw-pv-array-action-cell{
+  display:flex;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  justify-content:flex-end;
+  border-bottom:0;
+}
+.nw-pv-array-editor.is-compact .nw-pv-array-action-cell::before{display:none;}
+.nw-pv-array-editor.is-compact.is-single-row .nw-pv-array-action-cell{display:none!important;}
+
+/* Native component-width switch. This also works in a wide browser with a narrow settings column. */
+@container nw-pv-array-editor (max-width: 1079px){
+  .nw-pv-array-editor__header{flex-direction:column;}
+  .nw-pv-array-editor__add{width:100%;}
+  .nw-pv-array-table-wrap{overflow:visible;border:0;}
+  .nw-pv-array-table{min-width:0;}
+  .nw-pv-array-table thead{display:none;}
   .nw-pv-array-table,
   .nw-pv-array-table tbody,
   .nw-pv-array-table tr,
-  .nw-pv-array-table td{
-    display:block;
-    width:100%;
-  }
+  .nw-pv-array-table td{display:block;width:100%;}
   .nw-pv-array-table tr{
     box-sizing:border-box;
     margin-bottom:12px;
@@ -13399,12 +13442,15 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
   }
   .nw-pv-array-table td{
     display:grid;
-    grid-template-columns:minmax(120px,42%) minmax(0,1fr);
+    grid-template-columns:minmax(138px,40%) minmax(0,1fr);
     align-items:center;
     gap:10px;
-    box-sizing:border-box;
+    min-width:0!important;
+    max-width:none!important;
+    width:auto!important;
     padding:7px 4px;
     border-bottom:1px solid rgba(80,170,255,.08);
+    text-align:left!important;
   }
   .nw-pv-array-table td::before{
     content:attr(data-label);
@@ -13412,22 +13458,25 @@ body.nw-page-ems-apps .nw-charging-audit__empty{
     font-size:.78rem;
     font-weight:800;
   }
-  .nw-pv-array-table td:last-child{
+  .nw-pv-array-action-cell{
     display:flex;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
     justify-content:flex-end;
     border-bottom:0;
   }
-  .nw-pv-array-table td:last-child::before{
-    display:none;
-  }
+  .nw-pv-array-action-cell::before{display:none;}
+  .nw-pv-array-editor.is-single-row .nw-pv-array-action-cell{display:none!important;}
 }
 
-@media (max-width: 560px){
-  .nw-pv-array-editor{
-    padding:12px;
-  }
-  .nw-pv-array-table td{
-    grid-template-columns:1fr;
-    gap:5px;
-  }
+@media (max-width:560px){
+  .nw-pv-array-editor{padding:12px;}
+  .nw-pv-array-editor.is-compact .nw-pv-array-table td{grid-template-columns:1fr;gap:5px;}
+}
+
+/* Legacy viewport fallback retained for older customer browsers; the primary
+   switch is the container width above. */
+@media (max-width: 920px){
+  .nw-pv-array-editor{padding:14px;}
 }
