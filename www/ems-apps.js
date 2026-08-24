@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:ce9365bfde4a6795a4bbfccba66b1e794b1bb8139fa4665019c0bb99ee5d60f5
+ * Quell-Hash: sha256:a6f6f4e5431795c0671b2072a82ebe389aaece1ec623b3e5b04f8ca0e80ed83e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -352,27 +352,16 @@
 
     // Grid-Constraints / Netzlimits
     gridConstraintsMeter: document.getElementById('gridConstraintsMeter'),
+    gridConstraintsImportLimits: document.getElementById('gridConstraintsImportLimits'),
     gridConstraintsRlm: document.getElementById('gridConstraintsRlm'),
     gridConstraintsZero: document.getElementById('gridConstraintsZero'),
-    gridConstraintsPvCurtail: document.getElementById('gridConstraintsPvCurtail'),
-
-    gotoEvuPvTab: document.getElementById('gotoEvuPvTab')
+    gridConstraintsEvu: document.getElementById('gridConstraintsEvu'),
+    gridConstraintsPvCurtail: document.getElementById('gridConstraintsPvCurtail')
   };
 
   // Keep grid sign checkboxes in sync (Allgemein vs Energiefluss)
   if (els.gridInvertGrid && els.flowInvertGrid) {
-    /**
-     * Code-Teil: Arrow-Funktion `syncGridInvert`
-     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: syncGridInvert
-     * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const syncGridInvert = (val) => {
       els.gridInvertGrid.checked = !!val;
       els.flowInvertGrid.checked = !!val;
@@ -423,12 +412,7 @@
     'MS/NS': 30,
     NS: 30,
   });
-  /**
-   * Code-Teil: _psVoltageKey
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psVoltageKey(v) {
     const s = String(v || 'MS').trim().toUpperCase().replace(/Ö/g, 'O').replace(/Ü/g, 'U').replace(/Ä/g, 'A');
     if (s === 'HÖS' || s === 'HOS') return 'HOS';
@@ -438,32 +422,17 @@
     if (s === 'HS' || s === 'MS' || s === 'NS') return s;
     return 'MS';
   }
-  /**
-   * Code-Teil: _psThresholdForVoltage
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psThresholdForVoltage(v) {
     const k = _psVoltageKey(v);
     return Object.prototype.hasOwnProperty.call(PS_VOLTAGE_THRESHOLDS, k) ? PS_VOLTAGE_THRESHOLDS[k] : 20;
   }
-  /**
-   * Code-Teil: _psNumOrNull
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psNumOrNull(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
-  /**
-   * Code-Teil: _psParseNumberList
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psParseNumberList(value, min, max) {
     const out = [];
     const seen = new Set();
@@ -484,21 +453,11 @@
     out.sort((a, b) => a - b);
     return out;
   }
-  /**
-   * Code-Teil: _psFormatNumberList
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psFormatNumberList(arr) {
     return Array.isArray(arr) ? arr.map(v => String(v)).join(',') : '';
   }
-  /**
-   * Code-Teil: _psNormalizeDateToken
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psNormalizeDateToken(token) {
     const s = String(token || '').trim();
     if (!s) return '';
@@ -506,12 +465,7 @@
     if (m) return `${m[1].padStart(4, '0')}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
     return s;
   }
-  /**
-   * Code-Teil: _psParseDateList
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psParseDateList(value) {
     const out = [];
     const seen = new Set();
@@ -528,52 +482,27 @@
     out.sort();
     return out;
   }
-  /**
-   * Code-Teil: _psFormatDateList
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psFormatDateList(arr) {
     return Array.isArray(arr) ? arr.map(v => String(v)).filter(Boolean).join('\n') : '';
   }
-  /**
-   * Code-Teil: _psSetNumberInput
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psSetNumberInput(el, value) {
     if (!el) return;
     const n = Number(value);
     el.value = Number.isFinite(n) ? String(n) : '';
   }
-  /**
-   * Code-Teil: _psSetTextInput
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psSetTextInput(el, value) {
     if (!el) return;
     el.value = (value === null || value === undefined) ? '' : String(value);
   }
-  /**
-   * Code-Teil: _psRound2
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psRound2(n) {
     const x = Number(n);
     return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0;
   }
-  /**
-   * Code-Teil: _psBuildAtypicalReviewFromUi
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psBuildAtypicalReviewFromUi() {
     const voltageLevel = els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS';
     const thresholdInput = _psNumOrNull(els.psAtypicalThresholdPercent && els.psAtypicalThresholdPercent.value);
@@ -623,12 +552,7 @@
       eligible,
     };
   }
-  /**
-   * Code-Teil: _psUpdateAtypicalReviewPreview
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psUpdateAtypicalReviewPreview() {
     if (!els.psAtypicalReviewPreview) return;
     const r = _psBuildAtypicalReviewFromUi();
@@ -650,12 +574,7 @@
       : (r.technicalEligible ? 'Status: technisch erfüllt, wirtschaftliche Prüfung noch offen/negativ ⚠️' : 'Status: Kriterien noch nicht erfüllt ❌');
     els.psAtypicalReviewPreview.textContent = `${parts.join(' · ')} · ${status}`;
   }
-  /**
-   * Code-Teil: _psAtypicalReviewExportUrl
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psAtypicalReviewExportUrl(format) {
     const rawFmt = String(format || 'csv').trim().toLowerCase();
     const fmt = rawFmt === 'pdf' ? 'pdf' : (rawFmt === 'json' ? 'json' : 'csv');
@@ -674,21 +593,11 @@
     const base = fmt === 'json' ? '/api/peakshaving/atypical/review' : `/api/peakshaving/atypical/review.${fmt}`;
     return `${base}${qs ? `?${qs}` : ''}`;
   }
-  /**
-   * Code-Teil: _psAtypicalReviewDefaultStatus
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psAtypicalReviewDefaultStatus() {
     return 'Nachweis-Historie wird automatisch in Influx über historie.peakShaving.atypical.* und gedrosselte Audit-Samples unter peakShaving.atypical.audit.* mitgeführt. CSV/PDF exportieren die aktuelle Prüfung plus die Influx-Zeitreihe.';
   }
-  /**
-   * Code-Teil: _psOpenAtypicalReviewExport
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psOpenAtypicalReviewExport(format) {
     try {
       if (els.psAtypicalReviewExportStatus) {
@@ -703,12 +612,7 @@
       if (els.psAtypicalReviewExportStatus) els.psAtypicalReviewExportStatus.textContent = 'Export konnte nicht gestartet werden: ' + (e && e.message ? e.message : e);
     }
   }
-  /**
-   * Code-Teil: _psRefreshAtypicalReviewExportStatus
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   async function _psRefreshAtypicalReviewExportStatus() {
     if (!els.psAtypicalReviewExportStatus) return;
     try {
@@ -735,12 +639,7 @@
       els.psAtypicalReviewExportStatus.textContent = 'Nachweis konnte nicht gelesen werden: ' + (e && e.message ? e.message : e);
     }
   }
-  /**
-   * Code-Teil: _psSetSelect
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psSetSelect(el, value, fallback) {
     if (!el) return;
     const v = String(value || fallback || '').trim();
@@ -1094,18 +993,6 @@
   let dpTargetInputId = null;
   let treePrefix = '';
 
-  /**
-   * Code-Teil: shadowJsonDetailsOpen
-   *
-   * Zweck:
-   * Merkt sich, welche JSON-Detailblöcke in der TS-Shadow-Diagnose geöffnet sind.
-   *
-   * Zusammenhang:
-   * Die Statusseite aktualisiert sich alle paar Sekunden. Ohne diesen Merker wird das
-   * DOM neu aufgebaut und ein gerade geöffnetes JSON-Details-Fenster klappt sofort
-   * wieder zu. Genau das war auf der Anlage sichtbar: „JSON anzeigen" öffnet kurz
-   * und schließt beim nächsten Poll wieder.
-   */
   const shadowJsonDetailsOpen = new Set();
 
 
@@ -1234,13 +1121,6 @@
     }
   }
 
-  /**
-   * Code-Teil: normalizeLicenseInfo
-   * Zweck: Vereinheitlicht Lizenzdaten aus /api/installer/config und /api/license/info.
-   * Zusammenhang: Das App-Center darf nach einer aktivierten EOS-/Home-Lizenz nicht auf
-   * "Keine Lizenz" hängen bleiben, nur weil eine alte Konfigurationsantwort oder ein
-   * Browser-/Service-Worker-Cache noch keine Lizenzdaten enthielt.
-   */
   function normalizeLicenseInfo(raw) {
     const src = raw && typeof raw === 'object' ? raw : {};
     const unwrap = (value) => {
@@ -1616,30 +1496,12 @@
     }
   }
 
-  /**
-   * Code-Teil: _decodeShadowDisplayText
-   *
-   * Zweck:
-   * Bereitet Diagnose-Texte für die Anzeige vor. Manche Backend-Texte können aus
-   * URL-/Query-Kontexten bereits mit `%20` kodierte Leerzeichen enthalten. Für den
-   * Installateur muss das lesbar als normaler Text angezeigt werden.
-   */
   function _decodeShadowDisplayText(value) {
     const text = String(value === null || value === undefined ? '' : value);
     if (!/%[0-9A-Fa-f]{2}/.test(text)) return text;
     try { return decodeURIComponent(text); } catch (_e) { return text; }
   }
 
-  /**
-   * Code-Teil: _rememberOpenShadowDetails
-   *
-   * Zweck:
-   * Sichert den Offen/Zugeklappt-Zustand der JSON-Details vor einem Re-Render.
-   *
-   * Wichtig:
-   * Das verändert keine Diagnosewerte und keine EMS-Logik. Es verhindert nur, dass
-   * das App-Center bei automatischem Polling die Bedienung unbrauchbar macht.
-   */
   function _rememberOpenShadowDetails() {
     try {
       document.querySelectorAll('.nw-shadow-json-details[data-shadow-key]').forEach((node) => {
@@ -1655,34 +1517,19 @@
 // Energiefluss: Einheit pro Datenpunkt (W/kW)
 // Intern arbeitet der Energiefluss mit Watt; die Live-UI zeigt kW.
 // Hersteller liefern jedoch teils bereits kW. Daher pro DP umschaltbar.
-/**
- * Code-Teil: _ensureSettingsObj
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function _ensureSettingsObj() {
   if (!currentConfig || typeof currentConfig !== 'object') currentConfig = {};
   if (!currentConfig.settings || typeof currentConfig.settings !== 'object') currentConfig.settings = {};
   return currentConfig.settings;
 }
-/**
- * Code-Teil: _ensureFlowPowerDpIsW
- * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function _ensureFlowPowerDpIsW() {
   const st = _ensureSettingsObj();
   if (!st.flowPowerDpIsW || typeof st.flowPowerDpIsW !== 'object') st.flowPowerDpIsW = {};
   return st.flowPowerDpIsW;
 }
-/**
- * Code-Teil: _getFlowPowerDpIsW
- * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function _getFlowPowerDpIsW(key) {
   const st = _ensureSettingsObj();
   const map = (st.flowPowerDpIsW && typeof st.flowPowerDpIsW === 'object') ? st.flowPowerDpIsW : null;
@@ -1692,12 +1539,7 @@ function _getFlowPowerDpIsW(key) {
   // Default: DP liefert Watt
   return true;
 }
-/**
- * Code-Teil: _setFlowPowerDpIsW
- * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function _setFlowPowerDpIsW(key, isW) {
   const map = _ensureFlowPowerDpIsW();
   map[key] = !!isW;
@@ -1707,12 +1549,7 @@ function _setFlowPowerDpIsW(key, isW) {
     }
   });
 }
-/**
- * Code-Teil: _collectFlowPowerDpIsWFromUI
- * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function _collectFlowPowerDpIsWFromUI() {
   const map = {};
   document.querySelectorAll('input[data-flow-power-unit-key]').forEach((el) => {
@@ -1722,12 +1559,7 @@ function _collectFlowPowerDpIsWFromUI() {
   return map;
 }
 // ─────────────────────────────────────────────────────────────
-  /**
-   * Code-Teil: setStatus
-   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function setStatus(msg, kind) {
     if (!els.status) return;
     els.status.textContent = msg || '';
@@ -1752,24 +1584,14 @@ function _collectFlowPowerDpIsWFromUI() {
       els.save.setAttribute('aria-label', 'Konfiguration speichern');
     }
   }
-  /**
-   * Code-Teil: setBackupStatus
-   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function setBackupStatus(msg, kind) {
     if (!els.backupStatus) return;
     els.backupStatus.textContent = msg || '';
     els.backupStatus.style.opacity = msg ? '1' : '0.65';
     els.backupStatus.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : '');
   }
-  /**
-   * Code-Teil: downloadJsonFile
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function downloadJsonFile(filename, obj) {
     try {
       const json = JSON.stringify(obj, null, 2);
@@ -1786,12 +1608,7 @@ function _collectFlowPowerDpIsWFromUI() {
       }, 50);
     } catch (_e) {}
   }
-  /**
-   * Code-Teil: readFileAsText
-   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function readFileAsText(file) {
     return new Promise((resolve, reject) => {
       try {
@@ -1804,12 +1621,7 @@ function _collectFlowPowerDpIsWFromUI() {
       }
     });
   }
-  /**
-   * Code-Teil: fetchJson
-   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   async function fetchJson(url, opts) {
     const res = await fetch(url, Object.assign({
       headers: { 'Content-Type': 'application/json' }
@@ -1825,12 +1637,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   // --- Datapoint validation (Phase 3.3) ---
   let _validateTimer = null;
-  /**
-   * Code-Teil: _fmtAge
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _fmtAge(ageMs) {
     const n = Number(ageMs);
     if (!Number.isFinite(n) || n < 0) return '';
@@ -1842,12 +1649,7 @@ function _collectFlowPowerDpIsWFromUI() {
     const h = m / 60;
     return `${Math.round(h)}h`;
   }
-  /**
-   * Code-Teil: _setBadge
-   * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _setBadge(inputId, kind, text) {
     const el = document.getElementById('val_' + inputId);
     if (!el) return;
@@ -1855,23 +1657,13 @@ function _collectFlowPowerDpIsWFromUI() {
     el.classList.add('nw-config-badge', 'nw-config-badge--' + (kind || 'idle'));
     el.textContent = text || '—';
   }
-  /**
-   * Code-Teil: scheduleValidation
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function scheduleValidation(delayMs) {
     const d = (typeof delayMs === 'number' && Number.isFinite(delayMs)) ? delayMs : 600;
     if (_validateTimer) clearTimeout(_validateTimer);
     _validateTimer = setTimeout(() => { runValidation(false).catch(() => {}); }, d);
   }
-  /**
-   * Code-Teil: runValidation
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   async function runValidation(showStatusMessage) {
     const inputs = Array.from(document.querySelectorAll('input[data-dp-input="1"]'));
     const ids = [];
@@ -1948,12 +1740,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
     if (showStatusMessage) setStatus('Validierung: abgeschlossen.', 'ok');
   }
-  /**
-   * Code-Teil: deepMerge
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function deepMerge(target, ...patches) {
     const out = (target && typeof target === 'object') ? JSON.parse(JSON.stringify(target)) : {};
     for (const patch of patches) {
@@ -1969,52 +1756,27 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return out;
   }
-  /**
-   * Code-Teil: valueOrEmpty
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function valueOrEmpty(v) {
     return (v === null || v === undefined) ? '' : String(v);
   }
-  /**
-   * Code-Teil: numOrEmpty
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function numOrEmpty(v) {
     return (typeof v === 'number' && Number.isFinite(v)) ? String(v) : '';
   }
-  /**
-   * Code-Teil: _aiSetNumberInput
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _aiSetNumberInput(el, value, def) {
     if (!el) return;
     const n = Number(value);
     const d = Number(def);
     el.value = Number.isFinite(n) ? String(n) : (Number.isFinite(d) ? String(d) : '');
   }
-  /**
-   * Code-Teil: _aiSetCheckbox
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _aiSetCheckbox(el, value, def = true) {
     if (!el) return;
     el.checked = (typeof value === 'boolean') ? value : !!def;
   }
-  /**
-   * Code-Teil: _aiSetInputValue
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _aiSetInputValue(el, value, def = '') {
     if (!el) return;
     const v = (value === null || value === undefined || value === '') ? def : value;
@@ -2022,12 +1784,7 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
     // Abschnitt: KI-Berater-Konfiguration im App-Center. Felder müssen zu main.js-Defaults und ems/modules/ai-advisor.js passen.
-/**
- * Code-Teil: buildAiAdvisorUI
- * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function buildAiAdvisorUI() {
     const cfg = (currentConfig && currentConfig.aiAdvisor && typeof currentConfig.aiAdvisor === 'object') ? currentConfig.aiAdvisor : {};
     const cats = (cfg.categories && typeof cfg.categories === 'object') ? cfg.categories : {};
@@ -2092,20 +1849,10 @@ function buildAiAdvisorUI() {
   }
 
     // Abschnitt: KI-Konfiguration aus dem DOM einsammeln. Neue Eingabefelder müssen hier gespeichert werden, sonst gehen sie beim Speichern verloren.
-/**
- * Code-Teil: collectAiAdvisorConfigFromUI
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+
 function collectAiAdvisorConfigFromUI(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
-    /**
-     * Code-Teil: n
-     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
-     * Zusammenhang: Gehört zu Installer/App-Center (Admin-Konfiguration, EMS-Apps, DP-Zuordnung und Installer-Funktionen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen müssen mit main.js/native Config und EMS-Modulen synchron bleiben, sonst speichern Installerwerte falsch. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
-     */
+
     const n = (el, def, min, max, roundValue = true) => {
       const raw = el ? Number(el.value) : NaN;
       let v = Number.isFinite(raw) ? raw : def;
@@ -2113,18 +1860,7 @@ function collectAiAdvisorConfigFromUI(base) {
       if (Number.isFinite(max)) v = Math.min(max, v);
       return roundValue ? Math.round(v) : v;
     };
-    /**
-     * Code-Teil: Arrow-Funktion `str`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: str
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const str = (el, def) => {
       const raw = el ? String(el.value || '').trim() : '';
       return raw || def;
@@ -2753,15 +2489,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return card;
   }
 
-  /**
-   * Code-Teil: buildAppCenterStructurePanels
-   * Zweck: Hält das App-Center-Schema sauber: Apps enthalten nur Funktionsmodule,
-   * Zuordnung enthält Markt-/Länder- und P1/DSMR-Mapping, Ladepunkte enthält die
-   * DC-Stationsdisplay-Konfiguration. Dadurch werden neue EOS-Module nicht ungeordnet
-   * vorne unter „Apps“ abgelegt.
-   * Zusammenhang: Die Karten schreiben weiterhin dieselben Config-Strukturen; nur die
-   * visuelle Platzierung wird fachlich sauber getrennt. Es entsteht keine doppelte Logik.
-   */
   function buildAppCenterStructurePanels() {
     const mount = (el, card) => {
       if (!el) return;
@@ -2831,21 +2558,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
   }
 
-  /**
-   * Code-Teil: setupInstallerBackButton
-   * Zweck: Der Installateur kann aus dem App-Center zurück auf den ioBroker-/EOS-Admin-Tab
-   * der Adapter-Instanz wechseln. Wichtig: Das App-Center läuft oft direkt auf dem
-   * Adapter-Port (z. B. 8188). Eine relative Route wie `tab.html` zeigt dort ins Leere,
-   * weil die zentrale Installer-Seite im Admin auf `/#tab-nexowatt-ui-<instanz>` liegt.
-   *
-   * URL-Regel ab 0.8.34:
-   * - Wenn ein Admin-Referrer existiert, wird dessen Origin verwendet.
-   * - Sonst wird die aktuelle Host-IP mit Admin-Port 8081 genutzt.
-   * - Die Instanz wird aus ?instance=, ?inst= oder aus dem ioBroker-Hash abgeleitet.
-   *
-   * Dadurch funktioniert „Zurück zum Installer“ sowohl vom direkten Adapter-Port als auch
-   * aus dem Admin-Tab zuverlässig und ohne Zugriff auf /tab.html am falschen Port.
-   */
   function setupInstallerBackButton() {
     const btn = els.backInstaller;
     if (!btn || btn.__nwBackInstallerBound) return;
@@ -2918,21 +2630,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     });
   }
 
-  /**
-   * Code-Teil: buildAppsUI
-   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
   function buildAppsUI() {
     if (!els.appsList) return;
     els.appsList.innerHTML = '';
-    /**
-     * Code-Teil: getSt
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const getSt = (appId) => {
       const a = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps ? currentConfig.emsApps.apps[appId] : null;
       return a && typeof a === 'object' ? a : { installed: false, enabled: false };
@@ -3039,12 +2740,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       actions.className = 'nw-config-card__header-actions';
 
       // UI: use button-style toggles (no visible checkboxes)
-      /**
-       * Code-Teil: Arrow-Funktion `mkToggle`
-       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-       */
+
       const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus', toggleKind = '') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
@@ -3154,12 +2850,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     els.appsEmpty.style.display = visibleApps.length ? 'none' : 'block';
   }
-  /**
-   * Code-Teil: setAppsFromConfig
-   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function setAppsFromConfig(cfg) {
     if (!cfg) return;
     const apps = (cfg.emsApps && cfg.emsApps.apps && typeof cfg.emsApps.apps === 'object') ? cfg.emsApps.apps : {};
@@ -3185,29 +2876,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Phase 3.5: Zuordnungskacheln abhängig von installierten Apps ein-/ausblenden
     try { applyAppDependentVisibility(); } catch (_e) {}
   }
-  /**
-   * Code-Teil: applyAppDependentVisibility
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function applyAppDependentVisibility() {
-    /**
-     * Code-Teil: isInstalled
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const isInstalled = (appId) => {
       const cb = document.getElementById(`app_${appId}_installed`);
       return cb ? !!cb.checked : false;
     };
-    /**
-     * Code-Teil: toggleCard
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const toggleCard = (cardKey, show) => {
       const el = document.querySelector(`.nw-config-card[data-card="${cardKey}"]`);
       if (!el) return;
@@ -3263,12 +2939,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (appsTab) appsTab.click();
     }
   }
-  /**
-   * Code-Teil: _psDefaultWindow
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psDefaultWindow() {
     return {
       enabled: true,
@@ -3282,36 +2953,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       validTo: '',
     };
   }
-  /**
-   * Code-Teil: _psGetPeakCfg
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psGetPeakCfg() {
     currentConfig = currentConfig || {};
     currentConfig.peakShaving = currentConfig.peakShaving && typeof currentConfig.peakShaving === 'object' ? currentConfig.peakShaving : {};
     currentConfig.peakShaving.atypical = currentConfig.peakShaving.atypical && typeof currentConfig.peakShaving.atypical === 'object' ? currentConfig.peakShaving.atypical : {};
     return currentConfig.peakShaving;
   }
-  /**
-   * Code-Teil: _psGetWindowsFromCfg
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psGetWindowsFromCfg(cfg) {
     const atypical = (cfg && cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
     if (Array.isArray(atypical.highLoadWindows)) return atypical.highLoadWindows;
     if (Array.isArray(atypical.windows)) return atypical.windows;
     return [];
   }
-  /**
-   * Code-Teil: buildAtypicalWindowsUI
-   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function buildAtypicalWindowsUI() {
     if (!els.psAtypicalWindows) return;
     const ps = _psGetPeakCfg();
@@ -3404,23 +3060,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       }
     });
   }
-  /**
-   * Code-Teil: _psCollectWindowRows
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psCollectWindowRows() {
     const out = [];
     if (!els.psAtypicalWindows) return out;
     const rows = Array.from(els.psAtypicalWindows.querySelectorAll('[data-ps-hlzf-row]'));
     for (const row of rows) {
-      /**
-       * Code-Teil: get
-       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-       */
+
       const get = (field) => row.querySelector(`[data-ps-window-field="${field}"]`);
       const enabledEl = get('enabled');
       const label = String((get('label') && get('label').value) || '').trim();
@@ -3446,12 +3092,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
     return out;
   }
-  /**
-   * Code-Teil: _psUpdateAtypicalFieldState
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _psUpdateAtypicalFieldState() {
     const mode = els.psStrategyMode ? String(els.psStrategyMode.value || 'standard') : 'standard';
     const atypicalOn = mode === 'atypical' || mode === 'hybrid' || mode === 'monitor';
@@ -3486,12 +3127,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (el) el.disabled = !standardOn;
     });
   }
-  /**
-   * Code-Teil: buildPeakShavingUI
-   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function buildPeakShavingUI() {
     if (!els.psStrategyMode) return;
     const ps = _psGetPeakCfg();
@@ -3559,12 +3195,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     _psUpdateAtypicalFieldState();
     _psUpdateAtypicalReviewPreview();
   }
-  /**
-   * Code-Teil: collectPeakShavingConfigFromUI
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function collectPeakShavingConfigFromUI(baseCfg) {
     const out = deepMerge({}, baseCfg || {});
     if (!els.psStrategyMode) return out;
@@ -3573,12 +3204,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     out.strategyMode = ['standard', 'atypical', 'hybrid', 'monitor'].includes(strategy) ? strategy : 'standard';
     if (els.psStandardMode) out.mode = (els.psStandardMode.value === 'dynamic') ? 'dynamic' : 'static';
 
-    /**
-     * Code-Teil: Arrow-Funktion `setNum`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
     const setNum = (key, el, min = 0, max = Number.POSITIVE_INFINITY) => {
       if (!el) return;
       const n = Number(el.value);
@@ -3620,18 +3245,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     a.calendarExceptions = _psParseDateList(els.psAtypicalCalendarExceptions && els.psAtypicalCalendarExceptions.value);
     a.highLoadWindows = _psCollectWindowRows();
 
-    /**
-     * Code-Teil: Arrow-Funktion `setStr`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: setStr
-     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     const setStr = (key, el) => {
       if (!el) return;
       const v = String(el.value || '').trim();
@@ -3676,37 +3289,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     out.atypical = a;
     return out;
   }
-  /**
-   * Code-Teil: buildDpTable
-   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function buildDpTable(container, fields, getter, setter, options) {
     container.innerHTML = '';
 
     const fieldInputs = new Map();
     const metaUpdaters = [];
-    /**
-     * Code-Teil: isRequiredGroupSatisfied
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const isRequiredGroupSatisfied = (groupName) => {
       if (!groupName) return false;
-      /**
-       * Code-Teil: Arrow-Funktion `getVal`
-       * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-       */
-      /**
-       * Code-Teil: getVal
-       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-       */
+
       const getVal = (key) => String(fieldInputs.get(key)?.value || '').trim();
       if (groupName === 'gridPairOrSigned') {
         const signed = getVal('gridPointPower');
@@ -3716,29 +3308,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       }
       return false;
     };
-    /**
-     * Code-Teil: Arrow-Funktion `refreshAllMeta`
-     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: refreshAllMeta
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const refreshAllMeta = () => {
       metaUpdaters.forEach((fn) => {
         try { fn(); } catch (_e) {}
       });
     };
-    /**
-     * Code-Teil: makeRow
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+
     const makeRow = (field) => {
       const row = document.createElement('div');
       row.className = 'nw-config-item';
@@ -3843,18 +3419,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       row.appendChild(left);
       row.appendChild(right);
 
-      /**
-       * Code-Teil: Arrow-Funktion `updateMeta`
-       * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-       */
-      /**
-       * Code-Teil: updateMeta
-       * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
-       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-       */
       const updateMeta = () => {
         const v = String(input.value || '').trim();
         const isSet = !!v;
@@ -3942,23 +3506,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   // ------------------------------
   // Energiefluss: optionale Slots (Verbraucher/Erzeuger)
   // ------------------------------
-  /**
-   * Code-Teil: _ensureVis
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _ensureVis() {
     currentConfig = currentConfig || {};
     currentConfig.vis = (currentConfig.vis && typeof currentConfig.vis === 'object') ? currentConfig.vis : {};
     return currentConfig.vis;
   }
-  /**
-   * Code-Teil: _normalizeFlowConsumerType
-   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _normalizeFlowConsumerType(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return 'generic';
@@ -3966,24 +3520,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
     return 'generic';
   }
-  /**
-   * Code-Teil: _getFlowConsumerTypeLabel
-   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _getFlowConsumerTypeLabel(raw) {
     const t = _normalizeFlowConsumerType(raw);
     if (t === 'heatPump') return 'Wärmepumpe / Klima';
     if (t === 'heatingRod') return 'Heizstab';
     return 'Allgemein';
   }
-  /**
-   * Code-Teil: _ensureFlowSlots
-   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _ensureFlowSlots() {
     const vis = _ensureVis();
     vis.flowSlots = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
@@ -7890,6 +7434,22 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (typeof gc.rlmEnabled !== 'boolean') gc.rlmEnabled = false;
     if (typeof gc.rlmAligned !== 'boolean') gc.rlmAligned = true;
 
+    // RC79: zweistufige Netzbezugsbegrenzung. 0 beim Hard-Limit bedeutet,
+    // dass die Netzanschlussleistung aus Zuordnung → Allgemein verwendet wird.
+    // 0 beim Soft-Limit bzw. bei der Reserve aktiviert die automatische Reserve
+    // (10 %, mindestens 1 kW, höchstens 3 kW).
+    if (typeof gc.importSoftLimitEnabled !== 'boolean') gc.importSoftLimitEnabled = true;
+    const importHardLimitW = Number(gc.importHardLimitW ?? gc.gridImportHardLimitW ?? 0);
+    gc.importHardLimitW = Number.isFinite(importHardLimitW) && importHardLimitW >= 0 ? Math.round(importHardLimitW) : 0;
+    const importSoftLimitW = Number(gc.importSoftLimitW ?? 0);
+    gc.importSoftLimitW = Number.isFinite(importSoftLimitW) && importSoftLimitW >= 0 ? Math.round(importSoftLimitW) : 0;
+    const importSoftReserveW = Number(gc.importSoftReserveW ?? 0);
+    gc.importSoftReserveW = Number.isFinite(importSoftReserveW) && importSoftReserveW >= 0 ? Math.round(importSoftReserveW) : 0;
+    const importSoftHysteresisW = Number(gc.importSoftHysteresisW ?? 500);
+    gc.importSoftHysteresisW = Number.isFinite(importSoftHysteresisW) && importSoftHysteresisW >= 0 ? Math.round(importSoftHysteresisW) : 500;
+    const importSoftReleaseDelaySec = Number(gc.importSoftReleaseDelaySec ?? 10);
+    gc.importSoftReleaseDelaySec = Number.isFinite(importSoftReleaseDelaySec) && importSoftReleaseDelaySec >= 0 ? Math.round(importSoftReleaseDelaySec) : 10;
+
     if (typeof gc.zeroExportEnabled !== 'boolean') gc.zeroExportEnabled = false;
 
     // Einspeisebegrenzung/Export Guard: bewusst unter Netzlimits im Installer, nicht im Kundenfrontend.
@@ -7961,11 +7521,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   function buildGridConstraintsUI() {
     const meterEl = els.gridConstraintsMeter;
+    const importEl = els.gridConstraintsImportLimits;
     const rlmEl = els.gridConstraintsRlm;
     const zeroEl = els.gridConstraintsZero;
+    const evuEl = els.gridConstraintsEvu;
     const pvEl = els.gridConstraintsPvCurtail;
 
-    if (!meterEl && !rlmEl && !zeroEl && !pvEl) return;
+    if (!meterEl && !importEl && !rlmEl && !zeroEl && !evuEl && !pvEl) return;
 
     const apps = (currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps) ? currentConfig.emsApps.apps : {};
     const a = (apps && apps.grid) ? apps.grid : { installed: false, enabled: false };
@@ -8003,8 +7565,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
      */
     const clearAll = () => {
       if (meterEl) meterEl.innerHTML = '';
+      if (importEl) importEl.innerHTML = '';
       if (rlmEl) rlmEl.innerHTML = '';
       if (zeroEl) zeroEl.innerHTML = '';
+      if (evuEl) evuEl.innerHTML = '';
       if (pvEl) pvEl.innerHTML = '';
     };
 
@@ -8013,8 +7577,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (!a.installed) {
       const msg = mkMsg('Die App „Netzlimits“ ist nicht installiert. Bitte unter „Apps“ installieren, dann hier konfigurieren.');
       if (meterEl) meterEl.appendChild(msg.cloneNode(true));
+      if (importEl) importEl.appendChild(msg.cloneNode(true));
       if (rlmEl) rlmEl.appendChild(msg.cloneNode(true));
       if (zeroEl) zeroEl.appendChild(msg.cloneNode(true));
+      if (evuEl) evuEl.appendChild(msg.cloneNode(true));
       if (pvEl) pvEl.appendChild(msg.cloneNode(true));
       return;
     }
@@ -8283,6 +7849,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           const remaining = readVal(data, 'gridConstraints.exportLimit.remainingFeedInW');
           const usage = Number(readVal(data, 'gridConstraints.exportLimit.usagePercent'));
           const curt = readVal(data, 'gridConstraints.exportLimit.estimatedCurtailmentW');
+          const pvActual = readVal(data, 'gridConstraints.zeroExport.pvActualW');
+          const localAbsorption = readVal(data, 'gridConstraints.zeroExport.localAbsorptionW');
+          const pvFeedForwardTarget = readVal(data, 'gridConstraints.zeroExport.pvFeedForwardTargetW');
+          const pvFeedbackCorrection = readVal(data, 'gridConstraints.zeroExport.pvFeedbackCorrectionW');
+          const storageActual = readVal(data, 'gridConstraints.zeroExport.storageActualW');
+          const storageTarget = readVal(data, 'gridConstraints.zeroExport.storageTargetW');
+          const storageConflict = !!readVal(data, 'gridConstraints.zeroExport.storageDischargeConflict');
+          const pvSetpointReason = String(readVal(data, 'gridConstraints.zeroExport.pvSetpointReason') || '—');
           const status = String(readVal(data, 'gridConstraints.exportLimit.statusLabel') || '—');
           const planned = String(readVal(data, 'gridConstraints.exportLimit.plannedAction') || '—');
           const message = String(readVal(data, 'gridConstraints.exportLimit.installerMessage') || '');
@@ -8313,6 +7887,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             ['Rest bis Limit', fmtW(remaining)],
             ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
             ['Geschätzte Abregelung', fmtW(curt)],
+            ['PV Ist', fmtW(pvActual)],
+            ['Lokale Aufnahme inkl. Speicher', fmtW(localAbsorption)],
+            ['PV Feed‑Forward‑Ziel', fmtW(pvFeedForwardTarget)],
+            ['NVP‑Korrektur', fmtW(pvFeedbackCorrection)],
+            ['Speicher Ist (+Entladen / −Laden)', fmtW(storageActual)],
+            ['Speicher Soll (+Entladen / −Laden)', fmtW(storageTarget)],
+            ['PV/Speicher‑Konflikt', storageConflict ? 'PV wird freigegeben – Speicher entlädt' : 'Nein'],
+            ['PV‑Vorgabegrund', pvSetpointReason],
             ['Geplante Aktion', planned],
             ['0‑Einspeise nächste Senke', nextSink],
             ['WR-Schreibfähigkeit', writeCapable ? 'OK' : 'Fehlt / prüfen'],
@@ -8390,12 +7972,103 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         });
     };
 
+    /**
+     * RC79: Runtime-Diagnose fuer das zweistufige Importlimit. Die Anzeige ist
+     * rein lesend und zeigt bewusst den signierten NVP: Bezug positiv,
+     * Einspeisung negativ.
+     */
+    const renderGridImportRuntimeDiagnostics = (target) => {
+      if (!target) return;
+      const box = document.createElement('div');
+      box.className = 'nw-help';
+      box.style.marginTop = '10px';
+      box.textContent = 'Importlimit-Diagnose wird geladen …';
+      target.appendChild(box);
+
+      const fmtW = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '—';
+        const sign = n > 0 ? '+' : '';
+        if (Math.abs(n) >= 1000) return sign + (n / 1000).toFixed(2) + ' kW';
+        return sign + Math.round(n) + ' W';
+      };
+      const readVal = (data, key) => {
+        const rec = data && data[key];
+        return rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : undefined;
+      };
+      const stageLabel = (stage) => ({
+        normal: 'Normal',
+        soft: 'Soft-Limit aktiv',
+        hard: 'Hard-Limit aktiv',
+        stale: 'NVP nicht verwendbar',
+        unconfigured: 'Hard-Limit fehlt',
+      }[String(stage || '')] || String(stage || '—'));
+
+      fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' })
+        .then((data) => {
+          const stage = readVal(data, 'gridConstraints.importLimits.stage');
+          const rows = [
+            ['Stufe', stageLabel(stage)],
+            ['Signierter NVP', fmtW(readVal(data, 'gridConstraints.importLimits.signedNvpW'))],
+            ['Soft-Limit', fmtW(readVal(data, 'gridConstraints.importLimits.softLimitW'))],
+            ['Hard-Limit', fmtW(readVal(data, 'gridConstraints.importLimits.hardLimitW'))],
+            ['Reserve Soft → Hard', fmtW(readVal(data, 'gridConstraints.importLimits.reserveW'))],
+            ['Headroom bis Soft', fmtW(readVal(data, 'gridConstraints.importLimits.softHeadroomW'))],
+            ['Headroom bis Hard', fmtW(readVal(data, 'gridConstraints.importLimits.hardHeadroomW'))],
+            ['Erforderliche Reduktion', fmtW(readVal(data, 'gridConstraints.importLimits.requiredReductionW'))],
+            ['Grund', String(readVal(data, 'gridConstraints.importLimits.reason') || '—')],
+          ];
+          box.innerHTML = '';
+          const title = document.createElement('div');
+          title.style.fontWeight = '700';
+          title.style.marginBottom = '6px';
+          title.textContent = 'Import Soft-/Hard-Limit Runtime-Diagnose';
+          box.appendChild(title);
+          const table = document.createElement('div');
+          table.style.display = 'grid';
+          table.style.gridTemplateColumns = 'minmax(155px, 1fr) minmax(160px, 1.6fr)';
+          table.style.gap = '4px 10px';
+          for (const [key, value] of rows) {
+            const left = document.createElement('div');
+            left.style.opacity = '.78';
+            left.textContent = key;
+            const right = document.createElement('div');
+            right.style.fontWeight = '600';
+            right.textContent = String(value || '—');
+            table.appendChild(left);
+            table.appendChild(right);
+          }
+          box.appendChild(table);
+        })
+        .catch(() => {
+          box.textContent = 'Importlimit-Diagnose konnte nicht geladen werden. Adapter/API prüfen.';
+        });
+    };
+
     // Meter / Timeout
     if (meterEl) {
       const gridPowerId = String(gc.gridPowerId || '').trim();
       meterEl.appendChild(mkDpField('Netzleistung (Fallback) (optional)', 'gc_gridPowerId', gridPowerId, (v) => { gc.gridPowerId = v; }, 'Datenpunkt-ID (W)'));
       meterEl.appendChild(mkNum('Stale‑Timeout', 'gc_staleTimeoutSec', (gc.staleTimeoutSec !== undefined && gc.staleTimeoutSec !== null) ? Number(gc.staleTimeoutSec) : 15, (n) => { gc.staleTimeoutSec = (n > 0) ? Math.max(5, Math.round(n)) : 15; }, 's', 'z.B. 15'));
-      meterEl.appendChild(mkHint('Wenn Messwerte älter als der Timeout sind, wird die Regelung vorsichtshalber begrenzt.'));
+      meterEl.appendChild(mkHint('Wenn der NVP älter als der Timeout ist, werden keine neuen positiven Lastfreigaben erteilt.'));
+    }
+
+    // Zweistufiges Importlimit
+    if (importEl) {
+      importEl.appendChild(mkNum('Hard‑Limit Netzbezug', 'gc_importHardLimitW', Number(gc.importHardLimitW || 0) || 0, (n) => { gc.importHardLimitW = Math.max(0, Math.round(n)); }, 'W', '0 = Netzanschlussleistung'));
+      importEl.appendChild(mkChk('Soft‑Limit verwenden', 'gc_importSoftLimitEnabled', gc.importSoftLimitEnabled !== false, (b) => {
+        gc.importSoftLimitEnabled = b;
+        buildGridConstraintsUI();
+        scheduleValidation(200);
+      }));
+      if (gc.importSoftLimitEnabled !== false) {
+        importEl.appendChild(mkNum('Soft‑Limit explizit', 'gc_importSoftLimitW', Number(gc.importSoftLimitW || 0) || 0, (n) => { gc.importSoftLimitW = Math.max(0, Math.round(n)); }, 'W', '0 = automatisch'));
+        importEl.appendChild(mkNum('Reserve unter Hard‑Limit', 'gc_importSoftReserveW', Number(gc.importSoftReserveW || 0) || 0, (n) => { gc.importSoftReserveW = Math.max(0, Math.round(n)); }, 'W', '0 = auto 10 % / 1–3 kW'));
+        importEl.appendChild(mkNum('Hysterese', 'gc_importSoftHysteresisW', Number(gc.importSoftHysteresisW || 500) || 0, (n) => { gc.importSoftHysteresisW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 500'));
+        importEl.appendChild(mkNum('Wiederfreigabe‑Verzögerung', 'gc_importSoftReleaseDelaySec', Number(gc.importSoftReleaseDelaySec || 10) || 0, (n) => { gc.importSoftReleaseDelaySec = Math.max(0, Math.round(n)); }, 's', 'z.B. 10'));
+      }
+      importEl.appendChild(mkHint('Soft begrenzt vorausschauend neue flexible Lasten. Hard ist die absolute Bezugsgrenze und wird zusätzlich unmittelbar vor jedem Hardware‑Write geprüft. Einspeisung (negativer NVP) erhöht den verfügbaren Headroom.'));
+      renderGridImportRuntimeDiagnostics(importEl);
     }
 
     // RLM
@@ -8404,94 +8077,60 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       rlmEl.appendChild(mkNum('RLM Limit', 'gc_rlmLimitW', Number(gc.rlmLimitW || 0) || 0, (n) => { gc.rlmLimitW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 25000'));
       rlmEl.appendChild(mkNum('Sicherheitsmarge', 'gc_rlmSafetyMarginW', Number(gc.rlmSafetyMarginW || 0) || 0, (n) => { gc.rlmSafetyMarginW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 500'));
       rlmEl.appendChild(mkChk('Alignment auf 15‑Minuten‑Raster', 'gc_rlmAligned', (gc.rlmAligned !== false), (b) => { gc.rlmAligned = b; }));
-      rlmEl.appendChild(mkHint('Der RLM‑Deckel reduziert den maximal zulässigen Import dynamisch basierend auf dem 15‑Minuten‑Durchschnitt.'));
+      rlmEl.appendChild(mkHint('Der RLM‑Deckel kann das Hard‑Limit dynamisch weiter absenken.'));
     }
 
-    // PV Abregelung (EVU / 0‑Einspeisung)
-    /**
-     * Code-Teil: Arrow-Funktion `deriveCurtailMode`
-     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: deriveCurtailMode
-     * Zweck: Leitet Werte aus anderen Messwerten ab.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    const deriveCurtailMode = () => {
-      if (gc.pvEvuEnabled && gc.zeroExportEnabled) return 'combined';
-      if (gc.pvEvuEnabled) return 'evu';
-      if (gc.zeroExportEnabled) return 'zero';
-      return 'off';
-    };
-
-    /**
-     * Code-Teil: Arrow-Funktion `applyCurtailMode`
-     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: applyCurtailMode
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    const applyCurtailMode = (mode) => {
-      const m = String(mode || 'off');
-      gc.pvEvuEnabled = (m === 'evu' || m === 'combined');
-      gc.zeroExportEnabled = (m === 'zero' || m === 'combined');
-    };
-
-    const curMode = deriveCurtailMode();
-
-    // Card 1: Mode + Relays + Reglerparameter
-    if (zeroEl) {
-      zeroEl.appendChild(mkSelect('Modus', 'gc_pvCurtailAppMode', curMode, [
-        { v: 'off', t: 'Aus' },
-        { v: 'evu', t: 'EVU‑Abregelung (Relais 60% / 30% / 0%)' },
-        { v: 'zero', t: 'Einspeisebegrenzung / 0‑Einspeisung (Regler am NVP)' },
-        { v: 'combined', t: 'Kombiniert (EVU + Einspeisebegrenzung)' },
-      ], (v) => {
-        applyCurtailMode(v);
+    // EVU-Relaisstufen bleiben eine eigene optionale Schutzfunktion.
+    if (evuEl) {
+      evuEl.appendChild(mkChk('EVU‑Abregelung aktiv', 'gc_pvEvuEnabled', !!gc.pvEvuEnabled, (b) => {
+        gc.pvEvuEnabled = b;
         buildGridConstraintsUI();
         scheduleValidation(200);
       }));
-
       if (gc.pvEvuEnabled) {
-        zeroEl.appendChild(mkDpField('Relais 60% (Read)', 'gc_pvEvuRelay60Id', gc.pvEvuRelay60Id, (v) => { gc.pvEvuRelay60Id = v; }, 'BOOL / 0|1'));
-        zeroEl.appendChild(mkDpField('Relais 30% (Read)', 'gc_pvEvuRelay30Id', gc.pvEvuRelay30Id, (v) => { gc.pvEvuRelay30Id = v; }, 'BOOL / 0|1'));
-        zeroEl.appendChild(mkDpField('Relais 0% (Read)', 'gc_pvEvuRelay0Id', gc.pvEvuRelay0Id, (v) => { gc.pvEvuRelay0Id = v; }, 'BOOL / 0|1'));
-        zeroEl.appendChild(mkHint('Wenn mehrere Relais gleichzeitig aktiv sind, gilt automatisch die strengste Stufe: 0% > 30% > 60% > 100%.'));
+        evuEl.appendChild(mkDpField('Relais 60% (Read)', 'gc_pvEvuRelay60Id', gc.pvEvuRelay60Id, (v) => { gc.pvEvuRelay60Id = v; }, 'BOOL / 0|1'));
+        evuEl.appendChild(mkDpField('Relais 30% (Read)', 'gc_pvEvuRelay30Id', gc.pvEvuRelay30Id, (v) => { gc.pvEvuRelay30Id = v; }, 'BOOL / 0|1'));
+        evuEl.appendChild(mkDpField('Relais 0% (Read)', 'gc_pvEvuRelay0Id', gc.pvEvuRelay0Id, (v) => { gc.pvEvuRelay0Id = v; }, 'BOOL / 0|1'));
+        evuEl.appendChild(mkHint('Sind mehrere Relais gleichzeitig aktiv, gilt automatisch die strengste Stufe: 0 % > 30 % > 60 % > 100 %.'));
+      } else {
+        evuEl.appendChild(mkHint('EVU‑Relaisstufen sind deaktiviert. Die 0‑Einspeisung unter Netzlimits kann unabhängig davon aktiv sein.'));
       }
+    }
 
+    // 0-Einspeisung liegt verbindlich unter Netzlimits.
+    if (zeroEl) {
+      zeroEl.appendChild(mkChk('0‑Einspeisung / Einspeisebegrenzung aktiv', 'gc_zeroExportEnabled', !!gc.zeroExportEnabled, (b) => {
+        gc.zeroExportEnabled = b;
+        if (!b) gc.zeroExportInstallerApproved = false;
+        buildGridConstraintsUI();
+        scheduleValidation(200);
+      }));
       if (gc.zeroExportEnabled) {
         zeroEl.appendChild(mkChk('Installateurfreigabe Einspeisebegrenzung', 'gc_zeroExportInstallerApproved', !!gc.zeroExportInstallerApproved, (b) => { gc.zeroExportInstallerApproved = b; }));
         zeroEl.appendChild(mkSelect('Betriebsart Einspeisebegrenzung', 'gc_exportLimitRunMode', String(gc.exportLimitRunMode || 'active'), [
           { v: 'diagnostic', t: 'Diagnose/Testmodus – nur berechnen, nicht schreiben' },
           { v: 'active', t: 'Aktiv – WR-/PV-Setpoints schreiben' },
-        ], (v) => {
-          gc.exportLimitRunMode = (v === 'diagnostic') ? 'diagnostic' : 'active';
-        }));
-        zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = keine Einspeisung'));
-        zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
+        ], (v) => { gc.exportLimitRunMode = (v === 'diagnostic') ? 'diagnostic' : 'active'; }));
+        zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = echte Nulleinspeisung'));
+        zeroEl.appendChild(mkNum('Ziel‑Netzbezug / Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
-        zeroEl.appendChild(mkHint('0‑Einspeise-Reihenfolge: 1 Verbrauch zuerst (natürlich am Netzpunkt), 2 Speicher laden, 3 Ladepunkte, 4 flexible Verbraucher, 5 Mesh/Microgrid, 6 WR-Abregelung zuletzt.'));
+        zeroEl.appendChild(mkHint('RC79‑Reihenfolge: 1 reale lokale Verbraucher, 2 freigegebene Speicherladung, 3 Ladepunkte/flexible Lasten, 4 erst den verbleibenden PV‑Überschuss abregeln. PV‑Abregelung und Speicherentladung dürfen nicht gleichzeitig bestehen.'));
         zeroEl.appendChild(mkDpField('Speicher-Lade-Command-State optional', 'gc_zeroExportStorageChargeCommandStateId', gc.zeroExportStorageChargeCommandStateId || '', (v) => { gc.zeroExportStorageChargeCommandStateId = v; }, 'Neutraler JSON-Command-State, z.B. 0_userdata.0.nexowatt.zero.storage.command'));
         zeroEl.appendChild(mkDpField('Ladepunkt-Command-State optional', 'gc_zeroExportChargingCommandStateId', gc.zeroExportChargingCommandStateId || '', (v) => { gc.zeroExportChargingCommandStateId = v; }, 'Neutraler JSON-Command-State für Wallbox/DC-Ladepunkte'));
         zeroEl.appendChild(mkDpField('Flexible Verbraucher Command-State optional', 'gc_zeroExportFlexLoadCommandStateId', gc.zeroExportFlexLoadCommandStateId || '', (v) => { gc.zeroExportFlexLoadCommandStateId = v; }, 'Heizstab/Wärmepumpe/flexible Last – neutraler JSON-Command-State'));
         zeroEl.appendChild(mkDpField('Mesh/Microgrid Command-State optional', 'gc_zeroExportMeshCommandStateId', gc.zeroExportMeshCommandStateId || '', (v) => { gc.zeroExportMeshCommandStateId = v; }, 'Optionaler Übergang in Mesh/Microgrid-Zielgruppen'));
-        zeroEl.appendChild(mkHint('Export Guard für DE/NL: 0 W bedeutet echte Nulleinspeisung; Werte >0 erlauben nur die vom Installateur freigegebene maximale Einspeiseleistung. Bias/Deadband stabilisieren die Regelung.'));
-        zeroEl.appendChild(mkHint('Empfehlung: neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst wenn NVP-Vorzeichen, Einspeiselimit und WR-Schreibfähigkeit plausibel sind, auf „Aktiv" stellen.'));
+        zeroEl.appendChild(mkHint('Die PV‑Vorgabe folgt dynamisch der lokalen Aufnahme inklusive zulässiger Speicherladung. Bei steigendem Verbrauch wird PV schnell freigegeben; bei sinkendem Verbrauch wird nur der nicht nutzbare Rest abgeregelt.'));
+        zeroEl.appendChild(mkHint('Neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst nach plausibler NVP‑Richtung und bestätigter WR‑Schreibfähigkeit auf „Aktiv“ stellen.'));
         renderExportGuardRuntimeDiagnostics(zeroEl);
       } else {
-        zeroEl.appendChild(mkHint('Einspeisebegrenzung/0‑Einspeisung ist im aktuellen Modus deaktiviert.'));
+        zeroEl.appendChild(mkHint('0‑Einspeisung/Einspeisebegrenzung ist deaktiviert.'));
       }
-
-      zeroEl.appendChild(mkHint('Die Regelung arbeitet am NVP‑Datenpunkt (Zuordnung → Allgemein → Netzpunkt) und nutzt das Vorzeichen (Import + / Export −). Konfiguration nur durch den Installateur.'));
+      zeroEl.appendChild(mkHint('Führungsgröße ist der signierte NVP aus Zuordnung → Allgemein → Netzpunkt: Import + / Export −.'));
     }
+
+    const curMode = gc.pvEvuEnabled && gc.zeroExportEnabled
+      ? 'combined'
+      : (gc.pvEvuEnabled ? 'evu' : (gc.zeroExportEnabled ? 'zero' : 'off'));
 
     // Card 2: Wechselrichter‑Gruppen (pro WR)
     if (pvEl) {
@@ -16084,13 +15723,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   try { initTabs(); } catch (_e) {}
   try { initFlowSubtabs(); } catch (_e) {}
   try { startStatusPolling(); } catch (_e) {}
-
-  if (els.gotoEvuPvTab) {
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.gotoEvuPvTab. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    els.gotoEvuPvTab.addEventListener('click', () => {
-      try { _showTab('evupv'); } catch (_e) {}
-    });
-  }
 
   if (els.storageControlMode) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageControlMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

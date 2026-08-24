@@ -1683,9 +1683,9 @@
         <h2 class="nw-config-section__title">Netzlimits</h2>
       </div>
       <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-        Netzrestriktionen (RLM/Import‑Limits). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
+        Netzrestriktionen, zweistufige Bezugsbegrenzung und 0‑Einspeisung. Diese Schutzfunktionen werden ausschließlich im Installer‑/App‑Center konfiguriert.
         <br/>
-        Hinweis: Die Netzanschlussleistung wird unter <b>Zuordnung → Allgemein</b> gesetzt und wird als obere Grenze genutzt.
+        Hinweis: Die Netzanschlussleistung wird unter <b>Zuordnung → Allgemein</b> gesetzt und dient standardmäßig als Hard‑Limit. Das Importlimit gilt nur für Netzbezug; Einspeisung wird mit negativem NVP geführt.
       </div>
 
       <div class="nw-config-grid">
@@ -1693,7 +1693,7 @@
         <div class="nw-config-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Messung &amp; Stale‑Timeout</div>
-            <div class="nw-config-card__subtitle">Optionaler Fallback‑Datenpunkt + Max. Alter der Netzmessung</div>
+            <div class="nw-config-card__subtitle">Optionaler Fallback‑Datenpunkt + maximales Alter der Netzmessung</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsMeter"></div>
@@ -1702,26 +1702,39 @@
 
         <div class="nw-config-card">
           <div class="nw-config-card__header">
+            <div class="nw-config-card__title">Import Soft‑/Hard‑Limit</div>
+            <div class="nw-config-card__subtitle">Vorausschauender Puffer und absolute Bezugsgrenze am NVP</div>
+          </div>
+          <div class="nw-config-card__body">
+            <div id="gridConstraintsImportLimits"></div>
+          </div>
+        </div>
+
+        <div class="nw-config-card">
+          <div class="nw-config-card__header">
             <div class="nw-config-card__title">RLM / 15‑Minuten‑Deckel (Import)</div>
-            <div class="nw-config-card__subtitle">Dynamischer Cap basierend auf 15‑Minuten‑Durchschnitt</div>
+            <div class="nw-config-card__subtitle">Dynamisches Hard‑Limit basierend auf dem 15‑Minuten‑Durchschnitt</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsRlm"></div>
           </div>
         </div>
 
+        <div class="nw-config-card">
+          <div class="nw-config-card__header">
+            <div class="nw-config-card__title">0‑Einspeisung / Einspeisebegrenzung</div>
+            <div class="nw-config-card__subtitle">PV folgt lokalem Verbrauch und Speicheraufnahme; WR‑Abregelung erfolgt zuletzt</div>
+          </div>
+          <div class="nw-config-card__body">
+            <div id="gridConstraintsZero"></div>
+          </div>
         </div>
 
-      <div class="nw-help" style="margin-top:10px;">
-        EVU‑Abregelung / 0‑Einspeisung und Wechselrichter‑Gruppen sind jetzt in der App <b>EVU / PV Regelung</b> konfigurierbar.
-        <button id="gotoEvuPvTab" class="nw-config-btn nw-config-btn--ghost" type="button" style="margin-left:8px;">Öffnen</button>
       </div>
     </section>
 
   </div>
 
-
-  
 
   <div id="nw-tabpanel-evupv" data-tabpanel="evupv" style="display:none;">
 
@@ -1730,25 +1743,25 @@
         <h2 class="nw-config-section__title">EVU / PV Regelung</h2>
       </div>
       <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-        PV‑Abregelung (EVU‑Relaisstufen) und 0‑Einspeisung (NVP‑Regler). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
+        EVU‑Relaisstufen und Wechselrichter‑Zuordnung. Die 0‑Einspeisung selbst wird unter <b>Netzlimits</b> aktiviert und parametriert.
       </div>
 
       <div class="nw-config-grid">
 
         <div class="nw-config-card">
           <div class="nw-config-card__header">
-            <div class="nw-config-card__title">EVU‑Abregelung &amp; 0‑Einspeisung</div>
-            <div class="nw-config-card__subtitle">Modus, Relais‑Eingänge und Reglerparameter</div>
+            <div class="nw-config-card__title">EVU‑Abregelung</div>
+            <div class="nw-config-card__subtitle">Optionale Relais‑Eingänge für 60 %, 30 % und 0 %</div>
           </div>
           <div class="nw-config-card__body">
-            <div id="gridConstraintsZero"></div>
+            <div id="gridConstraintsEvu"></div>
           </div>
         </div>
 
         <div class="nw-config-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Wechselrichter‑Gruppen</div>
-            <div class="nw-config-card__subtitle">Übersichtliche WR‑Listen mit Details (Setpoints pro WR)</div>
+            <div class="nw-config-card__subtitle">Getrennte WR‑Listen für EVU‑Stufen und 0‑Einspeisung</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsPvCurtail"></div>

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:0eb67fe408d97e3d8a021918785da5451f49eb9d9e266abb8dbd4a7e44fb7048
+ * Quell-Hash: sha256:ad9b78f7550c9b77a0d23bbbe40f551e831a580e7f451f5a535bf8264e5f7781
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -691,6 +691,10 @@ class NvpCoordinatorModule extends BaseModule {
                     pvControlNvpW: hardRawGuardTriggered ? snapshot.rawNvpW : snapshot.pvControlNvpW,
                     nvpUsable: snapshot.nvpUsable,
                     hardRawGuardW: cfg.hardRawGuardW,
+                    storageActualW: snapshot.storageActualW,
+                    storageTargetW: snapshot.storageTargetW,
+                    storageCommandCredited: snapshot.storageCommandCredited,
+                    flexibleNetLoadDeltaW: snapshot.acceptedFlexibleNetLoadDeltaW,
                 }));
             }
             catch (error) {

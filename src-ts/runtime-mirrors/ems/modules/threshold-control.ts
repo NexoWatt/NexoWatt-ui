@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a8c09f6bdc1776e4dde743e44d6a67b57ab7ddb13fc2871bd2ab824ca9a4f338
+ * Original-Hash: f4f04a68546f0c0d918aa805c8b5a84660885a9bea8a2400402a1de6ec54bc30
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:e57e53f2895781b81351ce89b6712e946f2630a1009d99419f51c709c85fd05b
+ * Quell-Hash: sha256:029a0cc659eff0a74b16f78160195de81f00073427609481e9598424279fa266
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -471,6 +471,10 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.configured`, 'Konfiguriert', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.effectiveEnabled`, 'Effektiv aktiv', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.active`, 'Ausgang aktiv', 'boolean', 'indicator');
+            // Der Ausgang kann je nach Regel boolean oder numerisch sein. Ein
+            // stabiler mixed-State verhindert Cold-Start-Warnungen, wenn der
+            // Safe-Stop vor dem ersten aktiven Regel-Tick den AUS-Wert schreibt.
+            await mk(`threshold.rules.r${i}.output`, 'Ausgangswert', 'mixed', 'state');
             await mk(`threshold.rules.r${i}.input`, 'Input', 'number', 'value');
             await mk(`threshold.rules.r${i}.thresholdEff`, 'Schwellwert effektiv', 'number', 'value');
             await mk(`threshold.rules.r${i}.status`, 'Status', 'string', 'text');

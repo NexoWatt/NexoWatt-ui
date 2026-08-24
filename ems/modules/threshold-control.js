@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:e57e53f2895781b81351ce89b6712e946f2630a1009d99419f51c709c85fd05b
+ * Quell-Hash: sha256:029a0cc659eff0a74b16f78160195de81f00073427609481e9598424279fa266
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -407,6 +407,10 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.configured`, 'Konfiguriert', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.effectiveEnabled`, 'Effektiv aktiv', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.active`, 'Ausgang aktiv', 'boolean', 'indicator');
+            // Der Ausgang kann je nach Regel boolean oder numerisch sein. Ein
+            // stabiler mixed-State verhindert Cold-Start-Warnungen, wenn der
+            // Safe-Stop vor dem ersten aktiven Regel-Tick den AUS-Wert schreibt.
+            await mk(`threshold.rules.r${i}.output`, 'Ausgangswert', 'mixed', 'state');
             await mk(`threshold.rules.r${i}.input`, 'Input', 'number', 'value');
             await mk(`threshold.rules.r${i}.thresholdEff`, 'Schwellwert effektiv', 'number', 'value');
             await mk(`threshold.rules.r${i}.status`, 'Status', 'string', 'text');

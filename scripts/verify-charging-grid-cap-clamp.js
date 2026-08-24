@@ -51,7 +51,7 @@ if (overImportCase.incrementHeadroomW !== -2000 || overImportCase.capW !== 3000)
 must(src, 'gridBaseLoadRawW = gridW -', 'raw base load');
 must(src, 'derived.core.building.loadRestW', 'energy-flow loadRestW preference');
 must(src, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)', 'local support diagnostic');
-must(src, 'gridIncrementHeadroomW = gridImportLimitEffW - gridW', 'signed incremental headroom');
+must(src, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW', 'signed incremental headroom');
 must(src, 'clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)', 'import-only EVCS target cap');
 must(src, 'chargingManagement.control.gridBaseLoadRawW', 'raw base state');
 must(src, 'chargingManagement.control.gridLocalSupportW', 'local support state');

@@ -139,6 +139,8 @@ export interface CoreRuntimeGridInput {
   reason?: unknown;
   measurementAgeMs?: unknown;
   importLimitW?: unknown;
+  hardImportLimitW?: unknown;
+  limitStage?: unknown;
   highLevelCapW?: unknown;
   highLevelBinding?: unknown;
 }
@@ -241,6 +243,9 @@ export interface CoreRuntimeBudgetSnapshot {
   gates: {
     grid: {
       importLimitW: number;
+      planningImportLimitW: number;
+      hardImportLimitW: number;
+      limitStage: string;
       importW: number;
       exportW: number;
       measurementUsable: boolean;
@@ -531,6 +536,8 @@ export function prepareCoreRuntimeSnapshotInput(
       reason: text(gridRaw.reason),
       measurementAgeMs: gridAgeMs,
       importLimitW: finiteOrNull(gridRaw.importLimitW),
+      hardImportLimitW: finiteOrNull(gridRaw.hardImportLimitW),
+      limitStage: text(gridRaw.limitStage),
       highLevelCapW: finiteOrNull(gridRaw.highLevelCapW),
       highLevelBinding: text(gridRaw.highLevelBinding),
     },
@@ -870,6 +877,8 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   });
 
   const gridLimitW = positive(grid.importLimitW);
+  const gridHardLimitW = positive(grid.hardImportLimitW);
+  const gridLimitStage = text(grid.limitStage);
   // RC78 / 0.8.203: Die Anschlussgrenze gilt ausschließlich für Bezug.
   // `gridW` bleibt deshalb signiert. Das Gesamtziel-Budget besteht aus der
   // bereits real laufenden, EMS-gesteuerten Last plus der noch möglichen
@@ -888,7 +897,9 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   const totalBudgetW = gridUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
   const bindings: string[] = [];
   if (!gridUsable) bindings.push(`nvp_${text(grid.status, 'stale')}`);
-  if (gridUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
+  if (gridUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
+    bindings.push(gridHardLimitW > 0 && gridLimitW < gridHardLimitW - 1 ? 'grid-soft' : 'grid-hard');
+  }
   if (gridUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) {
     bindings.push(text(grid.highLevelBinding, 'highLevel'));
   }
@@ -946,6 +957,9 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
     gates: {
       grid: {
         importLimitW: round(gridLimitW),
+        planningImportLimitW: round(gridLimitW),
+        hardImportLimitW: round(gridHardLimitW),
+        limitStage: gridLimitStage,
         importW: round(gridImportW),
         exportW: round(gridExportW),
         measurementUsable: gridUsable,

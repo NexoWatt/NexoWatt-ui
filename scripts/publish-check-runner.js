@@ -39,6 +39,7 @@ const REQUIRED_COMMANDS = [
   'npm run test:rc76-pv-forecast-runtime-hardening',
   'npm run test:rc77-pv-forecast-state-cache-bridge',
   'npm run test:rc78-import-only-grid-budget',
+  'npm run test:rc79-import-soft-hard-zero-export',
   'npm run test:charging-infrastructure-budget',
   'npm run test:npm-version-free-guard',
   'npm run test:npm-version-free-runtime',

@@ -1,3 +1,15 @@
+## 0.8.204 - 2026-08-24
+
+- RC79 ergänzt eine zweistufige Netzbezugsbegrenzung. Der NVP bleibt signiert: Netzbezug ist positiv, Einspeisung negativ. Das Hard-Limit ist die absolute Anschluss-/Safety-Grenze; das Soft-Limit bildet mit expliziter oder automatischer Reserve den vorausschauenden Planungswert für flexible Lasten.
+- Die automatische Soft-Reserve beträgt 10 % der Hard-Grenze, mindestens 1 kW und höchstens 3 kW. Hysterese und verzögerte Wiederfreigabe verhindern Flattern; Diagnose zeigt Soft-/Hard-Limit, Headroom, Stufe, Grund und erforderliche Reduktion.
+- Zentrales EMS-Budget und Lademanagement planen gegen das Soft-Limit. Der finale Safety-Envelope vor jedem Hardware-Write prüft weiterhin ausschließlich das Hard-Limit, sodass wirtschaftliche oder komfortorientierte Logiken die Anschlussgrenze nicht übersteuern können.
+- Die Einstellung für 0-Einspeisung befindet sich verbindlich im AppCenter unter **Netzlimits**. EVU-Relais-/PV-Stufen bleiben getrennt im Bereich EVU/PV.
+- Bei aktivierter 0-Einspeisung folgt die PV-Vorgabe dynamisch der realen lokalen Aufnahme: aktueller Verbrauch, bestätigte Speicherladung und bereits akzeptierte flexible Laständerungen werden zuerst genutzt; nur der verbleibende Überschuss wird an den PV-Wechselrichtern abgeregelt.
+- Die Feed-forward-Berechnung verwendet `PV-Soll = PV-Ist + projizierter NVP − NVP-Ziel`. Lastanstieg beziehungsweise zusätzliche Speicheraufnahme gibt PV schnell frei; sinkende Aufnahme reduziert die PV-Vorgabe kontrolliert.
+- Gleichzeitige PV-Abregelung und Speicherentladung wird als Regelkonflikt erkannt. EOS hebt die PV-Begrenzung dann unmittelbar auf, damit keine PV-Energie vernichtet wird, während der Speicher dieselbe Last versorgt.
+- Cold-Start-Warnungen für `thermal.summary.*` und `threshold.rules.*` sind behoben. Deaktivierte Aktormodule legen ihre Objektstruktur vor dem Safe-Stop an; für den variablen Threshold-Ausgang existiert zusätzlich ein stabiler `mixed`-Diagnosestate.
+- Neuer RC79-Regressionsverbund prüft signed-NVP-Headroom, automatische Reserve, Soft-/Hard-Stufen, Hysterese, 0-Einspeise-Feed-forward, Speicher-Konfliktschutz, AppCenter-Platzierung, Cold-Start-Objekte sowie die Trennung von Soft-Planung und Hard-Safety.
+
 ## 0.8.203 - 2026-08-24
 
 - RC78 korrigiert die Netzanschluss-Budgetierung auf eine reine Bezugsgrenze. Der NVP bleibt durchgehend signiert: Netzbezug ist positiv, Netzeinspeisung negativ und erhöht die nutzbare Lastfreigabe.

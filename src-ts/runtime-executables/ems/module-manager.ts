@@ -358,6 +358,16 @@ class ModuleManager {
         const shouldRun = force === true || m.lastEnabled === true || (safetyActuator && m.deactivated !== true);
         if (!shouldRun) return true;
         try {
+            // RC79: Auch ein beim Cold-Start deaktiviertes Aktormodul muss zuerst
+            // seine Objektstruktur anlegen. Mehrere deactivate()-Pfade schreiben
+            // Diagnose-/Summary-States; ohne vorheriges init() erzeugt ioBroker
+            // Warnungen wie "State ... has no existing object". Die Initialisierung
+            // geschieht weiterhin unter dem Actuator-Shadow und darf keine aktive
+            // Regelung ausloesen; unmittelbar danach folgt der bestaetigte Safe-Stop.
+            if (safetyActuator && m.initialized !== true) {
+                const initialized = await this._ensureModuleInitialized(m, 'module-disabled-object-init', cycleId);
+                if (!initialized) throw new Error(String(m.initError || 'safety-deactivate-init-failed'));
+            }
             if (safetyActuator && typeof m.instance.deactivate !== 'function') {
                 throw new Error('safety-deactivate-hook-missing');
             }

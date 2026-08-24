@@ -1,13 +1,13 @@
-NexoWatt EOS 0.8.203 RC78 – NVP / reine Netzbezugsgrenze
+NexoWatt EOS 0.8.204 RC79 – Import Soft/Hard + 0-Einspeise-Feed-forward
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. Optional: npm ci
 3. npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.203 auf npm noch frei ist,
+- ob Version 0.8.204 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob keine freigegebene Produktdatei verändert wurde.
 
-RC78 behandelt den NVP durchgehend signiert. Netzeinspeisung erhöht die Lastfreigabe; die konfigurierte Anschlussgrenze begrenzt ausschließlich den Netzbezug. Core-Budget, EVCS-Netzcap und finaler Safety-Writer verwenden denselben Vertrag.
+RC79 trennt die vorausschauende Soft-Grenze von der absoluten Hard-Grenze für Netzbezug. Bei 0-Einspeisung unter Netzlimits folgt die PV-Vorgabe dem realen Verbrauch, bestätigter Speicherladung und akzeptierten flexiblen Lasten; nur nicht nutzbarer Überschuss wird abgeregelt. Cold-Start-Warnungen fehlender Thermal-/Threshold-Objekte sind ebenfalls korrigiert.

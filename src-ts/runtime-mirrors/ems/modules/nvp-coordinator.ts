@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 23c10cfbd06250dde288bb6add50f8dedd37bc48069e41eaaab7175eab485268
+ * Original-Hash: 974dc2f0155a5f9c6f27ee7270bb1556aeae2fc1d22ffd60db29f77b48b07590
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:0eb67fe408d97e3d8a021918785da5451f49eb9d9e266abb8dbd4a7e44fb7048
+ * Quell-Hash: sha256:ad9b78f7550c9b77a0d23bbbe40f551e831a580e7f451f5a535bf8264e5f7781
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -821,6 +821,10 @@ class NvpCoordinatorModule extends BaseModule {
                     pvControlNvpW: hardRawGuardTriggered ? snapshot.rawNvpW : snapshot.pvControlNvpW,
                     nvpUsable: snapshot.nvpUsable,
                     hardRawGuardW: cfg.hardRawGuardW,
+                    storageActualW: snapshot.storageActualW,
+                    storageTargetW: snapshot.storageTargetW,
+                    storageCommandCredited: snapshot.storageCommandCredited,
+                    flexibleNetLoadDeltaW: snapshot.acceptedFlexibleNetLoadDeltaW,
                 }));
             }
             catch (error) {

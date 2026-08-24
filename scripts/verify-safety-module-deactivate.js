@@ -310,7 +310,40 @@ class FakeDp {
     assert(String(adapter._nwSafetyCriticalFaults.chargingManagement.error).includes('hardware-write-failed'));
   }
 
-  console.log('[safety-module-deactivate] OK: Cold-Start/App-AUS stoppt EVCS, Speicher, Thermik, Heizstab, MultiUse, NexoLogic und Threshold physisch; Fehler bleiben kritisch verriegelt.');
+  // 10) RC79: Ein beim Cold-Start deaktiviertes Aktormodul muss seine States
+  // zuerst in init() anlegen, bevor deactivate() Summary-/Diagnosewerte schreibt.
+  // Das verhindert ioBroker-Warnungen fuer thermal.summary.* und threshold.rules.*.
+  {
+    const adapter = new FakeAdapter({});
+    const manager = new ModuleManager(adapter, new FakeDp(adapter));
+    const sequence = [];
+    let objectsReady = false;
+    const row = {
+      key: 'thresholdControl',
+      lastEnabled: false,
+      deactivated: false,
+      initialized: false,
+      alwaysInit: false,
+      instance: {
+        init: async () => {
+          sequence.push('init');
+          objectsReady = true;
+        },
+        deactivate: async () => {
+          sequence.push('deactivate');
+          assert.strictEqual(objectsReady, true, 'deactivate darf erst nach Objekt-Initialisierung laufen');
+          return { ok: true };
+        },
+      },
+    };
+    const ok = await manager._deactivateModule(row, 'cold-start', true);
+    assert.strictEqual(ok, true);
+    assert.deepStrictEqual(sequence, ['init', 'deactivate']);
+    assert.strictEqual(row.deactivated, true);
+    assert.strictEqual(row.initialized, false, 'nicht-always-init Modul wird nach Safe-Stop fuer spaetere Reaktivierung neu initialisiert');
+  }
+
+  console.log('[safety-module-deactivate] OK: Cold-Start/App-AUS stoppt EVCS, Speicher, Thermik, Heizstab, MultiUse, NexoLogic und Threshold physisch; States werden vor dem Safe-Stop initialisiert und Fehler bleiben kritisch verriegelt.');
 })().catch((error) => {
   console.error('[safety-module-deactivate] ERROR:', error && error.stack ? error.stack : error);
   process.exit(1);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 17a943d229496365ebd7ccd65f48e277ee1bbb0747bb0cb897dcab32179103c4
+ * Original-Hash: 1e28eb00828ed3e4405c1f8ceb4c7ccd753e27fcabb992ac80f70114ee321198
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:e69593026d71ebedac0b244ec7615c2a49e9ff93e6bf733763d72f94f5e02931
+ * Quell-Hash: sha256:12327c0b674eea6b491b625859d256692348ee03afbac6bc31f103b19a742d4b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -5098,8 +5098,10 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvEvcsPhysicalPvManagedW', 'Measured PV-managed EVCS power for central PV reconstruction (W)', 'number', 'value.power');
 
         // Gate A: hard grid safety caps (transparency)
-        await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
-        await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportLimitW', 'Grid import hard limit (W) configured', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import hard limit (W) effective', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportLimitW_planning', 'Grid import soft planning limit (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportStage', 'Grid import limit stage', 'string', 'text');
         await mk('chargingManagement.control.gridImportW', 'Grid power (W) (import + / export -)', 'number', 'value.power');
         await mk('chargingManagement.control.gridBaseLoadW', 'Estimated base load (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridBaseLoadRawW', 'Raw base load before clamp (W)', 'number', 'value.power');
@@ -9023,6 +9025,8 @@ if (components.length) {
         const coreCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
         const coreGridCfgW = coreCaps && coreCaps.grid ? num(coreCaps.grid.gridConnectionLimitW_cfg, null) : null;
         const coreGridEffW = coreCaps && coreCaps.grid ? num(coreCaps.grid.gridImportLimitW_effective, null) : null;
+        const coreGridPlanningW = coreCaps && coreCaps.grid ? num(coreCaps.grid.gridImportLimitW_planning, null) : null;
+        const coreGridStage = coreCaps && coreCaps.grid ? String(coreCaps.grid.gridImportStage || '') : '';
         const coreGridMarginW = coreCaps && coreCaps.grid ? num(coreCaps.grid.gridSafetyMarginW, null) : null;
         const coreMaxPhaseA = coreCaps && coreCaps.grid ? num(coreCaps.grid.gridMaxPhaseA_cfg, null) : null;
 
@@ -9043,6 +9047,12 @@ if (components.length) {
         const gridImportLimitEffW = (Number.isFinite(coreGridEffW) && coreGridEffW > 0)
             ? coreGridEffW
             : (gridImportLimitW > 0 ? Math.max(0, gridImportLimitW - gridMarginW) : 0);
+        // RC79: Das Lademanagement plant gegen das Soft-Limit. Die finale
+        // SafetyEnvelope prueft jeden Write weiterhin gegen `gridImportLimitEffW`.
+        const gridImportLimitPlanningW = (Number.isFinite(coreGridPlanningW) && coreGridPlanningW > 0)
+            ? Math.min(coreGridPlanningW, gridImportLimitEffW > 0 ? gridImportLimitEffW : coreGridPlanningW)
+            : gridImportLimitEffW;
+        const gridImportStage = coreGridStage || (gridImportLimitPlanningW > 0 && gridImportLimitPlanningW < gridImportLimitEffW - 1 ? 'normal' : 'hard-only');
 
         // Optional phase limit (A): prefer core snapshot.
         const gridMaxPhaseA = (Number.isFinite(coreMaxPhaseA) && coreMaxPhaseA > 0)
@@ -9050,7 +9060,7 @@ if (components.length) {
             : clamp(num(this.adapter?.config?.peakShaving?.maxPhaseA, 0), 0, 20000);
 
         // Read grid power (import + / export -) if needed for caps
-        const needGridSafetyCaps = gridImportLimitEffW > 0 || gridMaxPhaseA > 0;
+        const needGridSafetyCaps = gridImportLimitPlanningW > 0 || gridMaxPhaseA > 0;
         if (needGridSafetyCaps) {
             // Ensure we have a gridW reading even if PV logic is not active
             if (typeof gridW !== 'number' || !Number.isFinite(gridW)) {
@@ -9068,7 +9078,7 @@ if (components.length) {
         const budgetBeforeGridCaps = budgetW;
         const budgetModeBeforeGridCaps = String(effectiveBudgetMode || budgetMode || 'unlimited');
 
-        if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
+        if (gridImportLimitPlanningW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
             // RC78: reine Bezugsgrenze bei signiertem NVP. Das EVCS-Gesamtcap
             // addiert nur frische EVCS-Istleistung zu `Importlimit - NVP`;
             // Reservierungen bleiben außen vor, Überbezug reduziert aktive Last.
@@ -9103,7 +9113,7 @@ if (components.length) {
             } catch (_eBaseLoad) {}
             gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW)) ? Math.max(0, Number(derivedBaseLoadW)) : Math.max(0, gridBaseLoadRawW);
             gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW);
-            gridIncrementHeadroomW = gridImportLimitEffW - gridW;
+            gridIncrementHeadroomW = gridImportLimitPlanningW - gridW;
             // Gesamtziel-Cap = aktuell gemessene EVCS-Leistung + zulässige
             // zusätzliche Laständerung bis zur reinen Importgrenze.
             gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12);
@@ -9210,7 +9220,7 @@ if (components.length) {
             gridLocalSupportW: (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null,
             gridCapEvcsW: (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null,
             // For TS parity this flag means 'cap is active/available'; the returned apply.gridCapBinding still means 'actually binding'.
-            gridCapBinding: (gridImportLimitEffW > 0 && typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)),
+            gridCapBinding: (gridImportLimitPlanningW > 0 && typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)),
             phaseCapEvcsW: (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null,
             // For TS parity this flag means 'cap is active/available'; the returned apply.phaseCapBinding still means 'actually binding'.
             phaseCapBinding: (gridMaxPhaseA > 0 && typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)),
@@ -9252,6 +9262,8 @@ if (components.length) {
         try {
             await this._queueState('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
             await this._queueState('chargingManagement.control.gridImportLimitW_effective', gridImportLimitEffW || 0, true);
+            await this._queueState('chargingManagement.control.gridImportLimitW_planning', gridImportLimitPlanningW || 0, true);
+            await this._queueState('chargingManagement.control.gridImportStage', gridImportStage, true);
             await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
             await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
             await this._queueState('chargingManagement.control.gridBaseLoadRawW', (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : 0, true);
@@ -9282,6 +9294,8 @@ if (components.length) {
         if (budgetDebug && typeof budgetDebug === 'object') {
             budgetDebug.gridImportLimitW = gridImportLimitW || 0;
             budgetDebug.gridImportLimitEffW = gridImportLimitEffW || 0;
+            budgetDebug.gridImportLimitPlanningW = gridImportLimitPlanningW || 0;
+            budgetDebug.gridImportStage = gridImportStage;
             budgetDebug.gridW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
             // 0.8.64: EVCS-Ist darf nie aus Reservierung/Setpoint kommen.
             // Für Gate-/Statusdiagnose ist ausschließlich der frische Messwert gültig;
@@ -9731,6 +9745,8 @@ if (components.length) {
             try {
                 await this._queueState('chargingManagement.control.gridImportLimitW', (typeof gridImportLimitW === 'number' && Number.isFinite(gridImportLimitW)) ? gridImportLimitW : 0, true);
                 await this._queueState('chargingManagement.control.gridImportLimitW_effective', (typeof gridImportLimitEffW === 'number' && Number.isFinite(gridImportLimitEffW)) ? gridImportLimitEffW : 0, true);
+                await this._queueState('chargingManagement.control.gridImportLimitW_planning', (typeof gridImportLimitPlanningW === 'number' && Number.isFinite(gridImportLimitPlanningW)) ? gridImportLimitPlanningW : 0, true);
+                await this._queueState('chargingManagement.control.gridImportStage', gridImportStage, true);
                 await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
                 await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
                 await this._queueState('chargingManagement.control.gridBaseLoadRawW', (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : 0, true);

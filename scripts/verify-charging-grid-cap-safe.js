@@ -33,7 +33,7 @@ for (const file of [ts, js]) {
   must(file, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
   must(file, 'derived.core.building.loadRestW');
   must(file, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)');
-  must(file, 'gridIncrementHeadroomW = gridImportLimitEffW - gridW');
+  must(file, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW');
   must(file, 'gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)');
   mustNot(file, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
 }

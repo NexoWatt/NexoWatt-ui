@@ -174,12 +174,12 @@ function makeSafetyAdapter({ nvpW, importLimitW }) {
   assert(coreSource.includes('gridLimitW - gridControlW'));
   assert(coreSource.includes('currentControlledLoadW + gridIncrementHeadroomW'));
   assert(!coreSource.includes('Math.min(gridLimitW, gridHeadroomRawW)'));
-  assert(chargingSource.includes('gridImportLimitEffW - gridW'));
+  assert(chargingSource.includes('gridImportLimitPlanningW - gridW'));
   assert(chargingSource.includes('gridEvcsActualForCapW + gridIncrementHeadroomW'));
   assert(!chargingSource.includes('gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)'));
   assert(safetySource.includes('maxImportW - signedNvpW'));
   assert(read('src-ts/runtime-executables/www/ems-apps.ts').includes('EVCS Cap (NVP / Importgrenze)'));
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v484'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v485'"));
 }
 
 // 2) Feldfall: 30 kW Bezugsgrenze, 10,1 kW Einspeisung, 0 W Istlast.

@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.203",
+  "version": "0.8.204",
   "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -27,7 +27,7 @@
     "ioBroker:check": "node scripts/verify-publish.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:types": "npm run check:tsconfig-modern && npm run check:ts-source-syntax && npm run check:ts-source-integrity && npm run check:ts-canonical && npm run verify:ts-scaffold && npm run test:ts-script-mirrors && npm run test:ts-frontend-mirrors && npm run test:ts-backend-mirrors && npm run test:ts-adapter-mirrors && npm run test:frontend-mirror-runtime && npm run test:api-state-feature && npm run test:api-state-feature-runtime && npm run test:backend-api-state && npm run test:energy-flow-utils && npm run test:energy-flow-resolver && npm run test:energy-flow-mirrors && npm run test:energy-flow-regression && npm run test:energy-flow-regression-runtime && npm run test:ems-budget-heating-rod && npm run test:ems-budget-heating-rod-runtime && npm run test:ems-mirrors && npm run test:core-limits-reservations && npm run test:adapter-state-api && npm run test:adapter-state-api-runtime && npm run test:adapter-mirrors && npm run test:backend-api-state && npm run test:backend-api-state-runtime && npm run test:feature-visibility-resolver && npm run test:feature-visibility-resolver-runtime && npm run test:feature-visibility-shadow && npm run test:feature-visibility-shadow-runtime && npm run test:frontend-display && npm run test:feature-visibility-resolver && npm run test:feature-visibility-resolver-runtime && npm run test:feature-visibility-shadow && npm run test:feature-visibility-shadow-runtime && npm run test:frontend-display-runtime && npm run test:customer-feature-visibility && npm run test:customer-feature-visibility-runtime && npm run test:main-helpers && npm run typecheck && npm run typecheck:runtime-mirrors && npm run test:runtime-mirrors && npm run test:core-limits-runtime-typing && npm run test:heating-rod-runtime-typing && npm run test:shadow-bridges && npm run test:contracts && npm run test:feature-visibility-effective-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:adapter-helpers-mirrors && npm run test:main-runtime-helpers && npm run test:api-state-set-shadow && npm run test:live-dashboard-format-productive && npm run test:heating-rod-legacy-removal-candidate",
-    "test:all": "npm run publish:check && npm run test:types && npm run check:ts-source-syntax && npm run test:ems-shadow-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:rc57-ocpp-stability && npm run test:rc58-ocpp-compact-mapping && npm run test:rc59-ocpp21-native-storage-safety && npm run test:rc60-universal-auto-orchestrator && npm run test:rc60-universal-auto-wallbox && npm run test:rc61-heating-night-lock && npm run test:rc61-evcs-hardening && npm run test:rc63-availability-storage-grid-gate && npm run test:rc64-storage-grid-charge-policy && npm run test:rc65-nt-price-target-override && npm run test:dc-station-display && npm run test:rc66-station-display-stable && npm run test:rc66-station-display-browser && npm run test:rc67-license-bootstrap-access && npm run test:rc68-para14a-communication-fallback && npm run test:dashboard-lp-status-typing && npm run test:rc69-dashboard-lp-feedback && npm run test:rc70-dashboard-lp-status-polish && npm run test:rc72-weather-pv-forecast-auto && npm run test:rc73-ems-admin-overview && npm run test:rc74-pv-forecast-customer-ui && npm run test:rc75-pv-forecast-admin-location && npm run test:rc76-pv-forecast-runtime-hardening && npm run test:rc77-pv-forecast-state-cache-bridge && npm run test:rc78-import-only-grid-budget",
+    "test:all": "npm run publish:check && npm run test:types && npm run check:ts-source-syntax && npm run test:ems-shadow-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:rc57-ocpp-stability && npm run test:rc58-ocpp-compact-mapping && npm run test:rc59-ocpp21-native-storage-safety && npm run test:rc60-universal-auto-orchestrator && npm run test:rc60-universal-auto-wallbox && npm run test:rc61-heating-night-lock && npm run test:rc61-evcs-hardening && npm run test:rc63-availability-storage-grid-gate && npm run test:rc64-storage-grid-charge-policy && npm run test:rc65-nt-price-target-override && npm run test:dc-station-display && npm run test:rc66-station-display-stable && npm run test:rc66-station-display-browser && npm run test:rc67-license-bootstrap-access && npm run test:rc68-para14a-communication-fallback && npm run test:dashboard-lp-status-typing && npm run test:rc69-dashboard-lp-feedback && npm run test:rc70-dashboard-lp-status-polish && npm run test:rc72-weather-pv-forecast-auto && npm run test:rc73-ems-admin-overview && npm run test:rc74-pv-forecast-customer-ui && npm run test:rc75-pv-forecast-admin-location && npm run test:rc76-pv-forecast-runtime-hardening && npm run test:rc77-pv-forecast-state-cache-bridge && npm run test:rc78-import-only-grid-budget && npm run test:rc79-import-soft-hard-zero-export",
     "release:check": "npm run test:all && npm run build:ts && npm pack --dry-run",
     "ci:check": "npm run test:all && npm run build:ts && npm pack --dry-run",
     "typecheck:contracts": "tsc -p tsconfig.contracts.json --noEmit",
@@ -464,7 +464,8 @@
     "test:rc75-pv-forecast-admin-location": "node scripts/verify-rc75-pv-forecast-admin-location.cjs",
     "test:rc76-pv-forecast-runtime-hardening": "node scripts/verify-rc76-pv-forecast-runtime-hardening.cjs",
     "test:rc77-pv-forecast-state-cache-bridge": "node scripts/verify-rc77-pv-forecast-state-cache-bridge.cjs",
-    "test:rc78-import-only-grid-budget": "node scripts/verify-rc78-import-only-grid-budget.cjs && npm run test:charging-grid-cap-safe && npm run test:charging-grid-cap-clamp && npm run test:loadmanagement-grid-cap-sanity && npm run test:core-limits-typed-runtime-phase1 && npm run test:core-limits-typed-runtime-phase2 && npm run test:safety-envelope-final-write"
+    "test:rc78-import-only-grid-budget": "node scripts/verify-rc78-import-only-grid-budget.cjs && npm run test:charging-grid-cap-safe && npm run test:charging-grid-cap-clamp && npm run test:loadmanagement-grid-cap-sanity && npm run test:core-limits-typed-runtime-phase1 && npm run test:core-limits-typed-runtime-phase2 && npm run test:safety-envelope-final-write",
+    "test:rc79-import-soft-hard-zero-export": "node scripts/verify-rc79-import-soft-hard-zero-export-feedforward.cjs && npm run test:safety-module-deactivate && npm run test:zero-export-sink-priority && npm run test:zero-export-commissioning && npm run test:zero-export-fast-path && npm run test:zero-export-sink-ack-history && npm run test:safety-envelope-final-write"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -541,6 +542,7 @@
     "docs/RC76_OPEN_METEO_PV_FORECAST_HARDENING_DE.md",
     "docs/RC77_PV_FORECAST_STATE_CACHE_BRIDGE_DE.md",
     "docs/RC78_GRID_IMPORT_ONLY_NVP_BUDGET_DE.md",
+    "docs/RC79_IMPORT_SOFT_HARD_ZERO_EXPORT_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",
@@ -607,6 +609,7 @@
     "ems/services/feature-flags.js",
     "ems/services/fenecon-hybrid-control.js",
     "ems/services/fenecon-nvp-shadow-runtime.js",
+    "ems/services/grid-import-limit-policy.js",
     "ems/services/forecast-aware-target-planner.js",
     "ems/services/forecast-target-runtime-bridge.js",
     "ems/services/locale-api-service.js",

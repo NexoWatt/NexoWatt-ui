@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:e27bce99c953c3e00861bd5f17beaa14dc950daf58d684b73bc7ff6cbd68a58a
+ * Quell-Hash: sha256:95f8faa3cc9eb6fb0421190566ffcaac69d86203dc18a3747cd1956d173c9c19
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -323,6 +323,17 @@ class ModuleManager {
         if (!shouldRun)
             return true;
         try {
+            // RC79: Auch ein beim Cold-Start deaktiviertes Aktormodul muss zuerst
+            // seine Objektstruktur anlegen. Mehrere deactivate()-Pfade schreiben
+            // Diagnose-/Summary-States; ohne vorheriges init() erzeugt ioBroker
+            // Warnungen wie "State ... has no existing object". Die Initialisierung
+            // geschieht weiterhin unter dem Actuator-Shadow und darf keine aktive
+            // Regelung ausloesen; unmittelbar danach folgt der bestaetigte Safe-Stop.
+            if (safetyActuator && m.initialized !== true) {
+                const initialized = await this._ensureModuleInitialized(m, 'module-disabled-object-init', cycleId);
+                if (!initialized)
+                    throw new Error(String(m.initError || 'safety-deactivate-init-failed'));
+            }
             if (safetyActuator && typeof m.instance.deactivate !== 'function') {
                 throw new Error('safety-deactivate-hook-missing');
             }

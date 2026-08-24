@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0057c556ab98367971d2934a0b8b616f36beafbeaf4c572613e080643b2706d8
+ * Original-Hash: af4b770e7cb18101fd8902d7b74a5d73178e4778aeba6c883cf988e290e82b90
  */
 
 /**
@@ -114,7 +114,7 @@ if (overImportCase.incrementHeadroomW !== -2000 || overImportCase.capW !== 3000)
 must(src, 'gridBaseLoadRawW = gridW -', 'raw base load');
 must(src, 'derived.core.building.loadRestW', 'energy-flow loadRestW preference');
 must(src, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)', 'local support diagnostic');
-must(src, 'gridIncrementHeadroomW = gridImportLimitEffW - gridW', 'signed incremental headroom');
+must(src, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW', 'signed incremental headroom');
 must(src, 'clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)', 'import-only EVCS target cap');
 must(src, 'chargingManagement.control.gridBaseLoadRawW', 'raw base state');
 must(src, 'chargingManagement.control.gridLocalSupportW', 'local support state');

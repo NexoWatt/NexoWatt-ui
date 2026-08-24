@@ -472,6 +472,10 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.configured`, 'Konfiguriert', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.effectiveEnabled`, 'Effektiv aktiv', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.active`, 'Ausgang aktiv', 'boolean', 'indicator');
+            // Der Ausgang kann je nach Regel boolean oder numerisch sein. Ein
+            // stabiler mixed-State verhindert Cold-Start-Warnungen, wenn der
+            // Safe-Stop vor dem ersten aktiven Regel-Tick den AUS-Wert schreibt.
+            await mk(`threshold.rules.r${i}.output`, 'Ausgangswert', 'mixed', 'state');
             await mk(`threshold.rules.r${i}.input`, 'Input', 'number', 'value');
             await mk(`threshold.rules.r${i}.thresholdEff`, 'Schwellwert effektiv', 'number', 'value');
             await mk(`threshold.rules.r${i}.status`, 'Status', 'string', 'text');

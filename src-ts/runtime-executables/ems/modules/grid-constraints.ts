@@ -49,6 +49,7 @@ const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { isActuatorAuthorityBlockedResult } = require('../services/actuator-shadow-arbiter');
 const { ReasonCodes } = require('../reasons');
+const { resolveGridImportLimitPolicy, resolveZeroExportPvTarget } = require('../services/grid-import-limit-policy');
 
 /**
  * Grid constraints module (Netz & EVU):
@@ -119,6 +120,7 @@ class GridConstraintsModule extends BaseModule {
         this._deferDynamicPv = false;
         this._lastPlanningContext = null;
         this._lastDynamicResult = null;
+        this._importLimitRuntime = { stage: 'normal', releaseCandidateAtMs: 0 };
     }
 
     /**
@@ -265,7 +267,7 @@ class GridConstraintsModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['control', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
+        for (const ch of ['control', 'importLimits', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
             await this.adapter.setObjectNotExistsAsync(`gridConstraints.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -289,9 +291,28 @@ class GridConstraintsModule extends BaseModule {
 
         await mk('gridConstraints.control.status', 'Status', 'string', 'text');
         await mk('gridConstraints.control.reason', 'Reason', 'string', 'text');
-        await mk('gridConstraints.control.maxImportW_final', 'Max allowed import (W) final', 'number', 'value.power');
+        await mk('gridConstraints.control.maxImportW_final', 'Hard maximum allowed import (W)', 'number', 'value.power');
+        await mk('gridConstraints.control.maxImportW_planning', 'Soft planning maximum allowed import (W)', 'number', 'value.power');
         await mk('gridConstraints.control.minImportTargetW', 'Min import target (W) for zero export', 'number', 'value.power');
         await mk('gridConstraints.control.lastUpdate', 'Last update (ts)', 'number', 'value.time');
+
+
+        // Zweistufige Importbegrenzung (nur Bezug; Einspeisung bleibt negativ).
+        await mk('gridConstraints.importLimits.enabled', 'Soft import limit enabled', 'boolean', 'indicator');
+        await mk('gridConstraints.importLimits.hardLimitW', 'Hard import limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.softLimitW', 'Soft import limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.planningLimitW', 'Planning import limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.reserveW', 'Reserve between soft and hard limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.hysteresisW', 'Soft-limit hysteresis (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.releaseDelayMs', 'Soft-limit release delay (ms)', 'number', 'value.interval');
+        await mk('gridConstraints.importLimits.signedNvpW', 'Signed NVP (+ import / - export)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.softHeadroomW', 'Headroom to soft limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.hardHeadroomW', 'Headroom to hard limit (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.requiredReductionW', 'Required flexible-load reduction (W)', 'number', 'value.power');
+        await mk('gridConstraints.importLimits.stage', 'Import limit stage', 'string', 'text');
+        await mk('gridConstraints.importLimits.reason', 'Import limit reason', 'string', 'text');
+        await mk('gridConstraints.importLimits.softLimitMode', 'Soft limit mode', 'string', 'text');
+        await mk('gridConstraints.importLimits.releasePending', 'Soft-limit release pending', 'boolean', 'indicator');
 
         // RLM
         await mk('gridConstraints.rlm.enabled', 'RLM enabled', 'boolean', 'indicator');
@@ -316,6 +337,17 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.zeroExport.maxFeedInPowerW', 'Max allowed feed-in power (W)', 'number', 'value.power');
         await mk('gridConstraints.zeroExport.targetGridW', 'Grid target (+ import / - export)', 'number', 'value.power');
         await mk('gridConstraints.zeroExport.modeLabel', 'Export limit mode label', 'string', 'text');
+
+        await mk('gridConstraints.zeroExport.pvActualW', 'Current PV production (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.localAbsorptionW', 'Local consumption plus storage charging (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.pvFeedForwardTargetW', 'PV feed-forward target (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.pvFeedbackCorrectionW', 'PV feedback correction from NVP (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.storageActualW', 'Storage actual power (+ discharge / - charge)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.storageTargetW', 'Storage target power (+ discharge / - charge)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.storageDischargeConflict', 'PV curtailment conflicts with storage discharge', 'boolean', 'indicator');
+        await mk('gridConstraints.zeroExport.estimatedCurtailmentW', 'Estimated PV curtailment (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.pvSetpointReason', 'PV setpoint reason', 'string', 'text');
+        await mk('gridConstraints.zeroExport.pvActualSource', 'PV actual source', 'string', 'text');
 
         // Export Guard Diagnose (read-only): Diese States zeigen Einspeisung vs. Installateur-Limit,
         // negative-Preis-Strategie und WR-Schreibfähigkeit. Die eigentliche Regelung bleibt weiterhin
@@ -567,6 +599,54 @@ class GridConstraintsModule extends BaseModule {
         return { enabled: true, stagePct };
     }
 
+    _getCurrentPvPowerW(cfg) {
+        const staleMs = Math.max(1000, Math.round(this._num(cfg && cfg.pvActualStaleSec, 30) * 1000));
+        const dp = this.dp;
+        if (dp) {
+            for (const key of ['ps.pvW', 'ps.pvPowerW', 'cm.pvPowerW', 'pv.powerW']) {
+                try {
+                    const value = dp.getNumberFresh(key, staleMs, null);
+                    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+                        return { usable: true, valueW: value, source: key };
+                    }
+                } catch (_e) {}
+            }
+        }
+
+        const cache = this.adapter && this.adapter.stateCache ? this.adapter.stateCache : {};
+        for (const key of ['ems.budget.pvPowerW', 'derived.core.pv.totalW', 'pvPower', 'productionTotal']) {
+            const rec = cache && cache[key];
+            if (!rec || typeof rec !== 'object') continue;
+            const raw = Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec.val;
+            const value = Number(raw);
+            const ts = Number(rec.ts || rec.lc || 0);
+            const fresh = !(ts > 0) || Date.now() - ts <= staleMs;
+            if (fresh && Number.isFinite(value) && value >= 0) {
+                return { usable: true, valueW: value, source: key };
+            }
+        }
+        return { usable: false, valueW: null, source: '' };
+    }
+
+    async _publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, ratedW, nextW = null) {
+        const ff = feedForward && typeof feedForward === 'object' ? feedForward : {};
+        const storageActualW = Number.isFinite(Number(control && control.storageActualW)) ? Number(control.storageActualW) : 0;
+        const storageTargetW = Number.isFinite(Number(control && control.storageTargetW)) ? Number(control.storageTargetW) : 0;
+        const pvActualW = pvActual && pvActual.usable && Number.isFinite(Number(pvActual.valueW)) ? Number(pvActual.valueW) : 0;
+        const targetW = Number.isFinite(Number(ff.targetW)) ? Number(ff.targetW) : 0;
+        const appliedTargetW = Number.isFinite(Number(nextW)) ? Number(nextW) : targetW;
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.pvActualW', Math.round(pvActualW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.localAbsorptionW', Math.round(Number(ff.localAbsorptionW) || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.pvFeedForwardTargetW', Math.round(targetW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.pvFeedbackCorrectionW', Math.round(Number(ff.feedbackCorrectionW) || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.storageActualW', Math.round(storageActualW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.storageTargetW', Math.round(storageTargetW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.storageDischargeConflict', ff.storageDischargeConflict === true, true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.estimatedCurtailmentW', Math.round(Math.max(0, Number(ratedW || 0) - appliedTargetW)), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.pvSetpointReason', String(ff.reason || ''), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.pvActualSource', String(pvActual && pvActual.source || ''), true);
+    }
+
     async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale, control = {}) {
         const enabled = !!cfg.zeroExportEnabled;
         const approved = this._isExportLimitInstallerApproved(cfg);
@@ -642,12 +722,31 @@ class GridConstraintsModule extends BaseModule {
             return { enabled: true, biasW, deadbandW, exportW };
         }
 
-        // Closed-loop based on grid power error
-        const errorW = targetGridW - controlGridW; // positive => verbleibende Einspeisung oberhalb des Installateur-Limits
-        if (Math.abs(errorW) <= deadbandW) {
+        // RC79: Feed-forward nach lokaler Aufnahme. `controlGridW` enthaelt
+        // bereits die akzeptierte Speicherladung und flexible Lasten. Damit folgt
+        // die PV-Vorgabe dem realen Verbrauch plus Speicheraufnahme; nur der nicht
+        // nutzbare Rest wird am WR abgeregelt.
+        const errorW = targetGridW - controlGridW; // positiv => verbleibende Einspeisung oberhalb des Limits
+        const pvActual = this._getCurrentPvPowerW(cfg);
+        if (typeof this._pv.limitW !== 'number' || !Number.isFinite(this._pv.limitW) || this._pv.limitW > ratedSumW) {
+            this._pv.limitW = ratedSumW;
+        }
+        const feedForward = resolveZeroExportPvTarget({
+            ratedPvW: ratedSumW,
+            pvActualW: pvActual.valueW,
+            projectedNvpW: controlGridW,
+            targetNvpW: targetGridW,
+            storageActualW: control && control.storageActualW,
+            storageTargetW: control && control.storageTargetW,
+            storageDischargeDeadbandW: cfg.zeroExportStorageDischargeDeadbandW,
+            currentLimitW: this._pv.limitW,
+        });
+
+        if (Math.abs(errorW) <= deadbandW && feedForward.storageDischargeConflict !== true) {
+            await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, ratedSumW, this._pv.limitW);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: this._pv.limitW, setpointPct: this._pv.limitPct, mode: 'group' };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: this._pv.limitW, setpointPct: this._pv.limitPct, mode: 'group', feedForward };
         }
 
         const fastTripW = Math.max(0, this._num(cfg.pvCurtailFastTripExportW, 500));
@@ -656,18 +755,26 @@ class GridConstraintsModule extends BaseModule {
             || (hardRawGuardW > 0 && exportW >= hardRawGuardW);
 
         const maxDeltaW = Math.max(0, this._num(cfg.pvCurtailMaxDeltaWPerTick, 8000));
-        if (typeof this._pv.limitW !== 'number' || !Number.isFinite(this._pv.limitW) || this._pv.limitW > ratedSumW) {
-            this._pv.limitW = ratedSumW;
-        }
-
         const prev = this._pv.limitW;
-        const releaseToFull = controlGridW > (targetGridW + deadbandW);
-        const rawNext = releaseToFull
+        const releaseForStorageDischarge = feedForward.storageDischargeConflict === true;
+        const feedForwardTargetW = feedForward.usable && Number.isFinite(Number(feedForward.targetW))
+            ? this._clamp(Number(feedForward.targetW), 0, ratedSumW)
+            : null;
+        const fallbackTargetW = this._clamp(prev - errorW, 0, ratedSumW);
+        // Import bzw. steigender lokaler Verbrauch gibt nur genau die zusaetzlich
+        // benoetigte PV-Leistung frei. Eine pauschale Freigabe auf 100 % wuerde bei
+        // langsamer Verbraucher-/Speicherreaktion sofort wieder Einspeisung erzeugen.
+        // Nur ein gleichzeitiges Speicher-Entladen waehrend PV abgeregelt ist loest
+        // die Abregelung vollstaendig und unverzueglich auf.
+        const rawNext = releaseForStorageDischarge
             ? ratedSumW
-            : (fastTrip ? 0 : this._clamp(prev - errorW, 0, ratedSumW));
+            : (feedForwardTargetW !== null ? feedForwardTargetW : fallbackTargetW);
+        const fastRelease = rawNext > prev;
 
         let next = rawNext;
-        const effMaxDelta = (fastTrip || releaseToFull) ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
+        const effMaxDelta = (fastTrip || fastRelease || releaseForStorageDischarge)
+            ? Math.max(maxDeltaW, Math.abs(prev - rawNext))
+            : maxDeltaW;
         if (effMaxDelta > 0) {
             const d = rawNext - prev;
             if (Math.abs(d) > effMaxDelta) next = prev + Math.sign(d) * effMaxDelta;
@@ -694,15 +801,18 @@ class GridConstraintsModule extends BaseModule {
             applied = applied || (ok1 === true || ok1 === null) || (ok2 === true || ok2 === null) || (ok3 === true || ok3 === null);
         }
 
-        const action = releaseToFull
-            ? 'group_release'
-            : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_group_fast' : 'tariff_negative_group') : (fastTrip ? 'group_fast' : 'group'));
+        const action = releaseForStorageDischarge
+            ? 'group_release_storage_discharge'
+            : (tariffGridImportPreferred
+                ? ((fastTrip || fastRelease) ? 'tariff_negative_group_feedforward_fast' : 'tariff_negative_group_feedforward')
+                : ((fastTrip || fastRelease) ? 'group_feedforward_fast' : 'group_feedforward'));
+        await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, ratedSumW, next);
         await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', applied, true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(pct * 10) / 10, true);
 
-        return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied, setpointW: Math.round(next), setpointPct: Math.round(pct * 10) / 10, mode: 'group' };
+        return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied, setpointW: Math.round(next), setpointPct: Math.round(pct * 10) / 10, mode: 'group', feedForward };
     }
 
     _isStaleGrid(cfg) {
@@ -876,15 +986,12 @@ class GridConstraintsModule extends BaseModule {
             return { enabled: true, biasW, deadbandW, exportW, maxFeedInPowerW, targetGridW };
         }
 
-        // limit by PV power (W/%): closed-loop based on grid power error
-        const errorW = targetGridW - controlGridW; // positive => verbleibende Einspeisung oberhalb des Installateur-Limits
-
-        if (Math.abs(errorW) <= deadbandW) {
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
-            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: this._pv.limitW, setpointPct: this._pv.limitPct, mode: modeResolved };
-        }
-
+        // Dynamische PV-Leistungsgrenze: Feed-forward aus realer lokaler Aufnahme
+        // plus NVP-Fehler. Speicherladung und bereits akzeptierte flexible Lasten
+        // sind im koordinierten `controlGridW` enthalten. Dadurch wird zuerst lokal
+        // verbraucht/gespeichert und nur der verbleibende Ueberschuss abgeregelt.
+        const errorW = targetGridW - controlGridW; // positiv => verbleibende Einspeisung oberhalb des Installateur-Limits
+        const pvActual = this._getCurrentPvPowerW(cfg);
         const fastTripW = Math.max(0, this._num(cfg.pvCurtailFastTripExportW, 500));
         const hardRawGuardW = Math.max(0, this._num(control && control.hardRawGuardW, this._num(cfg.nvpCoordinatorHardRawExportW, 0)));
         const fastTrip = (fastTripW > 0 && controlExportW >= fastTripW)
@@ -893,20 +1000,56 @@ class GridConstraintsModule extends BaseModule {
         if (modeResolved === 'pvLimitW') {
             const maxDeltaW = Math.max(0, this._num(cfg.pvCurtailMaxDeltaWPerTick, 8000));
             const ratedW = this._getRatedPvW(cfg);
+            // Legacy-Fallback fuer Anlagen ohne hinterlegte WR-Nennleistung. Der
+            // reale Feed-forward-Zielwert bleibt trotzdem endlich; nur die volle
+            // Freigabe bei Speicher-Entladung nutzt den bisherigen hohen Maximalwert.
             const maxW = (ratedW > 0) ? ratedW : 1_000_000;
 
-            if (typeof this._pv.limitW !== 'number') {
-                this._pv.limitW = (ratedW > 0) ? ratedW : maxW;
+            if (typeof this._pv.limitW !== 'number' || !Number.isFinite(this._pv.limitW)) {
+                const mappedLimitW = this.dp ? this.dp.getNumber('pv.limitW', null) : null;
+                this._pv.limitW = mappedLimitW !== null && mappedLimitW !== undefined && Number.isFinite(Number(mappedLimitW))
+                    ? this._clamp(Number(mappedLimitW), 0, maxW)
+                    : ((ratedW > 0) ? ratedW : maxW);
             }
 
-            const prev = this._pv.limitW;
-            const releaseToFull = controlGridW > (targetGridW + deadbandW);
-            const rawNext = releaseToFull
+            const prev = this._clamp(this._pv.limitW, 0, maxW);
+            const feedForward = resolveZeroExportPvTarget({
+                ratedPvW: ratedW,
+                pvActualW: pvActual.valueW,
+                projectedNvpW: controlGridW,
+                targetNvpW: targetGridW,
+                storageActualW: control && control.storageActualW,
+                storageTargetW: control && control.storageTargetW,
+                storageDischargeDeadbandW: cfg.zeroExportStorageDischargeDeadbandW,
+                currentLimitW: prev,
+            });
+            // Ohne bekannte Nennleistung kann der reine Helfer keine vollstaendige
+            // Freigabe ableiten. Der Grundsatz bleibt trotzdem: PV niemals kuenstlich
+            // begrenzen, waehrend der Speicher gleichzeitig entlaedt.
+            const releaseForStorageDischarge = feedForward.storageDischargeConflict === true
+                || (feedForward.storageDischarging === true && prev < maxW - 1);
+
+            if (Math.abs(errorW) <= deadbandW && !releaseForStorageDischarge) {
+                const diagnosticRatedW = ratedW > 0 ? ratedW : Math.max(0, Number(pvActual.valueW) || 0, prev);
+                await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, diagnosticRatedW, prev);
+                await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
+                await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+                return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: prev, setpointPct: 0, mode: modeResolved, feedForward };
+            }
+
+            const feedForwardTargetW = feedForward.usable && Number.isFinite(Number(feedForward.targetW))
+                ? this._clamp(Number(feedForward.targetW), 0, maxW)
+                : null;
+            const fallbackTargetW = this._clamp(prev - errorW, 0, maxW);
+            const rawNext = releaseForStorageDischarge
                 ? maxW
-                : (fastTrip ? 0 : this._clamp(prev - errorW, 0, maxW));
+                : (feedForwardTargetW !== null ? feedForwardTargetW : fallbackTargetW);
+            const fastRelease = rawNext > prev;
 
             let next = rawNext;
-            const effMaxDelta = (fastTrip || releaseToFull) ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
+            const effMaxDelta = (fastTrip || fastRelease || releaseForStorageDischarge)
+                ? Math.max(maxDeltaW, Math.abs(prev - rawNext))
+                : maxDeltaW;
             if (effMaxDelta > 0) {
                 const d = rawNext - prev;
                 if (Math.abs(d) > effMaxDelta) next = prev + Math.sign(d) * effMaxDelta;
@@ -916,16 +1059,19 @@ class GridConstraintsModule extends BaseModule {
             this._pv.limitW = next;
 
             const ok = await this.dp.writeNumber('pv.limitW', next, false);
-
-            const action = releaseToFull
-                ? 'pvLimitW_release'
-                : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitW_fast' : 'tariff_negative_pvLimitW') : (fastTrip ? 'pvLimitW_fast' : 'pvLimitW'));
+            const action = releaseForStorageDischarge
+                ? 'pvLimitW_release_storage_discharge'
+                : (tariffGridImportPreferred
+                    ? ((fastTrip || fastRelease) ? 'tariff_negative_pvLimitW_feedforward_fast' : 'tariff_negative_pvLimitW_feedforward')
+                    : ((fastTrip || fastRelease) ? 'pvLimitW_feedforward_fast' : 'pvLimitW_feedforward'));
+            const diagnosticRatedW = ratedW > 0 ? ratedW : Math.max(0, Number(pvActual.valueW) || 0, next);
+            await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, diagnosticRatedW, next);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
-            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', 0, true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', ratedW > 0 ? Math.round((next / ratedW) * 1000) / 10 : 0, true);
 
-            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: Math.round(next), setpointPct: 0, mode: modeResolved };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: Math.round(next), setpointPct: ratedW > 0 ? Math.round((next / ratedW) * 1000) / 10 : 0, mode: modeResolved, feedForward };
         }
 
         if (modeResolved === 'pvLimitPct') {
@@ -937,19 +1083,48 @@ class GridConstraintsModule extends BaseModule {
             }
 
             const maxDeltaPct = Math.max(0, this._num(cfg.pvCurtailMaxDeltaPctPerTick, 10));
-            if (typeof this._pv.limitPct !== 'number') {
-                this._pv.limitPct = 100;
+            if (typeof this._pv.limitPct !== 'number' || !Number.isFinite(this._pv.limitPct)) {
+                const mappedLimitPct = this.dp ? this.dp.getNumber('pv.limitPct', null) : null;
+                this._pv.limitPct = mappedLimitPct !== null && mappedLimitPct !== undefined && Number.isFinite(Number(mappedLimitPct))
+                    ? this._clamp(Number(mappedLimitPct), 0, 100)
+                    : 100;
             }
 
-            const prev = this._pv.limitPct;
+            const prev = this._clamp(this._pv.limitPct, 0, 100);
+            const currentLimitW = ratedW * prev / 100;
+            const feedForward = resolveZeroExportPvTarget({
+                ratedPvW: ratedW,
+                pvActualW: pvActual.valueW,
+                projectedNvpW: controlGridW,
+                targetNvpW: targetGridW,
+                storageActualW: control && control.storageActualW,
+                storageTargetW: control && control.storageTargetW,
+                storageDischargeDeadbandW: cfg.zeroExportStorageDischargeDeadbandW,
+                currentLimitW,
+            });
+            const releaseForStorageDischarge = feedForward.storageDischargeConflict === true;
+
+            if (Math.abs(errorW) <= deadbandW && !releaseForStorageDischarge) {
+                await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, ratedW, currentLimitW);
+                await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
+                await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+                return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: Math.round(currentLimitW), setpointPct: prev, mode: modeResolved, feedForward };
+            }
+
+            const feedForwardTargetPct = feedForward.usable && Number.isFinite(Number(feedForward.targetW))
+                ? this._clamp((Number(feedForward.targetW) / ratedW) * 100, 0, 100)
+                : null;
             const deltaPct = (errorW / ratedW) * 100;
-            const releaseToFull = controlGridW > (targetGridW + deadbandW);
-            const rawNext = releaseToFull
+            const fallbackTargetPct = this._clamp(prev - deltaPct, 0, 100);
+            const rawNext = releaseForStorageDischarge
                 ? 100
-                : (fastTrip ? 0 : this._clamp(prev - deltaPct, 0, 100));
+                : (feedForwardTargetPct !== null ? feedForwardTargetPct : fallbackTargetPct);
+            const fastRelease = rawNext > prev;
 
             let next = rawNext;
-            const effMaxDeltaPct = (fastTrip || releaseToFull) ? Math.max(maxDeltaPct, Math.abs(prev - rawNext)) : maxDeltaPct;
+            const effMaxDeltaPct = (fastTrip || fastRelease || releaseForStorageDischarge)
+                ? Math.max(maxDeltaPct, Math.abs(prev - rawNext))
+                : maxDeltaPct;
             if (effMaxDeltaPct > 0) {
                 const d = rawNext - prev;
                 if (Math.abs(d) > effMaxDeltaPct) next = prev + Math.sign(d) * effMaxDeltaPct;
@@ -957,18 +1132,21 @@ class GridConstraintsModule extends BaseModule {
 
             next = this._clamp(next, 0, 100);
             this._pv.limitPct = next;
+            const nextW = ratedW * next / 100;
 
             const ok = await this.dp.writeNumber('pv.limitPct', next, false);
-
-            const action = releaseToFull
-                ? 'pvLimitPct_release'
-                : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitPct_fast' : 'tariff_negative_pvLimitPct') : (fastTrip ? 'pvLimitPct_fast' : 'pvLimitPct'));
+            const action = releaseForStorageDischarge
+                ? 'pvLimitPct_release_storage_discharge'
+                : (tariffGridImportPreferred
+                    ? ((fastTrip || fastRelease) ? 'tariff_negative_pvLimitPct_feedforward_fast' : 'tariff_negative_pvLimitPct_feedforward')
+                    : ((fastTrip || fastRelease) ? 'pvLimitPct_feedforward_fast' : 'pvLimitPct_feedforward'));
+            await this._publishZeroExportFeedForwardDiagnostics(feedForward, pvActual, control, ratedW, nextW);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
-            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', 0, true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(nextW), true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(next * 10) / 10, true);
 
-            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: 0, setpointPct: Math.round(next * 10) / 10, mode: modeResolved };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: Math.round(nextW), setpointPct: Math.round(next * 10) / 10, mode: modeResolved, feedForward };
         }
 
         await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'unknown_mode', true);
@@ -2033,16 +2211,63 @@ class GridConstraintsModule extends BaseModule {
         // unabhängig vom nachgelagerten Speicher-/PV-Koordinator aktiv.
         await this._tickPvEvu(nowMs, cfg);
 
+        const configuredHardLimitW = this._num(cfg.importHardLimitW ?? cfg.gridImportHardLimitW, 0);
         const instLimitW = this._num(this.adapter.config.installerConfig?.gridConnectionPower, 0);
         const legacyLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
-        const connectionLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
-            ? instLimitW
-            : legacyLimitW;
+        const connectionLimitW = (typeof configuredHardLimitW === 'number' && Number.isFinite(configuredHardLimitW) && configuredHardLimitW > 0)
+            ? configuredHardLimitW
+            : ((typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
+                ? instLimitW
+                : legacyLimitW);
         let maxImportFinal = connectionLimitW > 0 ? connectionLimitW : 0;
         if (cfg.rlmEnabled && rlm && typeof rlm.capNowW === 'number' && Number.isFinite(rlm.capNowW) && rlm.capNowW > 0) {
             maxImportFinal = maxImportFinal > 0 ? Math.min(maxImportFinal, rlm.capNowW) : rlm.capNowW;
         }
-        await this.adapter.setStateAsync('gridConstraints.control.maxImportW_final', Math.round(maxImportFinal || 0), true);
+
+        const importPolicy = resolveGridImportLimitPolicy({
+            nowMs,
+            hardLimitW: maxImportFinal,
+            softLimitEnabled: cfg.importSoftLimitEnabled !== false,
+            softLimitW: cfg.importSoftLimitW,
+            reserveW: cfg.importSoftReserveW,
+            hysteresisW: cfg.importSoftHysteresisW,
+            releaseDelaySec: cfg.importSoftReleaseDelaySec,
+            signedNvpW: gridW,
+            nvpUsable: !gridStale && typeof gridW === 'number' && Number.isFinite(gridW),
+            previousStage: this._importLimitRuntime && this._importLimitRuntime.stage,
+            releaseCandidateAtMs: this._importLimitRuntime && this._importLimitRuntime.releaseCandidateAtMs,
+        });
+        this._importLimitRuntime = {
+            stage: importPolicy.stage,
+            releaseCandidateAtMs: importPolicy.releaseCandidateAtMs,
+        };
+        this.adapter._gridImportLimitPolicy = { ...importPolicy, ts: nowMs };
+
+        await this.adapter.setStateAsync('gridConstraints.control.maxImportW_final', Math.round(importPolicy.hardLimitW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.control.maxImportW_planning', Math.round(importPolicy.planningLimitW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.enabled', importPolicy.enabled === true, true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.hardLimitW', Math.round(importPolicy.hardLimitW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.softLimitW', Math.round(importPolicy.softLimitW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.planningLimitW', Math.round(importPolicy.planningLimitW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.reserveW', Math.round(importPolicy.reserveW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.hysteresisW', Math.round(importPolicy.hysteresisW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.releaseDelayMs', Math.round(importPolicy.releaseDelayMs || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.signedNvpW', Math.round(importPolicy.signedNvpW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.softHeadroomW', Math.round(importPolicy.softHeadroomW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.hardHeadroomW', Math.round(importPolicy.hardHeadroomW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.requiredReductionW', Math.round(importPolicy.requiredReductionW || 0), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.stage', String(importPolicy.stage || ''), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.reason', String(importPolicy.reason || ''), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.softLimitMode', String(importPolicy.softLimitMode || ''), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.releasePending', importPolicy.releasePending === true, true);
+
+        if (status === 'ok' && importPolicy.stage === 'hard') {
+            status = 'hard_import_limit';
+            reason = 'HARD_IMPORT_LIMIT';
+        } else if (status === 'ok' && importPolicy.stage === 'soft') {
+            status = 'soft_import_limit';
+            reason = 'SOFT_IMPORT_LIMIT';
+        }
 
         const exportTarget = this._buildExportLimitTarget(cfg, false);
         const minImportTargetW = cfg.zeroExportEnabled ? Math.round(Math.max(0, exportTarget.biasW)) : 0;
@@ -2059,7 +2284,9 @@ class GridConstraintsModule extends BaseModule {
             status,
             reason,
             rlm,
-            maxImportFinal,
+            maxImportFinal: importPolicy.hardLimitW,
+            maxImportPlanning: importPolicy.planningLimitW,
+            importPolicy,
             minImportTargetW,
         };
         return this._lastPlanningContext;
@@ -2101,7 +2328,15 @@ class GridConstraintsModule extends BaseModule {
 
         const hasZeroGroup = Array.isArray(cfg.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length > 0;
         const exportGuardDiagnosticOnly = this._isExportLimitDiagnosticMode(cfg);
-        const control = { rawGridW, controlGridW, hardRawGuardW };
+        const control = {
+            rawGridW,
+            controlGridW,
+            hardRawGuardW,
+            storageActualW: coordinator && Number.isFinite(Number(coordinator.storageActualW)) ? Number(coordinator.storageActualW) : 0,
+            storageTargetW: coordinator && Number.isFinite(Number(coordinator.storageTargetW)) ? Number(coordinator.storageTargetW) : 0,
+            storageCommandCredited: coordinator && coordinator.storageCommandCredited === true,
+            flexibleNetLoadDeltaW: coordinator && Number.isFinite(Number(coordinator.flexibleNetLoadDeltaW)) ? Number(coordinator.flexibleNetLoadDeltaW) : 0,
+        };
 
         let ze = { enabled: !!cfg.zeroExportEnabled, diagnosticOnly: exportGuardDiagnosticOnly };
         if (cfg.zeroExportEnabled && exportGuardDiagnosticOnly) {

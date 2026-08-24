@@ -1127,8 +1127,14 @@ class CoreLimitsModule extends BaseModule {
         // Grid/Plant Caps
         await mk('ems.core.gridConnectionLimitW_cfg', 'Grid connection limit (W) configured', 'number', 'value.power', 'W');
         await mk('ems.core.gridSafetyMarginW', 'Grid safety margin (W)', 'number', 'value.power', 'W');
-        await mk('ems.core.gridConstraintsCapW', 'Grid constraints cap (W) (RLM/EVU)', 'number', 'value.power', 'W');
-        await mk('ems.core.gridImportLimitW_effective', 'Grid import limit effective (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridConstraintsCapW', 'Grid constraints hard cap (W) (RLM/EVU)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridConstraintsPlanningCapW', 'Grid constraints soft planning cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_effective', 'Grid import hard limit effective (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_planning', 'Grid import soft planning limit effective (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportSoftLimitW', 'Grid import soft limit (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportHardLimitW', 'Grid import hard limit (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportStage', 'Grid import limit stage', 'string', 'text');
+        await mk('ems.core.gridImportRequiredReductionW', 'Grid import required flexible-load reduction (W)', 'number', 'value.power', 'W');
         await mk('ems.core.gridImportLimitW_physical', 'Grid import limit physical (W) (cfg/EVU minus margin)', 'number', 'value.power', 'W');
         await mk('ems.core.gridImportLimitW_peakShaving', 'Grid import limit from Peak-Shaving (W)', 'number', 'value.power', 'W');
         await mk('ems.core.gridImportLimitW_source', 'Grid import limit binding source', 'string', 'text');
@@ -2067,7 +2073,13 @@ class CoreLimitsModule extends BaseModule {
         pvAllocationGate.storageMaxSocPct = storageMaxSocPct;
 
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
-        const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
+        const gridHardLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
+        const gridPlanningLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_planning || 0) : 0;
+        // RC79: flexible Lasten planen vorausschauend gegen das Soft-Limit. Die
+        // finale Safety-Envelope und jeder Hardware-Write schuetzen weiterhin das
+        // separate Hard-Limit. Ohne Soft-Konfiguration bleibt beides identisch.
+        const gridLimitW = gridPlanningLimitW > 0 ? gridPlanningLimitW : gridHardLimitW;
+        const gridImportStage = coreSnapshot && coreSnapshot.grid ? String(coreSnapshot.grid.gridImportStage || '') : '';
         // RC78: reine Bezugsgrenze bei signiertem NVP (Import +, Export -).
         // Gesamtziel = reale geregelte Istlast + Limit - NVP; Reservierungen werden
         // erst danach abgezogen. Überbezug erzwingt dadurch weiterhin Lastabwurf.
@@ -2096,7 +2108,9 @@ class CoreLimitsModule extends BaseModule {
 
         const bindings = [];
         if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
-        if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
+        if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
+            bindings.push(gridHardLimitW > 0 && gridLimitW < gridHardLimitW - 1 ? 'grid-soft' : 'grid-hard');
+        }
         if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(highLevelBinding);
         if (!bindings.length) bindings.push('unlimited');
 
@@ -2164,6 +2178,9 @@ class CoreLimitsModule extends BaseModule {
             gates: {
                 grid: {
                     importLimitW: roundW(gridLimitW),
+                    planningImportLimitW: roundW(gridLimitW),
+                    hardImportLimitW: roundW(gridHardLimitW),
+                    limitStage: gridImportStage,
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
                     measurementUsable: gridMeasurementUsable,
@@ -2238,6 +2255,8 @@ class CoreLimitsModule extends BaseModule {
                     ? Number(centralNvp.measurementAgeMs)
                     : null,
                 importLimitW: gridLimitW,
+                hardImportLimitW: gridHardLimitW,
+                limitStage: gridImportStage,
                 highLevelCapW,
                 highLevelBinding,
             },
@@ -2750,6 +2769,10 @@ class CoreLimitsModule extends BaseModule {
         const gridMaxPhaseA_cfg = clamp(num(psCfg?.maxPhaseA, 0), 0, 20000, 0) || 0;
 
         const gridConstraintsCapW = await readStateNumber(this.adapter, 'gridConstraints.control.maxImportW_final', null);
+        const gridConstraintsPlanningCapW = await readStateNumber(this.adapter, 'gridConstraints.control.maxImportW_planning', null);
+        const importPolicy = this.adapter && this.adapter._gridImportLimitPolicy && typeof this.adapter._gridImportLimitPolicy === 'object'
+            ? this.adapter._gridImportLimitPolicy
+            : {};
 
         let gridImportLimitW_physical = 0;
         {
@@ -2788,6 +2811,19 @@ class CoreLimitsModule extends BaseModule {
                     .join('+');
             }
         }
+
+        // Soft-Limit fuer vorausschauende Lastplanung. Die physische/effective
+        // Grenze oben bleibt das Hard-Limit fuer SafetyEnvelope und Final-Writer.
+        let gridImportLimitW_planning = gridImportLimitW_effective;
+        if (typeof gridConstraintsPlanningCapW === 'number' && Number.isFinite(gridConstraintsPlanningCapW) && gridConstraintsPlanningCapW > 0) {
+            gridImportLimitW_planning = gridImportLimitW_effective > 0
+                ? Math.min(gridImportLimitW_effective, gridConstraintsPlanningCapW)
+                : gridConstraintsPlanningCapW;
+        }
+        const gridImportHardLimitW = Math.max(0, Number(gridImportLimitW_effective) || 0);
+        const gridImportSoftLimitW = Math.max(0, Number(gridImportLimitW_planning) || 0);
+        const gridImportStage = String(importPolicy.stage || (gridImportSoftLimitW < gridImportHardLimitW - 1 ? 'normal' : 'hard-only'));
+        const gridImportRequiredReductionW = Math.max(0, Number(importPolicy.requiredReductionW) || 0);
 
         // ------------------------------------------------------------
         // Peak / Tariff / §14a caps
@@ -2856,9 +2892,15 @@ class CoreLimitsModule extends BaseModule {
                 gridConnectionLimitW_cfg,
                 gridSafetyMarginW,
                 gridConstraintsCapW: (typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : null,
+                gridConstraintsPlanningCapW: (typeof gridConstraintsPlanningCapW === 'number') ? gridConstraintsPlanningCapW : null,
                 gridImportLimitW_physical,
                 gridImportLimitW_peakShaving,
                 gridImportLimitW_effective,
+                gridImportLimitW_planning,
+                gridImportSoftLimitW,
+                gridImportHardLimitW,
+                gridImportStage,
+                gridImportRequiredReductionW,
                 gridImportLimitW_source,
                 gridMaxPhaseA_cfg,
             },
@@ -2961,6 +3003,12 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.core.gridConnectionLimitW_cfg', Math.round(Number(effectiveCoreGrid.gridConnectionLimitW_cfg || 0)), true);
             await this.adapter.setStateAsync('ems.core.gridSafetyMarginW', Math.round(Number(effectiveCoreGrid.gridSafetyMarginW || 0)), true);
             await this.adapter.setStateAsync('ems.core.gridConstraintsCapW', Math.round(Number(effectiveCoreGrid.gridConstraintsCapW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridConstraintsPlanningCapW', Math.round(Number(effectiveCoreGrid.gridConstraintsPlanningCapW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_planning', Math.round(Number(effectiveCoreGrid.gridImportLimitW_planning || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportSoftLimitW', Math.round(Number(effectiveCoreGrid.gridImportSoftLimitW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportHardLimitW', Math.round(Number(effectiveCoreGrid.gridImportHardLimitW || effectiveCoreGrid.gridImportLimitW_effective || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportStage', String(effectiveCoreGrid.gridImportStage || ''), true);
+            await this.adapter.setStateAsync('ems.core.gridImportRequiredReductionW', Math.round(Number(effectiveCoreGrid.gridImportRequiredReductionW || 0)), true);
             await this.adapter.setStateAsync('ems.core.gridImportLimitW_physical', Math.round(Number(effectiveCoreGrid.gridImportLimitW_physical || 0)), true);
             await this.adapter.setStateAsync('ems.core.gridImportLimitW_peakShaving', Math.round(Number(effectiveCoreGrid.gridImportLimitW_peakShaving || 0)), true);
             await this.adapter.setStateAsync('ems.core.gridImportLimitW_source', String(effectiveCoreGrid.gridImportLimitW_source || ''), true);

@@ -64,6 +64,12 @@ if (explicitFiles.length) {
   shippedFiles = walk(root);
 }
 
+// Bei einem Repository-Smoke mit package.json#files darf eine relative Runtime-
+// Abhängigkeit nicht nur zufällig im Arbeitsverzeichnis liegen: Sie muss selbst
+// Teil des auszuliefernden Pakets sein. So werden fehlende neue Services bereits
+// vor npm pack erkannt und nicht erst nach der Installation beim Adapterstart.
+const shippedFileSet = new Set(shippedFiles.map((file) => path.resolve(file)));
+
 const jsFiles = shippedFiles.filter((file) => /\.(?:c?js|mjs)$/i.test(file));
 for (const file of jsFiles) {
   const check = spawnSync(process.execPath, ['--check', file], { cwd: root, encoding: 'utf8' });
@@ -75,7 +81,10 @@ for (const file of jsFiles) {
 function resolveRelative(fromFile, request) {
   const base = path.resolve(path.dirname(fromFile), request);
   const candidates = [base, `${base}.js`, `${base}.json`, `${base}.cjs`, `${base}.mjs`, path.join(base, 'index.js'), path.join(base, 'index.json')];
-  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) || null;
+  return candidates.find((candidate) => {
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) return false;
+    return explicitFiles.length === 0 || shippedFileSet.has(path.resolve(candidate));
+  }) || null;
 }
 
 const missing = [];

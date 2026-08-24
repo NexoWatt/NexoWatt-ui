@@ -809,6 +809,10 @@ class NvpCoordinatorModule extends BaseModule {
           pvControlNvpW: hardRawGuardTriggered ? snapshot.rawNvpW : snapshot.pvControlNvpW,
           nvpUsable: snapshot.nvpUsable,
           hardRawGuardW: cfg.hardRawGuardW,
+          storageActualW: snapshot.storageActualW,
+          storageTargetW: snapshot.storageTargetW,
+          storageCommandCredited: snapshot.storageCommandCredited,
+          flexibleNetLoadDeltaW: snapshot.acceptedFlexibleNetLoadDeltaW,
         })) as AnyRecord | null;
       } catch (error: unknown) {
         pvResult = {

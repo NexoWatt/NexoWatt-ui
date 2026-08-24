@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: dab4f523f4878c1869ed8172267a0ac0a5556f865754ce051739611d5d705252
+ * Original-Hash: dc005af11df700f86955e0b67e78c17f13e5a0f6d92dcab63f79f6600468eb16
  */
 
 /**
@@ -96,7 +96,7 @@ for (const file of [ts, js]) {
   must(file, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
   must(file, 'derived.core.building.loadRestW');
   must(file, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)');
-  must(file, 'gridIncrementHeadroomW = gridImportLimitEffW - gridW');
+  must(file, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW');
   must(file, 'gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)');
   mustNot(file, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
 }
