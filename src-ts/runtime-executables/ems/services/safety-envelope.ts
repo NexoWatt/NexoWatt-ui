@@ -201,6 +201,7 @@ function emptyEnvelope(generation: unknown, now: number, reason: unknown = 'cycl
             nvpAgeMs: null,
             nvpStatus: 'missing',
             nvpSource: '',
+            incrementHeadroomW: 0,
             availableHeadroomW: 0,
         },
         phase: {
@@ -419,9 +420,16 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     if (!nvp.current) reasons.push('nvp-snapshot-stale');
     if (!nvp.usable) reasons.push(`nvp-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`);
     const nvpW = nvp.usable ? strictFiniteNumber(nvp.netW, null) : null;
+    // RC78 / 0.8.203: Signierter NVP. Die Anschlussgrenze begrenzt nur Bezug;
+    // Einspeisung (negativer NVP) ist lokale Deckung und erhöht die noch
+    // mögliche Laständerung entsprechend. Ein positiver Überbezug bleibt als
+    // negativer Inkrementwert sichtbar und wird im Final-Writer aktiv abgebaut.
+    const gridIncrementHeadroomW = nvpW === null || !(maxImportW > 0)
+        ? 0
+        : maxImportW - nvpW;
     const availableHeadroomW = nvpW === null || !(maxImportW > 0)
         ? 0
-        : Math.max(0, maxImportW - Math.max(0, nvpW));
+        : Math.max(0, gridIncrementHeadroomW);
 
     const maxPhaseA = strictFiniteNumber(coreGrid.gridMaxPhaseA_cfg, null);
     const phaseRequired = maxPhaseA !== null && maxPhaseA > 0;
@@ -543,6 +551,7 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
             nvpStatus: String(nvp.status || ''),
             nvpSource: String(nvp.source || ''),
             nvpReason: String(nvp.reason || ''),
+            incrementHeadroomW: Math.round(gridIncrementHeadroomW),
             availableHeadroomW: Math.round(availableHeadroomW),
             additionalHeadroomW: Math.round(availableHeadroomW),
             staleMs: safetyCfg.staleMs,
@@ -733,12 +742,13 @@ function evaluateFlexibleLoadRequest(adapter: AnyRecord | null | undefined, requ
     if (maxImportW === null || maxImportW <= 0) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'grid-limit-final-write-missing', now);
 
     const runtime = getSafetyRuntime(adapter, envelope.generation);
-    const gridImportW = Math.max(0, Number(nvp.netW) || 0);
+    const signedNvpW = Number(nvp.netW) || 0;
     // Keep this value signed. A negative headroom means the connection is
     // already above its hard import limit and existing flexible loads must be
     // reduced by at least the excess amount. Clamping it to 0 W would permit
-    // the currently active target to continue unchanged.
-    const gridIncrementHeadroomW = maxImportW - gridImportW;
+    // the currently active target to continue unchanged. Conversely, a
+    // negative NVP (export) increases the import-only connection headroom.
+    const gridIncrementHeadroomW = maxImportW - signedNvpW;
     const otherDeltaW = sumOther(runtime.deltasByKey, key);
     const gridAllowedW = Math.max(0, currentActualW + gridIncrementHeadroomW - otherDeltaW);
 

@@ -146,6 +146,7 @@ const snapshotInput = {
   storage: {
     chargeW: 3000,
     dischargeW: 0,
+    writerActive: true,
     eligible: true,
     maxChargeW: 10000,
     socPct: 50,
@@ -153,9 +154,12 @@ const snapshotInput = {
   },
   consumers: {
     evcsUsedW: 11000,
+    evcsActualW: 0,
     evcsPvUsedW: 8000,
     thermalUsedW: 0,
+    thermalActualW: 0,
     heatingRodUsedW: 0,
+    heatingRodActualW: 0,
   },
   allocation: {
     enabled: true,
@@ -173,8 +177,10 @@ assert.strictEqual(snapshot.gates.pv.rawW, 18000);
 assert.strictEqual(snapshot.gates.pv.effectiveW, 17500);
 assert.strictEqual(snapshot.gates.pvAllocation.evcsCapW, 14000);
 assert.strictEqual(snapshot.gates.pvAllocation.storageGuaranteedW, 3500);
-assert.strictEqual(snapshot.gates.grid.headroomRawW, 51000);
-assert.strictEqual(snapshot.gates.grid.headroomW, 40000);
+assert.strictEqual(snapshot.raw.currentControlledLoadW, 3000, 'Nur reale Istlast, nicht EVCS-Reservierung, darf zum Gesamtzielbudget addiert werden');
+assert.strictEqual(snapshot.gates.grid.incrementHeadroomW, 47000, 'Einspeisung muss den signierten Import-Headroom erhöhen');
+assert.strictEqual(snapshot.gates.grid.headroomRawW, 50000);
+assert.strictEqual(snapshot.gates.grid.headroomW, 50000);
 assert.strictEqual(snapshot.gates.total.effectiveW, 30000);
 assert.strictEqual(snapshot.gates.total.binding, 'para14a');
 assert.strictEqual(snapshot.typedRuntime.productive, true);
@@ -202,19 +208,28 @@ const rnd = () => {
 };
 for (let i = 0; i < 50000; i++) {
   const gridW = Math.round((rnd() - 0.5) * 80000);
+  const gridUsable = rnd() > 0.05;
+  const importLimitW = Math.round(rnd() * 60000);
+  const highLevelCapW = rnd() > 0.2 ? Math.round(rnd() * 60000) : null;
   const evcs = Math.round(rnd() * 30000);
+  const evcsActual = Math.round(rnd() * 30000);
+  const thermalUsed = Math.round(rnd() * 12000);
+  const thermalActual = Math.round(rnd() * 12000);
+  const heatingRodUsed = Math.round(rnd() * 12000);
+  const heatingRodActual = Math.round(rnd() * 12000);
   const charge = Math.round(rnd() * 25000);
   const discharge = Math.round(rnd() * 25000);
+  const storageWriterActive = rnd() > 0.3;
   const measuredPv = Math.round(rnd() * 50000);
   const snap = mirror.buildCoreRuntimeBudgetSnapshot({
     ts: i,
     grid: {
       netW: gridW,
-      usable: rnd() > 0.05,
+      usable: gridUsable,
       status: 'random',
       source: 'test',
-      importLimitW: Math.round(rnd() * 60000),
-      highLevelCapW: rnd() > 0.2 ? Math.round(rnd() * 60000) : null,
+      importLimitW,
+      highLevelCapW,
     },
     pv: {
       measuredW: measuredPv,
@@ -231,12 +246,16 @@ for (let i = 0; i < 50000; i++) {
       maxChargeW: Math.round(rnd() * 25000),
       socPct: rnd() * 100,
       maxSocPct: 100,
+      writerActive: storageWriterActive,
     },
     consumers: {
       evcsUsedW: evcs,
+      evcsActualW: evcsActual,
       evcsPvUsedW: Math.min(evcs, Math.round(rnd() * evcs)),
-      thermalUsedW: Math.round(rnd() * 12000),
-      heatingRodUsedW: Math.round(rnd() * 12000),
+      thermalUsedW: thermalUsed,
+      thermalActualW: thermalActual,
+      heatingRodUsedW: heatingRodUsed,
+      heatingRodActualW: heatingRodActual,
     },
     allocation: { enabled: true, mode: 'both', evcsSharePct: rnd() * 100 },
   });
@@ -248,6 +267,22 @@ for (let i = 0; i < 50000; i++) {
   assert.ok(snap.gates.pvAllocation.evcsCapW >= 0);
   assert.ok(snap.gates.pvAllocation.storageGuaranteedW >= 0);
   assert.ok(snap.gates.pvAllocation.evcsCapW + snap.gates.pvAllocation.storageGuaranteedW <= snap.gates.pv.effectiveW + 1);
+  const expectedControlledActualW = evcsActual + thermalActual + heatingRodActual + (storageWriterActive ? charge : 0);
+  assert.strictEqual(snap.raw.currentControlledLoadW, expectedControlledActualW);
+  if (!gridUsable) {
+    assert.strictEqual(snap.gates.grid.headroomW, 0);
+    assert.strictEqual(snap.gates.total.effectiveW, 0);
+  } else if (importLimitW > 0) {
+    const expectedGridAllowanceW = Math.max(0, expectedControlledActualW + importLimitW - gridW);
+    assert.strictEqual(snap.gates.grid.incrementHeadroomW, importLimitW - gridW);
+    assert.strictEqual(snap.gates.grid.headroomRawW, expectedGridAllowanceW);
+    assert.strictEqual(snap.gates.grid.headroomW, expectedGridAllowanceW);
+    if (highLevelCapW !== null) {
+      assert.strictEqual(snap.gates.total.effectiveW, Math.min(expectedGridAllowanceW, Math.max(0, highLevelCapW)));
+    } else {
+      assert.strictEqual(snap.gates.total.effectiveW, expectedGridAllowanceW);
+    }
+  }
 
   const req = Math.round(rnd() * 50000);
   const pvRemaining = Math.round(rnd() * 30000);

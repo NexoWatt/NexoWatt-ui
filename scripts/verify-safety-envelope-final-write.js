@@ -177,6 +177,36 @@ function release(adapter, dp, overrides = {}, budgetSnapshot = null) {
     assert.strictEqual(decision.gridIncrementHeadroomW, -2000);
   }
 
+  // 3c) Reine Bezugsgrenze: Einspeisung am signierten NVP vergrößert
+  // die Lastfreigabe. Der Feldfall aus RC78 muss 40,1 kW Gesamtfreigabe und
+  // nach 11,0 kW EVCS + 9,3 kW Speicher noch 19,8 kW Reserve liefern.
+  {
+    const adapter = makeAdapter({ gridConnectionPower: 30000, nvpW: -10100 });
+    const envelope = release(adapter, makeDp());
+    assert.strictEqual(envelope.valid, true);
+    assert.strictEqual(envelope.grid.incrementHeadroomW, 40100);
+    assert.strictEqual(envelope.grid.availableHeadroomW, 40100);
+
+    const evcs = evaluateFlexibleLoadRequest(adapter, {
+      key: 'evcs:field', app: 'evcs', requestedW: 11000, currentActualW: 0, phaseCount: 3,
+    });
+    assert.strictEqual(evcs.allowedW, 11000);
+    assert.strictEqual(evcs.gridIncrementHeadroomW, 40100);
+    commitFlexibleLoadDecision(adapter, evcs, true);
+
+    const storage = evaluateFlexibleLoadRequest(adapter, {
+      key: 'storage:field', app: 'storage', requestedW: 9300, currentActualW: 0, phaseCount: 3,
+    });
+    assert.strictEqual(storage.allowedW, 9300);
+    commitFlexibleLoadDecision(adapter, storage, true);
+
+    const remaining = evaluateFlexibleLoadRequest(adapter, {
+      key: 'thermal:field', app: 'thermal', requestedW: 50000, currentActualW: 0, phaseCount: 3,
+    });
+    assert.strictEqual(remaining.allowedW, 19800);
+    assert.strictEqual(remaining.binding, 'grid');
+  }
+
   // 4) §14a-Netzcap und ein separat bestätigter EOS-Safety-Stop bleiben getrennte harte Verträge.
   {
     const para = {

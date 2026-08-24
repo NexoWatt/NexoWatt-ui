@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:b2811f6215a831ac331ccc6afb8025071ae640e952c64c56136f6802911d1e0e
+ * Quell-Hash: sha256:64c116b29ab8ea657a0457f875a0bbdbb6ac7e18c367f73eabd5ca77d6abc8b9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1922,21 +1922,12 @@ class CoreLimitsModule extends BaseModule {
         const thermalEnabled = cfg.enableThermalControl === true;
         const heatingRodEnabled = cfg.enableHeatingRodControl === true;
 
-        // Der Core läuft vor den Verbrauchermodulen und verwendet deshalb deren
-        // zuletzt veröffentlichten Ist-/Intentstand aus dem vorherigen EMS-Tick.
-        // Diese Werte dürfen aber nicht unbegrenzt weiterleben: Ein alter EVCS-
-        // oder Thermikwert könnte sonst nachts bzw. nach einer Deaktivierung ein
-        // künstliches PV-Potential rekonstruieren. Das Fenster ist bewusst länger
-        // als ein normaler Modultick, bleibt aber klar endlich.
+        // Der Core nutzt den letzten Ist-/Intentstand der später laufenden Verbraucher.
+        // Das begrenzte Frischefenster verhindert Ghost-Lasten nach Deaktivierung.
         const flexibleFlowMaxAgeMs = Math.max(staleMs * 3, 45000);
-        const evcsUsedRawW = Math.max(0, this._readCacheNumberFresh([
-            'chargingManagement.control.usedW',
-            'evcs.totalPowerW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
-        const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh([
-            'chargingManagement.control.pvEvcsPhysicalPvManagedW',
-            'chargingManagement.control.pvEvcsUsedW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsUsedRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.usedW', 'evcs.totalPowerW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsActualRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.actualW', 'chargingManagement.summary.totalPowerW', 'evcs.totalPowerW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.pvEvcsPhysicalPvManagedW', 'chargingManagement.control.pvEvcsUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
         const thermalRuntimeW = this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null);
         const heatingRodRuntimeW = this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null);
         const thermalUsedRawW = Math.max(0, Number.isFinite(Number(thermalRuntimeW))
@@ -1945,36 +1936,22 @@ class CoreLimitsModule extends BaseModule {
         const heatingRodUsedRawW = Math.max(0, Number.isFinite(Number(heatingRodRuntimeW))
             ? Number(heatingRodRuntimeW)
             : (this._readCacheNumberFresh(['heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0));
+        const thermalActualRawW = Math.max(0, this._readCacheNumberFresh(['thermal.summary.appliedTotalW', 'thermal.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const heatingRodActualRawW = Math.max(0, this._readCacheNumberFresh(['heatingRod.summary.currentHeatingRodW', 'heatingRod.summary.appliedTotalW', 'heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
 
-        // Only active EMS-controlled apps may reserve central budget. Disabled apps can
-        // still have old summary states from before a restart/update; those must not
-        // create ghost reservations or reduce remainingPvW.
+        // Nur aktive EMS-Apps dürfen alte Runtimewerte in Budget/Diagnose übernehmen.
         const evcsUsedW = evcsEnabled ? evcsUsedRawW : 0;
+        const evcsActualW = evcsEnabled ? evcsActualRawW : 0;
         const evcsPvUsedW = evcsEnabled ? evcsPvUsedRawW : 0;
-        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0;
-        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
+        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0, thermalActualW = thermalEnabled ? thermalActualRawW : 0;
+        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0, heatingRodActualW = heatingRodEnabled ? heatingRodActualRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
+        const flexActualW = Math.max(0, evcsActualW + thermalActualW + heatingRodActualW), storageControlledChargeW = storageControlEnabled ? storageChargeW : 0;
+        const currentControlledLoadW = Math.max(0, flexActualW + storageControlledChargeW);
 
-        // 0.8.63: PV-Budget darf nie durch alte/fremde flexible Lasten oder
-        // Batterieentladung künstlich entstehen. Vorher konnte bei PV = 0 W und
-        // aktiver EVCS-Reservierung ein positiver PV-Budgetwert entstehen, weil
-        // `flexUsedW - storageDischargeW` als rekonstruierter PV-Überschuss
-        // gewertet wurde. Das ist für Bestandsanlagen gefährlich: PV-Budget muss
-        // physikalisch durch frische PV-Erzeugung gedeckelt sein.
-        //
-        // Rohdiagnose bleibt erhalten, aber das wirksame PV-Budget wird auf die
-        // aktuelle PV-Erzeugung begrenzt. Damit gilt:
-        // PV = 0 W  => PV Budget raw/effective = 0 W
-        // EVCS/Speicher-Reservierungen bleiben Gesamtbudget-/Prioritätsdaten,
-        // erzeugen aber kein PV-Budget mehr.
-        // Signierter NVP statt nur Export: Bei Netzbezug muss der importierte
-        // Anteil vom rekonstruierten PV-Budget abgezogen werden. Sonst kann z. B.
-        // eine bereits zu hohe Speicherladung das Budget selbst kuenstlich aufblasen.
-        // Für die physikalische PV-Rekonstruktion darf nicht die reine
-        // Budgetreservierung (`usedW`) verwendet werden. Eine wartende Wallbox kann
-        // bereits PV-Priorität reservieren, ohne real Leistung zu beziehen. Nur der
-        // gemessene bzw. über den letzten Setpoint plausibilisierte EVCS-PV-Fluss
-        // (`pvEvcsUsedW`) darf zum NVP zurückgerechnet werden.
+        // Physikalisches PV-Budget: frische PV begrenzt die NVP-Rekonstruktion.
+        // Reservierungen erzeugen kein PV-Potential; nur realer/plausibilisierter
+        // EVCS-PV-Fluss zählt. Netzbezug wird über den signierten NVP abgezogen.
         const pvFlexUsedW = Math.max(0, evcsPvUsedW + thermalUsedW + heatingRodUsedW);
         const pvBudgetFlowRawW = computePvBudgetFlowRawW({
             gridW: gridControlW,
@@ -2089,15 +2066,16 @@ class CoreLimitsModule extends BaseModule {
 
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
         const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
-        // 0.8.61: Zentrales Gate A konservativ klemmen. Die alte Anzeigeformel
-        // `gridLimit - Netz + flexible Lasten` ist als Rohdiagnose nützlich,
-        // darf aber das wirksame Netzbudget nicht über das Anschlusslimit heben.
+        // RC78: reine Bezugsgrenze bei signiertem NVP (Import +, Export -).
+        // Gesamtziel = reale geregelte Istlast + Limit - NVP; Reservierungen werden
+        // erst danach abgezogen. Überbezug erzwingt dadurch weiterhin Lastabwurf.
+        const gridIncrementHeadroomW = gridMeasurementUsable
+            ? (gridLimitW > 0 ? gridLimitW - gridControlW : Number.POSITIVE_INFINITY)
+            : 0;
         const gridHeadroomRawW = gridMeasurementUsable
-            ? (gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY)
+            ? (gridLimitW > 0 ? Math.max(0, currentControlledLoadW + gridIncrementHeadroomW) : Number.POSITIVE_INFINITY)
             : 0;
-        const gridHeadroomW = gridMeasurementUsable
-            ? (gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY)
-            : 0;
+        const gridHeadroomW = gridHeadroomRawW;
         const peakHighLevelCapW = coreSnapshot && coreSnapshot.peak && isFiniteNumber(coreSnapshot.peak.budgetW)
             ? Math.max(0, Number(coreSnapshot.peak.budgetW))
             : Number.POSITIVE_INFINITY;
@@ -2161,10 +2139,16 @@ class CoreLimitsModule extends BaseModule {
                 storageChargeW: roundW(storageChargeW),
                 storageDischargeW: roundW(storageDischargeW),
                 evcsUsedW: roundW(evcsUsedW),
+                evcsActualW: roundW(evcsActualW),
                 evcsPvUsedW: roundW(evcsPvUsedW),
                 thermalUsedW: roundW(thermalUsedW),
+                thermalActualW: roundW(thermalActualW),
                 heatingRodUsedW: roundW(heatingRodUsedW),
+                heatingRodActualW: roundW(heatingRodActualW),
                 flexUsedW: roundW(flexUsedW),
+                flexActualW: roundW(flexActualW),
+                storageControlledChargeW: roundW(storageControlledChargeW),
+                currentControlledLoadW: roundW(currentControlledLoadW),
                 pvFlexUsedW: roundW(pvFlexUsedW),
                 pvReserveW: roundW(pvReserveW),
                 pvBudgetFlowRawW: roundW(pvBudgetFlowRawW),
@@ -2184,6 +2168,8 @@ class CoreLimitsModule extends BaseModule {
                     measurementStatus: gridMeasurementStatus,
                     measurementSource: gridMeasurementSource,
                     measurementReason: gridMeasurementReason,
+                    incrementHeadroomW: Number.isFinite(gridIncrementHeadroomW) ? roundW(gridIncrementHeadroomW) : null,
+                    currentControlledLoadW: roundW(currentControlledLoadW),
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
                     headroomRawW: Number.isFinite(gridHeadroomRawW) ? roundW(gridHeadroomRawW) : null,
                 },
@@ -2225,13 +2211,13 @@ class CoreLimitsModule extends BaseModule {
             },
             consumers: (() => {
                 const out = {};
-                if (evcsUsedW > 0 || evcsPvUsedW > 0) {
+                if (evcsUsedW > 0 || evcsActualW > 0 || evcsPvUsedW > 0) {
                     out.evcs = { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' };
                 }
-                if (thermalUsedW > 0) {
+                if (thermalUsedW > 0 || thermalActualW > 0) {
                     out.thermal = { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' };
                 }
-                if (heatingRodUsedW > 0) {
+                if (heatingRodUsedW > 0 || heatingRodActualW > 0) {
                     out.heatingRod = { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' };
                 }
                 return out;
@@ -2277,9 +2263,12 @@ class CoreLimitsModule extends BaseModule {
             },
             consumers: {
                 evcsUsedW,
+                evcsActualW,
                 evcsPvUsedW,
                 thermalUsedW,
+                thermalActualW,
                 heatingRodUsedW,
+                heatingRodActualW,
             },
             allocation: {
                 enabled: allocationEnabled,

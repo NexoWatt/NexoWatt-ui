@@ -536,7 +536,8 @@ function verifyStaticAndGeneratedContracts() {
     assert(source.includes("['open-meteo', 'openmeteo', 'weather']"));
   }
   for (const source of [serviceWorkerTs, serviceWorkerJs]) {
-    assert(source.includes("const CACHE_NAME = 'nexowatt-cache-v483'"));
+    const cacheMatch = source.match(/const CACHE_NAME = 'nexowatt-cache-v(\d+)'/);
+    assert(cacheMatch && Number(cacheMatch[1]) >= 483, 'Service-Worker-Cache muss mindestens RC77/v483 sein');
   }
   assert(settingsHtml.includes('/static/forecast-settings.js?v=0.8.202-rc77'));
 

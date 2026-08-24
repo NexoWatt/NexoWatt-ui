@@ -1,3 +1,13 @@
+## 0.8.203 - 2026-08-24
+
+- RC78 korrigiert die Netzanschluss-Budgetierung auf eine reine Bezugsgrenze. Der NVP bleibt durchgehend signiert: Netzbezug ist positiv, Netzeinspeisung negativ und erhöht die nutzbare Lastfreigabe.
+- Das zentrale EMS-Gesamtzielbudget verwendet jetzt `aktuelle geregelte Istlast + Bezugsgrenze − signierter NVP`. Reservierungen und Sollwerte werden nicht als Istleistung zurückaddiert, sondern anschließend geordnet vom Budget abgezogen.
+- Der Feldfall mit 30,0 kW Bezugsgrenze und 10,1 kW Einspeisung liefert damit 40,1 kW Gesamtbudget und nach 11,0 kW EVCS- sowie 9,3 kW Speicherreservierung korrekt 19,8 kW Restbudget.
+- Das direkte EVCS-Netzcap und die finale Safety-Prüfung unmittelbar vor dem Hardware-Write verwenden denselben Import-only-Vertrag. Parallel geplante Verbraucher können den gemeinsamen Headroom nicht doppelt nutzen.
+- Bereits überschrittener Netzbezug wird weiterhin aktiv abgebaut: Bei 32 kW Bezug, 30 kW Grenze und 10 kW laufender geregelter Last sinkt das zulässige Gesamtziel auf 8 kW.
+- Fremd gesteuerte Speicherladung wird nur dann als EOS-Istlast zurückaddiert, wenn der EOS-Speicherwriter tatsächlich autorisiert ist. Stations-, Geräte-, Phasen-, §14a-, Parkregler- und Single-Writer-Grenzen bleiben übergeordnet.
+- Diagnose und UI benennen das EVCS-Gate jetzt eindeutig als `NVP / Importgrenze`. Ein eigener RC78-Regressionsverbund prüft Core-Budget, Reservierungsfolge, EVCS-Gate, Überbezugsabbau und den finalen Safety-Writer.
+
 ## 0.8.202 - 2026-08-24
 
 - RC77 behebt die eigentliche Ursache der im Kundenfrontend dauerhaft fehlenden PV-Prognosewerte: `forecast.openMeteoPv.*` und `forecast.pv.*` werden vor dem ersten Providerabruf abonniert, beim Adapterstart aus ioBroker in den internen UI-`stateCache` eingelesen und anschließend über `/api/state` sowie SSE zuverlässig veröffentlicht.

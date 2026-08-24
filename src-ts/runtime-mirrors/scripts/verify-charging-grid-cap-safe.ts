@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1613a427fc8ce7af36a280c88b0809acafaa2e6510b9f845f31cf8e7c14124d5
+ * Original-Hash: dab4f523f4878c1869ed8172267a0ac0a5556f865754ce051739611d5d705252
  */
 
 /**
@@ -30,6 +30,7 @@
  */
 
 'use strict';
+
 const fs = require('fs');
 /**
  * Code-Teil: read
@@ -42,7 +43,7 @@ const fs = require('fs');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(p){ return fs.readFileSync(p,'utf8'); }
+function read(p) { return fs.readFileSync(p, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -54,7 +55,13 @@ function read(p){ return fs.readFileSync(p,'utf8'); }
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`[charging-grid-cap-safe] Missing in ${file}: ${needle}`); process.exit(1); } }
+function must(file, needle) {
+  const source = read(file);
+  if (!source.includes(needle)) {
+    console.error(`[charging-grid-cap-safe] Missing in ${file}: ${needle}`);
+    process.exit(1);
+  }
+}
 /**
  * Code-Teil: mustNot
  *
@@ -66,20 +73,38 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[charging-grid-cap-safe] Forbidden in ${file}: ${needle}`); process.exit(1); } }
+function mustNot(file, needle) {
+  const source = read(file);
+  if (source.includes(needle)) {
+    console.error(`[charging-grid-cap-safe] Forbidden in ${file}: ${needle}`);
+    process.exit(1);
+  }
+}
+
 const pkg = JSON.parse(read('package.json'));
-if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) { console.error('[version] invalid SemVer'); process.exit(1); }
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW -');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'derived.core.building.loadRestW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW))');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridLocalSupportW = Math.max(0, gridBaseLoadW - Math.max(0, gridBaseLoadRawW))');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'chargingManagement.control.gridLocalSupportW');
+if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) {
+  console.error('[version] invalid SemVer');
+  process.exit(1);
+}
+
+const ts = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
+const js = 'ems/modules/charging-management.js';
+const uiTs = 'src-ts/runtime-executables/www/ems-apps.ts';
+const uiJs = 'www/ems-apps.js';
+
+for (const file of [ts, js]) {
+  must(file, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
+  must(file, 'derived.core.building.loadRestW');
+  must(file, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)');
+  must(file, 'gridIncrementHeadroomW = gridImportLimitEffW - gridW');
+  must(file, 'gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)');
+  mustNot(file, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
+}
+
+must(ts, 'chargingManagement.control.gridLocalSupportW');
 must('src-ts/runtime-executables/main.ts', 'gridLocalSupportW: await getOwn');
-must('src-ts/runtime-executables/www/ems-apps.ts', 'EVCS Cap (Netz sicher)');
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Lokale Deckung');
-must('ems/modules/charging-management.js', 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
-must('www/ems-apps.js', 'EVCS Cap (Netz sicher)');
-// Make sure the old optimistic 1e12 grid cap expression is not the active formula.
-mustNot('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, 1e12)');
-console.log('OK: EVCS grid cap uses building load when available, is clamped to effective grid import limit and local support is diagnostic-only.');
+must(uiTs, 'EVCS Cap (NVP / Importgrenze)');
+must(uiTs, 'Lokale Deckung');
+must(uiJs, 'EVCS Cap (NVP / Importgrenze)');
+
+console.log('OK: EVCS grid cap uses signed NVP plus fresh EVCS actual power; export increases import-only headroom and reservations stay excluded.');

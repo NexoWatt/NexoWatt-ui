@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:fb22bc68860a613c70c76d0a6dde8d8a18ba6d9ed279393ea29788a6bd89df9e
+ * Quell-Hash: sha256:e69593026d71ebedac0b244ec7615c2a49e9ff93e6bf733763d72f94f5e02931
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -8877,24 +8877,16 @@ if (components.length) {
         let gridBaseLoadW = null;
         let gridBaseLoadRawW = null;
         let gridLocalSupportW = null;
+        let gridIncrementHeadroomW = null;
         let gridCapEvcsW = null;
         let gridCapBinding = false;
         const budgetBeforeGridCaps = budgetW;
         const budgetModeBeforeGridCaps = String(effectiveBudgetMode || budgetMode || 'unlimited');
 
         if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
-            // 0.8.61: load-management grid cap regression guard.
-            //
-            // A battery discharge can make the old approximation `gridW - EVCS`
-            // negative while the building still consumes power. Using that negative
-            // value increased the visible EVCS cap above the physical connection
-            // (e.g. 40 kW -> 50.94 kW). That is unsafe and confusing.
-            //
-            // Prefer the central energy-flow building load without EV/extras when it
-            // is fresh. That keeps the cap aligned with "Netzanschluss minus realer
-            // Verbrauch". If the central value is not available, fall back to the
-            // grid equation but clamp the effective base load to >= 0. In every case
-            // the cap is hard-clamped to the effective grid limit.
+            // RC78: reine Bezugsgrenze bei signiertem NVP. Das EVCS-Gesamtcap
+            // addiert nur frische EVCS-Istleistung zu `Importlimit - NVP`;
+            // Reservierungen bleiben außen vor, Überbezug reduziert aktive Last.
             const gridEvcsActualForCapW = Number.isFinite(totalFreshActualPowerW) ? Math.max(0, Number(totalFreshActualPowerW)) : 0;
             const gridEvcsReserveIgnoredForCapW = Math.max(0, (Number.isFinite(totalPowerW) ? Number(totalPowerW) : 0) - gridEvcsActualForCapW);
             // Wichtig: Für das Netzanschluss-Gate zählt nur frisch gemessene EVCS-Leistung.
@@ -8925,15 +8917,17 @@ if (components.length) {
                 }
             } catch (_eBaseLoad) {}
             gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW)) ? Math.max(0, Number(derivedBaseLoadW)) : Math.max(0, gridBaseLoadRawW);
-            gridLocalSupportW = Math.max(0, gridBaseLoadW - Math.max(0, gridBaseLoadRawW));
-            // Max EVCS total to keep grid import under limit: baseLoad + EVCS <= limit.
-            // Hard cap: EVCS Cap (Netz sicher) must stay <= effective grid limit.
-            gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW);
+            gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW);
+            gridIncrementHeadroomW = gridImportLimitEffW - gridW;
+            // Gesamtziel-Cap = aktuell gemessene EVCS-Leistung + zulässige
+            // zusätzliche Laständerung bis zur reinen Importgrenze.
+            gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12);
             try {
                 budgetDebug = budgetDebug || {};
-                budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-fresh-evcs-clamped';
+                budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-fresh-evcs';
                 budgetDebug.gridEvcsActualForCapW = gridEvcsActualForCapW;
                 budgetDebug.gridEvcsReserveIgnoredForCapW = gridEvcsReserveIgnoredForCapW;
+                budgetDebug.gridIncrementHeadroomW = gridIncrementHeadroomW;
             } catch (_eBaseLoadDebug) {}
 
             // Apply cap (always)
@@ -9113,6 +9107,7 @@ if (components.length) {
             budgetDebug.gridBaseLoadW = (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : null;
             budgetDebug.gridBaseLoadRawW = (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : null;
             budgetDebug.gridLocalSupportW = (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null;
+            budgetDebug.gridIncrementHeadroomW = (typeof gridIncrementHeadroomW === 'number' && Number.isFinite(gridIncrementHeadroomW)) ? gridIncrementHeadroomW : null;
             budgetDebug.gridCapEvcsW = (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null;
             budgetDebug.gridCapBinding = !!gridCapBinding;
             budgetDebug.infrastructureRawCapacityW = Math.round(Math.max(0, Number(cfg.infrastructureRawCapacityW) || 0));

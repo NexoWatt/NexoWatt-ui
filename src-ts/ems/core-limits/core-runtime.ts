@@ -169,9 +169,12 @@ export interface CoreRuntimeStorageInput {
 
 export interface CoreRuntimeConsumerInput {
   evcsUsedW?: unknown;
+  evcsActualW?: unknown;
   evcsPvUsedW?: unknown;
   thermalUsedW?: unknown;
+  thermalActualW?: unknown;
   heatingRodUsedW?: unknown;
+  heatingRodActualW?: unknown;
 }
 
 export interface CoreRuntimeSnapshotInput {
@@ -215,10 +218,16 @@ export interface CoreRuntimeBudgetSnapshot {
     storageChargeW: number;
     storageDischargeW: number;
     evcsUsedW: number;
+    evcsActualW: number;
     evcsPvUsedW: number;
     thermalUsedW: number;
+    thermalActualW: number;
     heatingRodUsedW: number;
+    heatingRodActualW: number;
     flexUsedW: number;
+    flexActualW: number;
+    storageControlledChargeW: number;
+    currentControlledLoadW: number;
     pvFlexUsedW: number;
     pvReserveW: number;
     pvBudgetFlowRawW: number;
@@ -238,6 +247,8 @@ export interface CoreRuntimeBudgetSnapshot {
       measurementStatus: string;
       measurementSource: string;
       measurementReason: string;
+      incrementHeadroomW: number | null;
+      currentControlledLoadW: number;
       headroomW: number | null;
       headroomRawW: number | null;
     };
@@ -502,12 +513,13 @@ export function prepareCoreRuntimeSnapshotInput(
   const pvSource = text(pvRaw.measuredSource);
   const storageChargeW = positive(storageRaw.chargeW);
   const storageDischargeW = positive(storageRaw.dischargeW);
-  const consumerValues = [
-    positive(consumersRaw.evcsUsedW),
-    positive(consumersRaw.evcsPvUsedW),
-    positive(consumersRaw.thermalUsedW),
-    positive(consumersRaw.heatingRodUsedW),
-  ];
+  const evcsUsedW = positive(consumersRaw.evcsUsedW);
+  const evcsActualW = positive(consumersRaw.evcsActualW);
+  const evcsPvUsedW = positive(consumersRaw.evcsPvUsedW);
+  const thermalUsedW = positive(consumersRaw.thermalUsedW);
+  const thermalActualW = positive(consumersRaw.thermalActualW);
+  const heatingRodUsedW = positive(consumersRaw.heatingRodUsedW);
+  const heatingRodActualW = positive(consumersRaw.heatingRodActualW);
 
   const input: CoreRuntimeSnapshotInput = {
     ts: finiteOrNull(rawInput.ts) ?? Date.now(),
@@ -545,10 +557,13 @@ export function prepareCoreRuntimeSnapshotInput(
       authorityReason: text(storageRaw.authorityReason),
     },
     consumers: {
-      evcsUsedW: consumerValues[0],
-      evcsPvUsedW: consumerValues[1],
-      thermalUsedW: consumerValues[2],
-      heatingRodUsedW: consumerValues[3],
+      evcsUsedW,
+      evcsActualW,
+      evcsPvUsedW,
+      thermalUsedW,
+      thermalActualW,
+      heatingRodUsedW,
+      heatingRodActualW,
     },
     allocation: {
       enabled: allocationRaw.enabled !== false,
@@ -579,7 +594,11 @@ export function prepareCoreRuntimeSnapshotInput(
       storageTopology: text(storageRaw.topology, 'none'),
       storageWriterActive: bool(storageRaw.writerActive, false),
       storageAuthorityReason: text(storageRaw.authorityReason),
-      consumerCount: consumerValues.filter((value) => value > 0).length,
+      consumerCount: [
+        evcsUsedW > 0 || evcsActualW > 0 || evcsPvUsedW > 0,
+        thermalUsedW > 0 || thermalActualW > 0,
+        heatingRodUsedW > 0 || heatingRodActualW > 0,
+      ].filter(Boolean).length,
     },
   };
 }
@@ -800,11 +819,18 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   const gridExportW = Math.max(0, -gridW);
   const storageChargeW = positive(storage.chargeW);
   const storageDischargeW = positive(storage.dischargeW);
+  const storageWriterActive = bool(storage.writerActive, false);
   const evcsUsedW = positive(consumers.evcsUsedW);
+  const evcsActualW = positive(consumers.evcsActualW);
   const evcsPvUsedW = positive(consumers.evcsPvUsedW);
   const thermalUsedW = positive(consumers.thermalUsedW);
+  const thermalActualW = positive(consumers.thermalActualW);
   const heatingRodUsedW = positive(consumers.heatingRodUsedW);
+  const heatingRodActualW = positive(consumers.heatingRodActualW);
   const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
+  const flexActualW = Math.max(0, evcsActualW + thermalActualW + heatingRodActualW);
+  const storageControlledChargeW = storageWriterActive ? storageChargeW : 0;
+  const currentControlledLoadW = Math.max(0, flexActualW + storageControlledChargeW);
   const pvFlexUsedW = Math.max(0, evcsPvUsedW + thermalUsedW + heatingRodUsedW);
   const pvPowerW = positive(pv.measuredW);
   const pvReserveW = positive(pv.reserveW);
@@ -844,12 +870,19 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   });
 
   const gridLimitW = positive(grid.importLimitW);
+  // RC78 / 0.8.203: Die Anschlussgrenze gilt ausschließlich für Bezug.
+  // `gridW` bleibt deshalb signiert. Das Gesamtziel-Budget besteht aus der
+  // bereits real laufenden, EMS-gesteuerten Last plus der noch möglichen
+  // Änderung bis zur Importgrenze. Einspeisung (gridW < 0) erhöht folgerichtig
+  // die nutzbare Lastfreigabe; Überbezug erzeugt einen negativen Inkrementwert
+  // und reduziert bestehende flexible Lasten.
+  const gridIncrementHeadroomW = gridUsable
+    ? (gridLimitW > 0 ? gridLimitW - gridW : Number.POSITIVE_INFINITY)
+    : 0;
   const gridHeadroomRawW = gridUsable
-    ? (gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY)
+    ? (gridLimitW > 0 ? Math.max(0, currentControlledLoadW + gridIncrementHeadroomW) : Number.POSITIVE_INFINITY)
     : 0;
-  const gridHeadroomW = gridUsable
-    ? (gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY)
-    : 0;
+  const gridHeadroomW = gridHeadroomRawW;
   const highLevelRaw = finiteOrNull(grid.highLevelCapW);
   const highLevelCapW = highLevelRaw === null ? Number.POSITIVE_INFINITY : Math.max(0, highLevelRaw);
   const totalBudgetW = gridUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
@@ -862,13 +895,13 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   if (!bindings.length) bindings.push('unlimited');
 
   const outConsumers: Record<string, CoreRuntimeBudgetConsumer> = {};
-  if (evcsUsedW > 0 || evcsPvUsedW > 0) {
+  if (evcsUsedW > 0 || evcsActualW > 0 || evcsPvUsedW > 0) {
     outConsumers.evcs = { priority: 100, usedW: round(evcsUsedW), pvUsedW: round(evcsPvUsedW), mode: 'charging' };
   }
-  if (thermalUsedW > 0) {
+  if (thermalUsedW > 0 || thermalActualW > 0) {
     outConsumers.thermal = { priority: 200, usedW: round(thermalUsedW), pvUsedW: round(thermalUsedW), mode: 'pvAuto' };
   }
-  if (heatingRodUsedW > 0) {
+  if (heatingRodUsedW > 0 || heatingRodActualW > 0) {
     outConsumers.heatingRod = { priority: 300, usedW: round(heatingRodUsedW), pvUsedW: round(heatingRodUsedW), mode: 'pvAuto' };
   }
 
@@ -890,10 +923,16 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
       storageChargeW: round(storageChargeW),
       storageDischargeW: round(storageDischargeW),
       evcsUsedW: round(evcsUsedW),
+      evcsActualW: round(evcsActualW),
       evcsPvUsedW: round(evcsPvUsedW),
       thermalUsedW: round(thermalUsedW),
+      thermalActualW: round(thermalActualW),
       heatingRodUsedW: round(heatingRodUsedW),
+      heatingRodActualW: round(heatingRodActualW),
       flexUsedW: round(flexUsedW),
+      flexActualW: round(flexActualW),
+      storageControlledChargeW: round(storageControlledChargeW),
+      currentControlledLoadW: round(currentControlledLoadW),
       pvFlexUsedW: round(pvFlexUsedW),
       pvReserveW: round(pvReserveW),
       pvBudgetFlowRawW: round(pvBudgetFlowRawW),
@@ -913,6 +952,8 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
         measurementStatus: text(grid.status),
         measurementSource: text(grid.source),
         measurementReason: text(grid.reason),
+        incrementHeadroomW: Number.isFinite(gridIncrementHeadroomW) ? round(gridIncrementHeadroomW) : null,
+        currentControlledLoadW: round(currentControlledLoadW),
         headroomW: Number.isFinite(gridHeadroomW) ? round(gridHeadroomW) : null,
         headroomRawW: Number.isFinite(gridHeadroomRawW) ? round(gridHeadroomRawW) : null,
       },
@@ -934,7 +975,7 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
         chargeW: round(storageChargeW),
         dischargeW: round(storageDischargeW),
         topology: text(storage.topology, 'none'),
-        writerActive: bool(storage.writerActive, false),
+        writerActive: storageWriterActive,
         authorityReason: text(storage.authorityReason),
       },
       pvAllocation,
@@ -1535,10 +1576,16 @@ export function compareCoreRuntimeBudgetSnapshots(
     'raw.storageChargeW',
     'raw.storageDischargeW',
     'raw.evcsUsedW',
+    'raw.evcsActualW',
     'raw.evcsPvUsedW',
     'raw.thermalUsedW',
+    'raw.thermalActualW',
     'raw.heatingRodUsedW',
+    'raw.heatingRodActualW',
     'raw.flexUsedW',
+    'raw.flexActualW',
+    'raw.storageControlledChargeW',
+    'raw.currentControlledLoadW',
     'raw.pvFlexUsedW',
     'raw.pvReserveW',
     'raw.pvBudgetFlowRawW',
@@ -1547,6 +1594,8 @@ export function compareCoreRuntimeBudgetSnapshots(
     'gates.grid.importLimitW',
     'gates.grid.importW',
     'gates.grid.exportW',
+    'gates.grid.incrementHeadroomW',
+    'gates.grid.currentControlledLoadW',
     'gates.grid.headroomW',
     'gates.grid.headroomRawW',
     'gates.pv.rawW',

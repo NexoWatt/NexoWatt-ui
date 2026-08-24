@@ -24,8 +24,8 @@ const prepared = mirror.prepareCoreRuntimeSnapshotInput({
   ts: 123,
   grid: { netW: '0', usable: true, status: 'fresh', source: 'signed', measurementAgeMs: '250', importLimitW: '40000' },
   pv: { measuredW: '12000', measuredFresh: true, measuredSource: 'derived.core.pv.totalW', reserveW: 500 },
-  storage: { chargeW: '3000', dischargeW: 0, eligible: true, maxChargeW: 10000, socPct: 50, maxSocPct: 100 },
-  consumers: { evcsUsedW: '4000', evcsPvUsedW: 3000, thermalUsedW: 0, heatingRodUsedW: 0 },
+  storage: { chargeW: '3000', dischargeW: 0, writerActive: true, eligible: true, maxChargeW: 10000, socPct: 50, maxSocPct: 100 },
+  consumers: { evcsUsedW: '4000', evcsActualW: 2500, evcsPvUsedW: 3000, thermalUsedW: 0, thermalActualW: 0, heatingRodUsedW: 0, heatingRodActualW: 0 },
   allocation: { enabled: true, mode: 'both', evcsSharePct: 80 },
 });
 assert.strictEqual(prepared.ok, true);
@@ -33,7 +33,7 @@ assert.strictEqual(prepared.source, 'ts-core-runtime-input-v2');
 assert.strictEqual(prepared.input.grid.netW, 0, '0 W muss bei der Quellenübergabe erhalten bleiben');
 assert.strictEqual(prepared.diagnostics.gridSource, 'signed');
 assert.strictEqual(prepared.diagnostics.pvFresh, true);
-assert.strictEqual(prepared.diagnostics.consumerCount, 2);
+assert.strictEqual(prepared.diagnostics.consumerCount, 1, 'EVCS-Ist, Reservierung und PV-Anteil zählen als ein Verbraucher');
 
 const snapshot = mirror.buildCoreRuntimeBudgetSnapshot({
   ts: 456,
@@ -54,8 +54,8 @@ const snapshot = mirror.buildCoreRuntimeBudgetSnapshot({
     measuredSource: 'derived.core.pv.totalW',
     reserveW: 500,
   },
-  storage: { chargeW: 3000, dischargeW: 0, eligible: true, maxChargeW: 10000, socPct: 50, maxSocPct: 100 },
-  consumers: { evcsUsedW: 4000, evcsPvUsedW: 3000, thermalUsedW: 0, heatingRodUsedW: 0 },
+  storage: { chargeW: 3000, dischargeW: 0, writerActive: true, eligible: true, maxChargeW: 10000, socPct: 50, maxSocPct: 100 },
+  consumers: { evcsUsedW: 4000, evcsActualW: 2500, evcsPvUsedW: 3000, thermalUsedW: 0, thermalActualW: 0, heatingRodUsedW: 0, heatingRodActualW: 0 },
   allocation: { enabled: true, mode: 'both', evcsSharePct: 80 },
   forecast: { usable: true, nowW: 25000 },
   tariff: { active: false, dischargeAllowed: true },

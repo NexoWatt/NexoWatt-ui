@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0f874d0debb2e4438a3422f5fd88d8b7776f62ccef2cbe1c3815cf997cf5f2c7
+ * Original-Hash: 1654370adab85a2b74f028db9a09e0638b8881bb580bd716c7eaea55ad4bdfdc
  */
 
 /**
@@ -1922,6 +1922,11 @@ class CoreLimitsModule extends BaseModule {
             'chargingManagement.control.usedW',
             'evcs.totalPowerW',
         ], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsActualRawW = Math.max(0, this._readCacheNumberFresh([
+            'chargingManagement.control.actualW',
+            'chargingManagement.summary.totalPowerW',
+            'evcs.totalPowerW',
+        ], flexibleFlowMaxAgeMs, 0) || 0);
         const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh([
             'chargingManagement.control.pvEvcsPhysicalPvManagedW',
             'chargingManagement.control.pvEvcsUsedW',
@@ -1934,15 +1939,30 @@ class CoreLimitsModule extends BaseModule {
         const heatingRodUsedRawW = Math.max(0, Number.isFinite(Number(heatingRodRuntimeW))
             ? Number(heatingRodRuntimeW)
             : (this._readCacheNumberFresh(['heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0));
+        const thermalActualRawW = Math.max(0, this._readCacheNumberFresh([
+            'thermal.summary.appliedTotalW',
+            'thermal.summary.budgetUsedW',
+        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const heatingRodActualRawW = Math.max(0, this._readCacheNumberFresh([
+            'heatingRod.summary.currentHeatingRodW',
+            'heatingRod.summary.appliedTotalW',
+            'heatingRod.summary.budgetUsedW',
+        ], flexibleFlowMaxAgeMs, 0) || 0);
 
         // Only active EMS-controlled apps may reserve central budget. Disabled apps can
         // still have old summary states from before a restart/update; those must not
         // create ghost reservations or reduce remainingPvW.
         const evcsUsedW = evcsEnabled ? evcsUsedRawW : 0;
+        const evcsActualW = evcsEnabled ? evcsActualRawW : 0;
         const evcsPvUsedW = evcsEnabled ? evcsPvUsedRawW : 0;
         const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0;
+        const thermalActualW = thermalEnabled ? thermalActualRawW : 0;
         const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
+        const heatingRodActualW = heatingRodEnabled ? heatingRodActualRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
+        const flexActualW = Math.max(0, evcsActualW + thermalActualW + heatingRodActualW);
+        const storageControlledChargeW = storageControlEnabled ? storageChargeW : 0;
+        const currentControlledLoadW = Math.max(0, flexActualW + storageControlledChargeW);
 
         // Das physikalische PV-Budget wird aus dem signierten NVP rekonstruiert.
         // Ein positiver NVP-Wert ist Netzbezug und muss abgezogen werden; sonst
@@ -1986,7 +2006,17 @@ class CoreLimitsModule extends BaseModule {
 
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
         const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
-        const gridHeadroomW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        // RC78 / 0.8.203: Die Anschlussgrenze ist eine reine Bezugsgrenze.
+        // Der signierte NVP bleibt deshalb erhalten: Import positiv, Einspeisung
+        // negativ. Das Gesamtziel-Budget addiert nur real laufende, EMS-gesteuerte
+        // Lasten; Reservierungen duerfen den Headroom nicht selbst erzeugen.
+        const gridIncrementHeadroomW = gridLimitW > 0
+            ? gridLimitW - gridW
+            : Number.POSITIVE_INFINITY;
+        const gridHeadroomRawW = gridLimitW > 0
+            ? Math.max(0, currentControlledLoadW + gridIncrementHeadroomW)
+            : Number.POSITIVE_INFINITY;
+        const gridHeadroomW = gridHeadroomRawW;
         const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
             ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
             : Number.POSITIVE_INFINITY;
@@ -2033,10 +2063,16 @@ class CoreLimitsModule extends BaseModule {
                 storageChargeW: roundW(storageChargeW),
                 storageDischargeW: roundW(storageDischargeW),
                 evcsUsedW: roundW(evcsUsedW),
+                evcsActualW: roundW(evcsActualW),
                 evcsPvUsedW: roundW(evcsPvUsedW),
                 thermalUsedW: roundW(thermalUsedW),
+                thermalActualW: roundW(thermalActualW),
                 heatingRodUsedW: roundW(heatingRodUsedW),
+                heatingRodActualW: roundW(heatingRodActualW),
                 flexUsedW: roundW(flexUsedW),
+                flexActualW: roundW(flexActualW),
+                storageControlledChargeW: roundW(storageControlledChargeW),
+                currentControlledLoadW: roundW(currentControlledLoadW),
                 pvFlexUsedW: roundW(pvFlexUsedW),
                 pvReserveW: roundW(pvReserveW),
                 pvBudgetFlowRawW: roundW(pvBudgetFlowRawW),
@@ -2052,7 +2088,10 @@ class CoreLimitsModule extends BaseModule {
                     importLimitW: roundW(gridLimitW),
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
+                    incrementHeadroomW: Number.isFinite(gridIncrementHeadroomW) ? roundW(gridIncrementHeadroomW) : null,
+                    currentControlledLoadW: roundW(currentControlledLoadW),
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
+                    headroomRawW: Number.isFinite(gridHeadroomRawW) ? roundW(gridHeadroomRawW) : null,
                 },
                 pv: {
                     available: !!pvAvailable,
@@ -2084,13 +2123,13 @@ class CoreLimitsModule extends BaseModule {
             },
             consumers: (() => {
                 const out: Record<string, CoreBudgetConsumerEntry> = {};
-                if (evcsUsedW > 0 || evcsPvUsedW > 0) {
+                if (evcsUsedW > 0 || evcsActualW > 0 || evcsPvUsedW > 0) {
                     out.evcs = { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' };
                 }
-                if (thermalUsedW > 0) {
+                if (thermalUsedW > 0 || thermalActualW > 0) {
                     out.thermal = { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' };
                 }
-                if (heatingRodUsedW > 0) {
+                if (heatingRodUsedW > 0 || heatingRodActualW > 0) {
                     out.heatingRod = { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' };
                 }
                 return out;

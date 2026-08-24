@@ -38,6 +38,7 @@ const REQUIRED_COMMANDS = [
   'npm run test:rc75-pv-forecast-admin-location',
   'npm run test:rc76-pv-forecast-runtime-hardening',
   'npm run test:rc77-pv-forecast-state-cache-bridge',
+  'npm run test:rc78-import-only-grid-budget',
   'npm run test:charging-infrastructure-budget',
   'npm run test:npm-version-free-guard',
   'npm run test:npm-version-free-runtime',

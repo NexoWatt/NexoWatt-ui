@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: eafaa0e3e16384d1e215390729ddf0bf28e6b25427ba8fba59e888c886a366b3
+ * Original-Hash: 021c3469b386bbb19cc70210f34a9fc6690ab9ca6d85787257d562b10d0633ad
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -15757,7 +15757,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
       { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
       { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
-      { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'EVCS Cap (NVP / Importgrenze)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 

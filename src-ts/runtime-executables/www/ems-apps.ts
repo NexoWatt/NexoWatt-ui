@@ -15457,7 +15457,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
       { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
       { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
-      { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'EVCS Cap (NVP / Importgrenze)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 
