@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/pv-forecast.ts
- * Quell-Hash: sha256:f970e780f0564799dcb945138ca294ee083257483a7abe5321e3d132f50e64b6
+ * Quell-Hash: sha256:f53253e0d95b0aa072b8b1b08673e51df12e6f59260bedce54dd845044cfaf47
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -638,14 +638,33 @@ class PvForecastModule extends BaseModule {
    * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  _syncForecastUiCache(id, value, ts = Date.now()) {
+    try {
+      const cached = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[id] : null;
+      if (cached && Object.is(cached.value, value)) return;
+      if (this.adapter && typeof this.adapter.updateValue === 'function') {
+        this.adapter.updateValue(id, value, ts, { raw: false });
+      }
+    } catch {
+      // The ioBroker state remains authoritative if the UI cache is unavailable.
+    }
+  }
+
   async _setIfChanged(id, val) {
     const v = (val === undefined) ? null : val;
     try {
       const cur = await this.adapter.getStateAsync(id);
       const curVal = cur ? cur.val : null;
+      // Persisted forecast states may already contain the same value after an
+      // adapter restart. They still need to be primed into stateCache because
+      // the customer frontend is served from /api/state, not directly from DB.
       // eslint-disable-next-line eqeqeq
-      if (cur && curVal == v) return;
+      if (cur && curVal == v) {
+        this._syncForecastUiCache(id, v, cur.ts || Date.now());
+        return;
+      }
       await this.adapter.setStateAsync(id, v, true);
+      this._syncForecastUiCache(id, v, Date.now());
     } catch {
       // ignore
     }
@@ -676,14 +695,27 @@ class PvForecastModule extends BaseModule {
         return entry && entry.value !== undefined && entry.value !== null ? entry.value : fallback;
       } catch (_e) { return fallback; }
     };
-    const sourceMode = String(cachedSetting('forecastSourceMode', 'auto') || 'auto').trim().toLowerCase();
-    const openMeteoEnabled = cachedSetting('openMeteoPvEnabled', false) === true;
-    const fallbackEnabled = cachedSetting('forecastFallbackToDatapoints', true) !== false;
+    const asBoolean = (value, fallback = false) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'number') return value !== 0;
+      const normalized = String(value ?? '').trim().toLowerCase();
+      if (['true', '1', 'on', 'yes', 'ja', 'an', 'active', 'enabled'].includes(normalized)) return true;
+      if (['false', '0', 'off', 'no', 'nein', 'aus', 'inactive', 'disabled'].includes(normalized)) return false;
+      return fallback;
+    };
+    const sourceRaw = String(cachedSetting('forecastSourceMode', 'auto') || 'auto').trim().toLowerCase();
+    const sourceMode = ['open-meteo', 'openmeteo', 'weather'].includes(sourceRaw)
+      ? 'open-meteo'
+      : (['datapoint', 'mapping', 'appcenter', 'app-center'].includes(sourceRaw)
+        ? 'datapoint'
+        : (['disabled', 'off', 'aus'].includes(sourceRaw) ? 'disabled' : 'auto'));
+    const openMeteoEnabled = asBoolean(cachedSetting('openMeteoPvEnabled', false), false);
+    const fallbackEnabled = asBoolean(cachedSetting('forecastFallbackToDatapoints', true), true);
     const integrated = this.adapter && this.adapter._openMeteoPvForecast && typeof this.adapter._openMeteoPvForecast === 'object'
       ? this.adapter._openMeteoPvForecast : null;
     const integratedAgeMs = integrated && Number.isFinite(Number(integrated.ts)) ? Math.max(0, now - Number(integrated.ts)) : Number.POSITIVE_INFINITY;
     const useIntegrated = sourceMode !== 'disabled' && sourceMode !== 'datapoint' && openMeteoEnabled
-      && integrated && integrated.valid === true && Array.isArray(integrated.curve) && integrated.curve.length > 0 && integratedAgeMs <= 2 * 3600000;
+      && integrated && asBoolean(integrated.valid, false) && Array.isArray(integrated.curve) && integrated.curve.length > 0 && integratedAgeMs <= 2 * 3600000;
     if (sourceMode === 'disabled') {
       const diagnostic = buildPvForecastDiagnostics({ now: 0, mappedAgeMs: 0 });
       this.adapter._pvForecast = { ts: now, valid: false, ageMs: null, source: 'disabled', planningSafetyPct: 85, confidencePct: 0, points: 0, ...diagnostic, kwhNext6h: 0, kwhNext12h: 0, kwhNext24h: 0, peakWNext24h: 0, curve: [] };

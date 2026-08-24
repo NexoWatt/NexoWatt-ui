@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 246,
+  "expectedStepCount": 247,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -248,6 +248,7 @@
     "npm run test:rc73-ems-admin-overview",
     "npm run test:rc74-pv-forecast-customer-ui",
     "npm run test:rc75-pv-forecast-admin-location",
-    "npm run test:rc76-pv-forecast-runtime-hardening"
+    "npm run test:rc76-pv-forecast-runtime-hardening",
+    "npm run test:rc77-pv-forecast-state-cache-bridge"
   ]
 }

@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.201",
+  "version": "0.8.202",
   "files": [
     {
       "path": "LICENSE",
@@ -259,6 +259,11 @@
       "sha256": "8610b416c2a941dd80ea981ea9dd9842dfe4d9b81d8fd617290973f8f4608309"
     },
     {
+      "path": "docs/RC77_PV_FORECAST_STATE_CACHE_BRIDGE_DE.md",
+      "size": 3215,
+      "sha256": "747208e36eed180f25743fd0f3ef9569033f90898c2e33daf21d20cdb09879ce"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 18385,
       "sha256": "53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd"
@@ -420,8 +425,8 @@
     },
     {
       "path": "ems/modules/pv-forecast.js",
-      "size": 41570,
-      "sha256": "36e62bfa46a6f5fa7ff440e1ddcfa21b1c050e280431324fcf3fa2246b895403"
+      "size": 43210,
+      "sha256": "150b00749e8c52433eff967e5a8099e171a0a7cb5ccd14661c1134da33638964"
     },
     {
       "path": "ems/modules/stage-a-diagnostics.js",
@@ -630,8 +635,8 @@
     },
     {
       "path": "ems/services/open-meteo-pv-forecast.js",
-      "size": 44626,
-      "sha256": "268fa7fafe3efd81664d245d0dde35470ba296015c83f15d4dbc1b9d4cdc60b2"
+      "size": 52730,
+      "sha256": "18a5d87054a274e30feaadec8f686b7d61c2691b070bdd3a564b3706a8ae0bd0"
     },
     {
       "path": "ems/services/operating-strategy-runtime.js",
@@ -695,8 +700,8 @@
     },
     {
       "path": "io-package.json",
-      "size": 24198,
-      "sha256": "82ddecda5df4078d949391c157ba47e6cbcb4b17b8ffbb6cf92f326b718bf709"
+      "size": 23926,
+      "sha256": "491e575efe99eac98ebec587b6e1ca00d9148970ddec79c5de149400aaccfba7"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -940,8 +945,8 @@
     },
     {
       "path": "main.js",
-      "size": 1721954,
-      "sha256": "df46b7f8fd7d22b3e405fb1f2919a450667fd3f22d6d5c5f6cb6719bccda0e7f"
+      "size": 1727045,
+      "sha256": "7c2c403296d509a38f87c0d10a488a14555579cd573ff1d0784dc6b7a71ca979"
     },
     {
       "path": "www/admin-guard.js",
@@ -1140,8 +1145,8 @@
     },
     {
       "path": "www/forecast-settings.js",
-      "size": 33657,
-      "sha256": "772a27e06372b462b801098658d215bf9acc309d952727f96a44f76b31016469"
+      "size": 33791,
+      "sha256": "524cdc3edc01e87c489cfe32b846f118a19d61795ed117e5a648c066b7967689"
     },
     {
       "path": "www/history.html",
@@ -1221,7 +1226,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "e9ce8c09ef990a74ccf662128f6b1921dc0855a4237582cc66f057f6f35f513b"
+      "sha256": "beb0fc424ab7667a9c09ee2b723eff5e691937fb13f1cf4e16b560651021e210"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1306,7 +1311,7 @@
     {
       "path": "www/settings.html",
       "size": 60674,
-      "sha256": "891951cb77dc07efca54db8f744989c96ab0aa39ec84cd88d582fd0c62173d96"
+      "sha256": "98ae0178468a875c652ef73644c72cace17220a28ded29c60878d1de9ac5e10a"
     },
     {
       "path": "www/simulation.html",
@@ -1396,7 +1401,7 @@
     {
       "path": "www/sw.js",
       "size": 4927,
-      "sha256": "457cb364bc7a3bc51d268347754ada7c2e74ae26e58752007c8e8b5eed2d17b8"
+      "sha256": "89791fb6088764cd530f829a2d8610a16782a5b5ea6c305ff6b66b1b3e2bf2a6"
     },
     {
       "path": "www/tariff-report.html",

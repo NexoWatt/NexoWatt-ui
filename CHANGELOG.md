@@ -1,3 +1,13 @@
+## 0.8.202 - 2026-08-24
+
+- RC77 behebt die eigentliche Ursache der im Kundenfrontend dauerhaft fehlenden PV-Prognosewerte: `forecast.openMeteoPv.*` und `forecast.pv.*` werden vor dem ersten Providerabruf abonniert, beim Adapterstart aus ioBroker in den internen UI-`stateCache` eingelesen und anschließend über `/api/state` sowie SSE zuverlässig veröffentlicht.
+- `keyFromId()` ordnet lokale Forecast-States jetzt dem öffentlichen `forecast.*`-Namespace zu. Erfolgreiche Provider- und EMS-Writes werden zusätzlich direkt in den UI-Cache gespiegelt, sodass Abrufzeit, Abrufmodus, Standort, Punkte, Kurve und 6-/12-/24-Stunden-Ertrag ohne verzögertes Folgeereignis sichtbar werden.
+- Unveränderte persistierte Forecast-Werte werden nach einem Adapterneustart nicht unnötig erneut geschrieben, füllen den neu aufgebauten UI-Cache aber dennoch sofort.
+- Eine höchstens zwei Stunden alte, weiterhin in die Zukunft reichende letzte erfolgreiche Open-Meteo-Kurve wird beim Start wiederhergestellt. Bei einem kurzfristigen Provider-/DNS-/Netzfehler bleibt sie als `stale-error` nutzbar; vergangene Segmente werden entfernt und Energie-/Peakwerte neu berechnet. Abgelaufene oder vollständig vergangene Kurven werden sicher verworfen.
+- Forecast-Statewrite-Fehler werden gesammelt und auf höchstens eine Warnung pro Minute gedrosselt, statt still verschluckt oder als Log-Spam ausgegeben zu werden.
+- Änderungen an Quelle, Aktivierung, Standort, Intervall oder PV-Flächen lösen unmittelbar einen neuen Forecastabruf aus. Service-Worker und `forecast-settings.js` verwenden einen neuen RC77-Cachestand, damit alte Browserdateien die korrigierte Anzeige nicht überdecken.
+- Neuer dynamischer RC77-Regressionsverbund prüft Provider-Erfolg und -Fehler, direkte Cache-Spiegelung, Neustart-Fallback, Ablaufgrenzen, Quellalias-/Boolean-Kompatibilität, effektive EMS-Übernahme, lokale/fremde ioBroker-Subscriptions, `keyFromId()`, Browser-Cache und generierte Runtime-Synchronität.
+
 ## 0.8.201 - 2026-08-23
 
 - RC76 stabilisiert die Open-Meteo-PV-Prognose mit einer dreistufigen Abrufkette: 15-Minuten-GTI, stündliche GTI und anschließend lokale PV-Berechnung aus GHI/DNI/DHI. Temporäre Transportfehler werden einmal wiederholt.

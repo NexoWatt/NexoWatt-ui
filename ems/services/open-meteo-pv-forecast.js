@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/open-meteo-pv-forecast.ts
- * Quell-Hash: sha256:5b0f4692e94c90bc2da8ea86a91425325ea61d531d73a9f411ef8d6c5b6d9863
+ * Quell-Hash: sha256:6fee7457fb00a490ad2236bf0e40c216f56441934857a95cef4e62de9f998f92
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -72,6 +72,7 @@ async function publishPvForecastDiagnostics(setter, diagnostics) {
     }
 }
 const SLOT_MS = 15 * 60 * 1000;
+const MAX_LAST_GOOD_AGE_MS = 2 * 3600000;
 const DEFAULT_ERROR = 'open-meteo-pv-not-started';
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -104,6 +105,16 @@ function parseJson(value, fallback) {
     catch {
         return fallback;
     }
+}
+function normalizeForecastSourceMode(value) {
+    const normalized = text(value, 'auto').trim().toLowerCase();
+    if (['open-meteo', 'openmeteo', 'weather'].includes(normalized))
+        return 'open-meteo';
+    if (['datapoint', 'mapping', 'appcenter', 'app-center'].includes(normalized))
+        return 'datapoint';
+    if (['disabled', 'off', 'aus'].includes(normalized))
+        return 'disabled';
+    return 'auto';
 }
 async function readSetting(adapter, key, fallback) {
     const cached = adapter.stateCache?.[`settings.${key}`];
@@ -159,7 +170,7 @@ async function loadSettings(adapter) {
         values[key] = await readSetting(adapter, key, fallback);
     return {
         enabled: asBoolean(values.weatherEnabled, false) && asBoolean(values.openMeteoPvEnabled, false),
-        sourceMode: text(values.forecastSourceMode, 'auto').trim().toLowerCase(),
+        sourceMode: normalizeForecastSourceMode(values.forecastSourceMode),
         latitude: clamp(values.openMeteoLatitude, -90, 90, 0),
         longitude: clamp(values.openMeteoLongitude, -180, 180, 0),
         timezone: text(values.openMeteoTimezone, 'auto').trim() || 'auto',
@@ -540,6 +551,57 @@ function integrateKwh(curve, nowMs, hours) {
         return sum + segment.w * overlap / 3600000000;
     }, 0);
 }
+function normalizeFutureCurve(value, nowMs) {
+    const raw = Array.isArray(value) ? value : [];
+    return raw
+        .filter((segment) => !!segment && typeof segment === 'object')
+        .map((segment) => ({
+        t: finite(segment.t, Number.NaN),
+        dtMs: Math.max(0, finite(segment.dtMs, 0)),
+        w: Math.max(0, finite(segment.w, 0)),
+    }))
+        .filter((segment) => Number.isFinite(segment.t) && segment.dtMs > 0 && segment.t + segment.dtMs > nowMs)
+        .sort((a, b) => a.t - b.t)
+        .slice(0, 384);
+}
+function buildLastGoodSnapshot(previous, nowMs, details) {
+    if (!previous?.valid)
+        return null;
+    const lastSuccessAt = finite(previous.lastSuccessAt || previous.ts, 0);
+    if (!(lastSuccessAt > 0) || nowMs - lastSuccessAt > MAX_LAST_GOOD_AGE_MS)
+        return null;
+    const curve = normalizeFutureCurve(previous.curve, nowMs);
+    if (!curve.length)
+        return null;
+    const peakEnd = nowMs + 24 * 3600000;
+    const location = details.location;
+    return {
+        ...previous,
+        ts: lastSuccessAt,
+        valid: true,
+        ageMs: Math.max(0, nowMs - lastSuccessAt),
+        points: curve.length,
+        positivePoints: curve.filter((segment) => segment.w > 0).length,
+        requestCount: Math.max(0, Math.round(finite(details.requestCount, previous.requestCount))),
+        requestMode: text(details.requestMode, previous.requestMode),
+        requestStatus: text(details.requestStatus, 'stale-error'),
+        lastAttemptAt: finite(details.lastAttemptAt, nowMs),
+        lastSuccessAt,
+        kwhNext6h: integrateKwh(curve, nowMs, 6),
+        kwhNext12h: integrateKwh(curve, nowMs, 12),
+        kwhNext24h: integrateKwh(curve, nowMs, 24),
+        peakWNext24h: curve
+            .filter((segment) => segment.t < peakEnd)
+            .reduce((max, segment) => Math.max(max, segment.w), 0),
+        statusText: details.statusText,
+        error: details.error,
+        latitude: location?.latitude ?? previous.latitude,
+        longitude: location?.longitude ?? previous.longitude,
+        locationText: location?.name ?? previous.locationText,
+        locationSource: location?.source ?? previous.locationSource,
+        curve,
+    };
+}
 function invalidSnapshot(nowMs, error, settings, location, requestStatus = 'error', requestMode = 'none', lastAttemptAt = nowMs) {
     return {
         ts: nowMs, valid: false, source: 'open-meteo-gti', ageMs: 0, points: 0, positivePoints: 0, requestCount: 0, requestMode, requestStatus, lastAttemptAt, lastSuccessAt: 0,
@@ -559,6 +621,109 @@ async function ensureState(adapter, id, type, role, unit) {
         await adapter.setObjectNotExistsAsync?.(id, { type: 'state', common: { name: id, type, role, read: true, write: false, unit }, native: {} });
     }
     catch { /* optional */ }
+}
+/**
+ * Mirrors a written forecast state into the adapter's UI cache immediately.
+ * The customer frontend reads `/api/state` from `stateCache`; an ioBroker
+ * `setStateAsync()` call alone is not sufficient when the state was not yet
+ * subscribed or when the persisted value did not change after a restart.
+ */
+function mirrorForecastUiState(adapter, id, value, timestamp = Date.now()) {
+    try {
+        const cached = adapter.stateCache?.[id];
+        if (cached && Object.is(cached.value, value))
+            return;
+        adapter.updateValue?.(id, value, timestamp, { raw: false });
+    }
+    catch { /* UI cache is best-effort; ioBroker state remains authoritative */ }
+}
+async function writeForecastState(adapter, id, value, timestamp = Date.now()) {
+    try {
+        if (adapter.setStateAsync)
+            await adapter.setStateAsync(id, { val: value, ack: true });
+        mirrorForecastUiState(adapter, id, value, timestamp);
+        return null;
+    }
+    catch (error) {
+        return `${id}: ${text(error?.message, String(error))}`;
+    }
+}
+function warnForecastStateWriteFailures(adapter, scope, failures) {
+    if (!failures.length)
+        return;
+    const now = Date.now();
+    const last = finite(adapter._nwOpenMeteoPvStateWarningAt, 0);
+    if (now - last < 60000)
+        return;
+    adapter._nwOpenMeteoPvStateWarningAt = now;
+    adapter.log?.warn?.(`[forecast] ${scope}: ${failures.length} Forecast-State(s) konnten nicht geschrieben werden (${failures.slice(0, 3).join(' | ')})`);
+}
+async function readPersistedForecastState(adapter, key) {
+    try {
+        return (await adapter.getStateAsync?.(`forecast.openMeteoPv.${key}`))?.val;
+    }
+    catch {
+        return undefined;
+    }
+}
+/**
+ * Restores a recent successful provider curve before the first network request.
+ * This makes a short API/DNS outage survivable across an adapter restart. Old or
+ * exhausted curves are deliberately rejected so the EMS never plans on stale data.
+ */
+async function restoreRecentPersistedSnapshot(adapter) {
+    if (adapter._openMeteoPvForecast)
+        return adapter._openMeteoPvForecast;
+    const keys = [
+        'valid', 'source', 'updatedAt', 'ageMs', 'points', 'positivePoints', 'requestCount',
+        'requestMode', 'requestStatus', 'lastAttemptAt', 'lastSuccessAt', 'configuredKwp',
+        'planningSafetyPct', 'kwhNext6h', 'kwhNext12h', 'kwhNext24h', 'peakWNext24h',
+        'statusText', 'error', 'latitude', 'longitude', 'locationText', 'locationSource', 'curveJson',
+    ];
+    const values = Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await readPersistedForecastState(adapter, key)])));
+    if (!asBoolean(values.valid, false))
+        return null;
+    const now = Date.now();
+    const lastSuccessAt = finite(values.lastSuccessAt ?? values.updatedAt, 0);
+    const persisted = {
+        ts: lastSuccessAt,
+        valid: asBoolean(values.valid, false),
+        source: 'open-meteo-gti',
+        ageMs: Math.max(0, now - lastSuccessAt),
+        points: Math.max(0, Math.round(finite(values.points, 0))),
+        positivePoints: Math.max(0, Math.round(finite(values.positivePoints, 0))),
+        requestCount: Math.max(0, Math.round(finite(values.requestCount, 0))),
+        requestMode: text(values.requestMode, 'persisted-cache'),
+        requestStatus: text(values.requestStatus, 'restored-cache'),
+        lastAttemptAt: finite(values.lastAttemptAt, lastSuccessAt),
+        lastSuccessAt,
+        configuredKwp: Math.max(0, finite(values.configuredKwp, 0)),
+        planningSafetyPct: clamp(values.planningSafetyPct, 30, 100, 85),
+        kwhNext6h: Math.max(0, finite(values.kwhNext6h, 0)),
+        kwhNext12h: Math.max(0, finite(values.kwhNext12h, 0)),
+        kwhNext24h: Math.max(0, finite(values.kwhNext24h, 0)),
+        peakWNext24h: Math.max(0, finite(values.peakWNext24h, 0)),
+        statusText: text(values.statusText, 'Letzte erfolgreiche PV-Prognose aus persistentem Cache geladen'),
+        error: text(values.error, ''),
+        latitude: finite(values.latitude, 0),
+        longitude: finite(values.longitude, 0),
+        locationText: text(values.locationText, ''),
+        locationSource: text(values.locationSource, 'persisted-cache'),
+        curve: parseJson(values.curveJson, []),
+    };
+    const value = buildLastGoodSnapshot(persisted, now, {
+        requestCount: persisted.requestCount,
+        requestMode: 'persisted-cache',
+        requestStatus: 'restored-cache',
+        lastAttemptAt: persisted.lastAttemptAt,
+        statusText: 'Letzte erfolgreiche PV-Prognose aus persistentem Cache geladen',
+        error: '',
+    });
+    if (!value)
+        return null;
+    adapter._openMeteoPvForecast = value;
+    adapter.log?.debug?.(`[forecast] Persistierte Open-Meteo-Prognose wiederhergestellt (${value.curve.length} Punkte, ${Math.round(value.ageMs / 60000)} min alt).`);
+    return value;
 }
 async function publish(adapter, value) {
     const definitions = [
@@ -584,12 +749,17 @@ async function publish(adapter, value) {
         latitude: value.latitude, longitude: value.longitude, locationText: value.locationText, locationSource: value.locationSource,
         statusText: value.statusText, error: value.error, curveJson: JSON.stringify(value.curve.slice(0, 384)),
     };
+    const failures = [];
+    const writeTimestamp = Date.now();
     for (const [key, state] of Object.entries(states)) {
-        try {
-            await adapter.setStateAsync?.(`forecast.openMeteoPv.${key}`, { val: state, ack: true });
-        }
-        catch { /* optional */ }
+        // stateCache timestamps describe when the browser received the state. The
+        // forecast data timestamp itself remains explicitly available in updatedAt,
+        // lastAttemptAt and lastSuccessAt.
+        const failure = await writeForecastState(adapter, `forecast.openMeteoPv.${key}`, state, writeTimestamp);
+        if (failure)
+            failures.push(failure);
     }
+    warnForecastStateWriteFailures(adapter, 'Open-Meteo Publish', failures);
 }
 async function publishAttempt(adapter, nowMs, settings, location) {
     const definitions = [
@@ -612,12 +782,13 @@ async function publishAttempt(adapter, nowMs, settings, location) {
         statusText: 'Open-Meteo PV-Prognose wird aktualisiert …',
         error: '',
     };
+    const failures = [];
     for (const [key, value] of Object.entries(values)) {
-        try {
-            await adapter.setStateAsync?.(`forecast.openMeteoPv.${key}`, { val: value, ack: true });
-        }
-        catch { /* optional */ }
+        const failure = await writeForecastState(adapter, `forecast.openMeteoPv.${key}`, value, nowMs);
+        if (failure)
+            failures.push(failure);
     }
+    warnForecastStateWriteFailures(adapter, 'Open-Meteo Abrufstart', failures);
 }
 async function refresh(adapter) {
     const nowMs = Date.now();
@@ -793,22 +964,16 @@ async function refresh(adapter) {
     catch (error) {
         const previous = adapter._openMeteoPvForecast;
         const message = text(error?.message, String(error));
-        if (previous?.valid && previous.ts > 0) {
-            const stale = {
-                ...previous,
-                ageMs: Math.max(0, nowMs - previous.ts),
-                requestCount,
-                requestMode,
-                requestStatus: 'stale-error',
-                lastAttemptAt: nowMs,
-                lastSuccessAt: previous.lastSuccessAt || previous.ts,
-                statusText: `Letzte Prognose wird weiterverwendet: ${message}`,
-                error: message,
-                latitude: location.latitude,
-                longitude: location.longitude,
-                locationText: location.name,
-                locationSource: location.source,
-            };
+        const stale = buildLastGoodSnapshot(previous, nowMs, {
+            requestCount,
+            requestMode,
+            requestStatus: 'stale-error',
+            lastAttemptAt: nowMs,
+            statusText: `Letzte Prognose wird weiterverwendet: ${message}`,
+            error: message,
+            location,
+        });
+        if (stale) {
             adapter._openMeteoPvForecast = stale;
             await publish(adapter, stale);
             return stale;
@@ -838,13 +1003,22 @@ function startOpenMeteoPvForecastRuntime(adapter) {
         catch { /* optional */ }
         timer = null;
     };
+    let restoreChecked = false;
     const cycle = async () => {
         if (stopped || adapter._nwShuttingDown)
             return adapter._openMeteoPvForecast ?? invalidSnapshot(Date.now(), DEFAULT_ERROR);
         if (running)
             return running;
         clear();
-        running = refresh(adapter).finally(async () => {
+        running = (async () => {
+            if (!restoreChecked) {
+                restoreChecked = true;
+                await restoreRecentPersistedSnapshot(adapter).catch((error) => {
+                    adapter.log?.debug?.(`[forecast] Persistierter Forecast-Cache nicht lesbar: ${text(error?.message, String(error))}`);
+                });
+            }
+            return refresh(adapter);
+        })().finally(async () => {
             running = null;
             if (!stopped && !adapter._nwShuttingDown) {
                 const settings = await loadSettings(adapter).catch(() => ({ updateMinutes: 30 }));
@@ -855,6 +1029,6 @@ function startOpenMeteoPvForecastRuntime(adapter) {
         });
         return running;
     };
-    cycle().catch((error) => adapter.log?.debug?.(`[forecast] ${text(error?.message, error)}`));
+    cycle().catch((error) => adapter.log?.debug?.(`[forecast] ${text(error?.message, String(error))}`));
     return { refresh: cycle, stop: () => { stopped = true; clear(); } };
 }

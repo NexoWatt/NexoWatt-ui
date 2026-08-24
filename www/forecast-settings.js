@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/forecast-settings.ts
- * Quell-Hash: sha256:9309410c5b1f96d7606813675ae11871cce997c3b68534e2df8515f80b2c7afc
+ * Quell-Hash: sha256:bbe562c1db1ab643f28962fdb2cb033cdbf024abe3587548797b26f06e5ee1a6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -368,8 +368,9 @@
     const formatAge = (ageValue, updatedAtValue) => {
         let ageMs = Number(ageValue);
         const updatedAt = Number(updatedAtValue);
-        if (!Number.isFinite(ageMs) && Number.isFinite(updatedAt) && updatedAt > 0)
-            ageMs = Math.max(0, Date.now() - updatedAt);
+        const ageFromTimestamp = Number.isFinite(updatedAt) && updatedAt > 0 ? Math.max(0, Date.now() - updatedAt) : Number.NaN;
+        if (Number.isFinite(ageFromTimestamp))
+            ageMs = Number.isFinite(ageMs) ? Math.max(ageMs, ageFromTimestamp) : ageFromTimestamp;
         if (!Number.isFinite(ageMs))
             return '—';
         const minutes = Math.max(0, Math.round(ageMs / 60000));

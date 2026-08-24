@@ -39,7 +39,7 @@ assert(settingsHtml.includes('+ PV-Fläche hinzufügen'));
 assert(!settingsHtml.includes('id="s_openMeteoLatitude"'), 'Manuelle Standortkoordinaten dürfen im Endkundenbereich nicht sichtbar sein');
 assert(!settingsHtml.includes('id="s_openMeteoLongitude"'), 'Manuelle Standortkoordinaten dürfen im Endkundenbereich nicht sichtbar sein');
 assert(!settingsHtml.includes('Mehrere PV-Flächen / Experten-JSON'));
-assert(settingsHtml.includes('/static/forecast-settings.js?v=0.8.201-rc76'));
+assert(settingsHtml.includes('/static/forecast-settings.js?v=0.8.202-rc77'));
 for (const label of ['Nord', 'Nordost', 'Ost', 'Südost', 'Süd', 'Südwest', 'West', 'Nordwest']) {
   assert(settingsTs.includes(`label: '${label}'`), `Ausrichtung ${label} fehlt`);
 }

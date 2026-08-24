@@ -1,13 +1,13 @@
-NexoWatt EOS 0.8.201 RC76 – Open-Meteo PV-Forecast Hardening
+NexoWatt EOS 0.8.202 RC77 – PV-Forecast UI-Cache-/Neustart-Härtung
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. Optional: npm ci
 3. npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.201 auf npm noch frei ist,
+- ob Version 0.8.202 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob keine freigegebene Produktdatei verändert wurde.
 
-RC76 korrigiert die Open-Meteo-Fallbackkette, gültige 0-W-Prognosen, Standortnamen, Providerdiagnose und das responsive PV-Flächenlayout.
+RC77 korrigiert die Forecast-State-Subscription, den UI-Statecache, die Live-SSE-Spiegelung, unveränderte Neustartwerte, den zeitlich begrenzten Last-Good-Fallback und den Browser-Cache.

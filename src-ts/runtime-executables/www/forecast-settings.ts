@@ -358,7 +358,8 @@
   const formatAge = (ageValue: unknown, updatedAtValue: unknown): string => {
     let ageMs = Number(ageValue);
     const updatedAt = Number(updatedAtValue);
-    if (!Number.isFinite(ageMs) && Number.isFinite(updatedAt) && updatedAt > 0) ageMs = Math.max(0, Date.now() - updatedAt);
+    const ageFromTimestamp = Number.isFinite(updatedAt) && updatedAt > 0 ? Math.max(0, Date.now() - updatedAt) : Number.NaN;
+    if (Number.isFinite(ageFromTimestamp)) ageMs = Number.isFinite(ageMs) ? Math.max(ageMs, ageFromTimestamp) : ageFromTimestamp;
     if (!Number.isFinite(ageMs)) return '—';
     const minutes = Math.max(0, Math.round(ageMs / 60000));
     if (minutes < 1) return 'gerade eben';

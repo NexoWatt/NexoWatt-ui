@@ -3897,7 +3897,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.201',
+        liveControlVersion: '0.8.202',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -11408,6 +11408,9 @@ async onReady() {
 
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
+      // Forecast states are served to the customer UI through stateCache. Subscribe
+      // and prime them before the first provider request so no startup update is lost.
+      try { await this.subscribeForecastUiStates(); } catch (e) { this.log.debug('PV forecast UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
       try { this._openMeteoPvForecastRuntime = startOpenMeteoPvForecastRuntime(this); } catch (e) { this.log.warn('PV forecast runtime failed: ' + (e && e.message ? e.message : e)); }
       // EVCS (multi wallbox) model states
       await this.ensureEvcsStates();
@@ -11461,6 +11464,9 @@ async onReady() {
 
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
+      // Prime the effective forecast.pv.* states created by the EMS module as well.
+      // The method is idempotent and keeps its wildcard subscription active.
+      try { await this.subscribeForecastUiStates(); } catch (e) { this.log.debug('PV forecast UI state re-prime failed: ' + (e && e.message ? e.message : e)); }
 
       // Direkte EEBUS/CLS-Anbindung erst nach dem zentralen EMS initialisieren.
       // Damit kann ein angenommener LPC-Befehl sofort einen vollständigen
@@ -20823,7 +20829,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.201',
+      apiVersion: '0.8.202',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21016,7 +21022,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.201';
+  commandPayload.version = '0.8.202';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22253,7 +22259,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.201').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.202').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -26351,6 +26357,94 @@ return res.json(out);
     }, intervalMs);
   }
   /**
+   * Subscribes and primes all integrated and effective PV forecast states.
+   *
+   * The web frontend receives `/api/state` and SSE values exclusively from the
+   * adapter's `stateCache`. Forecast provider and EMS modules write local
+   * ioBroker states directly, so they require an explicit cache bridge here.
+   */
+  async subscribeForecastUiStates() {
+    const namespace = this.namespace;
+    const prefix = `${namespace}.forecast.`;
+    if (!this._nwForecastUiSubscribed) {
+      try {
+        // Own adapter states are most reliably subscribed through subscribeStatesAsync.
+        // Keep the full-ID foreign variant as a compatibility fallback for older cores.
+        if (typeof this.subscribeStatesAsync === 'function') {
+          await this.subscribeStatesAsync('forecast.*');
+        } else {
+          await this.subscribeForeignStatesAsync(`${namespace}.forecast.*`);
+        }
+        this._nwForecastUiSubscribed = true;
+      } catch (localError) {
+        try {
+          await this.subscribeForeignStatesAsync(`${namespace}.forecast.*`);
+          this._nwForecastUiSubscribed = true;
+        } catch (foreignError) {
+          const localMessage = localError && localError.message ? localError.message : localError;
+          const foreignMessage = foreignError && foreignError.message ? foreignError.message : foreignError;
+          this.log.debug(`PV forecast subscribe failed (local=${localMessage}; foreign=${foreignMessage})`);
+        }
+      }
+    }
+
+    const primedKeys = new Set();
+    // Prefer a wildcard database read so newly added diagnostic states are
+    // automatically exposed without having to maintain another static key list.
+    try {
+      if (typeof this.getForeignStatesAsync === 'function') {
+        const states = await this.getForeignStatesAsync(`${namespace}.forecast.*`);
+        for (const [id, state] of Object.entries(states || {})) {
+          if (!id.startsWith(prefix) || !state || state.val === undefined) continue;
+          const key = `forecast.${id.slice(prefix.length)}`;
+          const ts = Number(state.ts) || Number(state.lc) || Date.now();
+          const cached = this.stateCache && this.stateCache[key];
+          if (!(cached && Object.is(cached.value, state.val) && Number(cached.ts) === ts)) {
+            this.updateValue(key, state.val, ts, { raw: false });
+          }
+          primedKeys.add(key);
+        }
+      }
+    } catch (e) {
+      this.log.debug(`PV forecast wildcard cache prime failed: ${e && e.message ? e.message : e}`);
+    }
+
+    // Compatibility fallback for older controller APIs, a partial wildcard result,
+    // or upgrade states that were created while the wildcard request was running.
+    const providerKeys = [
+      'valid', 'source', 'updatedAt', 'ageMs', 'points', 'positivePoints', 'requestCount',
+      'requestMode', 'requestStatus', 'lastAttemptAt', 'lastSuccessAt',
+      'kwhNext6h', 'kwhNext12h', 'kwhNext24h', 'peakWNext24h',
+      'configuredKwp', 'planningSafetyPct', 'latitude', 'longitude',
+      'locationText', 'locationSource', 'statusText', 'error', 'curveJson',
+    ];
+    const effectiveKeys = [
+      'valid', 'points', 'ageMs', 'kwhNext6h', 'kwhNext12h', 'kwhNext24h',
+      'peakWNext24h', 'statusText', 'curveJson', 'source', 'fallbackActive',
+      'planningSafetyPct', 'confidencePct', 'updatedAt', 'lastAttemptAt',
+      'lastSuccessAt', 'positivePoints', 'requestMode', 'requestStatus',
+      'powerNowW', 'locationText', 'locationSource', 'latitude', 'longitude', 'error',
+    ];
+    const keys = [
+      ...providerKeys.map((key) => `forecast.openMeteoPv.${key}`),
+      ...effectiveKeys.map((key) => `forecast.pv.${key}`),
+    ];
+    for (const key of keys) {
+      if (primedKeys.has(key)) continue;
+      try {
+        const state = await this.getStateAsync(key);
+        if (!state || state.val === undefined) continue;
+        const ts = Number(state.ts) || Number(state.lc) || Date.now();
+        const cached = this.stateCache && this.stateCache[key];
+        if (cached && Object.is(cached.value, state.val) && Number(cached.ts) === ts) continue;
+        this.updateValue(key, state.val, ts, { raw: false });
+      } catch (_e) {
+        // Missing upgrade states are normal until their module creates them.
+      }
+    }
+  }
+
+  /**
    * Code-Teil: subscribeConfiguredStates
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -26748,6 +26842,7 @@ return res.json(out);
     const prefHR = this.namespace + '.heatingRod.';
     const prefTR = this.namespace + '.threshold.';
     const prefGC = this.namespace + '.gridConstraints.';
+    const prefForecast = this.namespace + '.forecast.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
     if (id && id.startsWith(prefI)) return 'installer.' + id.slice(prefI.length);
     if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
@@ -26759,6 +26854,7 @@ return res.json(out);
     if (id && id.startsWith(prefHR)) return 'heatingRod.' + id.slice(prefHR.length);
     if (id && id.startsWith(prefTR)) return 'threshold.' + id.slice(prefTR.length);
     if (id && id.startsWith(prefGC)) return 'gridConstraints.' + id.slice(prefGC.length);
+    if (id && id.startsWith(prefForecast)) return 'forecast.' + id.slice(prefForecast.length);
 
     // Root-level local UI states without a folder prefix (e.g. weatherTempC)
     // Only allow a strict whitelist to avoid leaking arbitrary internal states into the UI.
