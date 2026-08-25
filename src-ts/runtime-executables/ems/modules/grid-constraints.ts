@@ -133,7 +133,10 @@ class GridConstraintsModule extends BaseModule {
     }
 
     _isEnabled() {
-        return !!this.adapter.config.enableGridConstraints;
+        // RC82: Netzlimits ist ein dauerhaft aktiver Kernschutz. Die Modulfreigabe
+        // erfolgt zentral über Lizenz/Systemstart; ein veraltetes Legacy-Flag oder
+        // ein importiertes Backup darf den NVP-Schutz nicht mehr abschalten.
+        return true;
     }
     /**
      * Code-Teil: _cfg

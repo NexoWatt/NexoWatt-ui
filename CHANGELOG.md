@@ -1,3 +1,14 @@
+## 0.8.207 - 2026-08-25
+
+- RC82 macht **Netzlimits** zum dauerhaft aktiven Kernschutz. Im AppCenter gibt es für diese Funktion keinen Installiert-/Aktiv-Schalter mehr; stattdessen wird der Status „Netzschutz dauerhaft aktiv · nicht abschaltbar“ angezeigt.
+- Ein altes `enableGridConstraints=false`, ein importiertes Backup oder ein früher gespeicherter App-Zustand kann den NVP-/Anschlussschutz nicht mehr deaktivieren. Backend-Normalisierung, Modulmanager, Grid-Modul und finaler NVP-/PV-Koordinator verwenden denselben permanenten Vertrag.
+- Der Netzschutz bleibt auch bei abgelaufener, noch nicht aktivierter oder vorübergehend nicht lesbarer Lizenz aktiv. Die Lizenzierung betrifft Komfort- und Funktionsmodule, nicht die physische Schutzfunktion des Netzanschlusspunktes.
+- Netzlimits ist Bestandteil von **Home und Pro**. Die zentrale Quelle bleibt unverändert **Zuordnung → Allgemein**: Netzanschlussleistung = Hard-Limit 100 %, automatisch berechnetes Soft-Limit 90 %, Reserve exakt 10 %; der dort zugeordnete NVP bleibt signiert.
+- Die 0-Einspeisung bleibt bewusst separat und standardmäßig ausgeschaltet. Nur diese Betriebsart, RLM sowie weitere optionale Netzbetreiber-/PV-Funktionen werden innerhalb von Netzlimits konfiguriert; der Import-Schutz selbst läuft immer.
+- Peak-Shaving-RLM und Speicher-0-Einspeisung hängen nicht mehr am entfernten Legacy-Aktivierungsflag. Hysterese, Wiederfreigabeverzögerung, RLM nur absenkend und die finale Hard-Safety vor jedem Hardware-Write bleiben erhalten.
+- Der wiederkehrende Logeintrag `[core-limits-ts-shadow] JS/TS budget mismatch: total.effectiveW` ist behoben. Der alte Teil-Shadow bleibt als interne Diagnose im State erhalten, wird aber vom bereits produktiven vollständigen `core-runtime-v2`-Vergleich überlagert und erzeugt keine minütlichen Warnungen mehr. Unerwartete neue Shadow-Signaturen werden höchstens einmal pro Adapterlauf gemeldet.
+- Service-Worker-Cache auf `nexowatt-cache-v488` erhöht. Neuer RC82-Regressionsverbund prüft Home-/Pro-Freigabe, Pflicht-App-Normalisierung, Legacy-Flag-Ignorierung, UI-Sperre, optional bleibende 0-Einspeisung, NVP-Koordinator und finalen Safety-Writer.
+
 ## 0.8.206 - 2026-08-24
 
 - RC81 macht **Zuordnung → Allgemein** zur einzigen statischen Quelle für Netzanschlussleistung und signierte NVP-Messung.

@@ -3888,8 +3888,8 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
         if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
-            const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
-            const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
+            const zeCfg = (this.adapter.config && this.adapter.config.gridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
+            const zeEnabled = !!zeCfg.zeroExportEnabled;
             const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
             const zeBias = Math.max(0, num(zeCfg.zeroExportBiasW, 80));
 

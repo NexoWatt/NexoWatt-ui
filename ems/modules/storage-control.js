@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:827080764feda0d256a1c1a481bc1747a5067725cf3a084e6f95373aa851d2c7
+ * Quell-Hash: sha256:d6e8057c058b43921476d1061b8b7bdee5f40eba7028bbc33a86185e9e3c630d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3886,8 +3886,8 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
         if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
-            const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
-            const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
+            const zeCfg = (this.adapter.config && this.adapter.config.gridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
+            const zeEnabled = !!zeCfg.zeroExportEnabled;
             const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
             const zeBias = Math.max(0, num(zeCfg.zeroExportBiasW, 80));
 

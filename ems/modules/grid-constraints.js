@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:b48e4100718d1c7b7af0cf45f97a01558a6ebdbdaf8abc5fa653bf61804e3058
+ * Quell-Hash: sha256:4bb73924d7d9554ac9ae978d8b170dde007ba251bec49ab3885d343a3e1439de
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -131,7 +131,10 @@ class GridConstraintsModule extends BaseModule {
     }
 
     _isEnabled() {
-        return !!this.adapter.config.enableGridConstraints;
+        // RC82: Netzlimits ist ein dauerhaft aktiver Kernschutz. Die Modulfreigabe
+        // erfolgt zentral über Lizenz/Systemstart; ein veraltetes Legacy-Flag oder
+        // ein importiertes Backup darf den NVP-Schutz nicht mehr abschalten.
+        return true;
     }
     /**
      * Code-Teil: _cfg

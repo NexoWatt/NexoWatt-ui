@@ -229,7 +229,7 @@ class ModuleManager {
         } catch (_e) {}
         if (edition === 'eos') return true;
         if (edition !== 'hems') return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
         return hemsApps.has(String(appId || ''));
     }
 
@@ -461,7 +461,7 @@ class ModuleManager {
         this.modules.push({
             key: 'gridConstraints',
             instance: gridConstraintsModule,
-            enabledFn: () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
+            enabledFn: () => true,
         });
 
         // Peak shaving
@@ -700,7 +700,7 @@ class ModuleManager {
                 this.adapter,
                 this.dp,
                 gridConstraintsModule,
-                () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
+                () => true,
             ),
             enabledFn: () => true,
         });

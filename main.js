@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:9f86f790e84b04d36c023ae503a96ddecf4f2a6d9cacf8877a9497abf9b99049
+ * Quell-Hash: sha256:17a08f5269a77dd8d978380a325b046438de910881f174b4acf7b454a8341892
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2236,8 +2236,8 @@ class NexoWattVis extends utils.Adapter {
         return nwFeatureFlagsService.buildFeatureMap(ed);
       }
     } catch (_eFeatureFlags) {}
-    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','operatingStrategies','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','gridConstraints','gridLimits','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','operatingStrategies','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2334,8 +2334,8 @@ class NexoWattVis extends utils.Adapter {
       storagePowerProfile,
       maxStoragePowerW: Number(storagePowerProfile.maxCommandW || 0),
       features,
-      hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
-      homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
+      hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
+      homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
       eosFullAccess: edition === 'eos',
       proFullAccess: edition === 'eos'
     };
@@ -2346,7 +2346,17 @@ class NexoWattVis extends utils.Adapter {
     out.schemaVersion = out.schemaVersion || 1;
     out.apps = (out.apps && typeof out.apps === 'object') ? out.apps : {};
     for (const appId of Object.keys(out.apps)) {
-      if (!this._nwLicenseAllowsAppId(appId)) {
+      // Netzlimits ist ein Sicherheitskern und darf auch bei abgelaufener, noch
+      // nicht aktivierter oder vorübergehend nicht lesbarer Lizenz niemals aus
+      // der Runtime entfernt werden. Nur Komfort-/Funktionsmodule werden lizenziert.
+      if (appId === 'grid') {
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, {
+          installed: true,
+          enabled: true,
+          licenseBlocked: false,
+          requiredLicense: 'Kernschutz',
+        });
+      } else if (!this._nwLicenseAllowsAppId(appId)) {
         out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'Pro' });
       } else {
         out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'Home' : 'Pro' });
@@ -4468,7 +4478,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'generator',   enableFlag: 'enableGeneratorControl' },
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
       { id: 'relay',       enableFlag: 'enableRelayControl' },
-      { id: 'grid',        enableFlag: 'enableGridConstraints' },
+      { id: 'grid',        enableFlag: 'enableGridConstraints', mandatory: true, defaultInstalled: true },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
@@ -4594,7 +4604,9 @@ class NexoWattVis extends utils.Adapter {
 
     for (const a of CATALOG) {
       const st = (apps.apps && apps.apps[a.id]) ? apps.apps[a.id] : null;
-      n[a.enableFlag] = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
+      n[a.enableFlag] = a.id === 'grid'
+        ? true
+        : (this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled));
     }
 
     // §14a is controlled via installerConfig.para14a
@@ -14995,7 +15007,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', enableFlag: 'enableGeneratorControl', mandatory: false },
       { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', enableFlag: 'enableThresholdControl', mandatory: false },
       { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', enableFlag: 'enableRelayControl', mandatory: false },
-      { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (z.B. RLM/0‑Einspeisung/Import‑Limits)', enableFlag: 'enableGridConstraints', mandatory: false },
+      { id: 'grid', label: 'Netzlimits', desc: 'Dauerhafter Netzanschlussschutz mit Import-Soft-/Hard-Limit; 0‑Einspeisung bleibt optional', enableFlag: 'enableGridConstraints', mandatory: true },
       { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung / Energie‑Tipps ohne automatische Schaltbefehle', enableFlag: 'enableAiAdvisor', mandatory: false },
       { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert und Einspeisewert für das Kundenfrontend (Home + EOS)', enableFlag: 'enableEnergyWallet', mandatory: true },
       // tariff is a shared helper module (provider + budget). Keep it always present.
@@ -15088,7 +15100,9 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       for (const a of _nwAppCatalog) {
         if (!a.enableFlag) continue;
         const st = emsApps.apps && emsApps.apps[a.id] ? emsApps.apps[a.id] : null;
-        const enabled = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
+        const enabled = a.id === 'grid'
+          ? true
+          : (this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled));
         n[a.enableFlag] = enabled;
       }
 
@@ -15135,7 +15149,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         enableGeneratorControl: (typeof n.enableGeneratorControl === 'boolean') ? n.enableGeneratorControl : undefined,
         enableThresholdControl: (typeof n.enableThresholdControl === 'boolean') ? n.enableThresholdControl : undefined,
         enableRelayControl: (typeof n.enableRelayControl === 'boolean') ? n.enableRelayControl : undefined,
-        enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
+        enableGridConstraints: true,
         enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
         enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
         enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
@@ -22928,7 +22942,7 @@ settingsConfig: {
           evcsAvailable: evcsAvailableEffective,
           peakShavingEnabled: boolOr(cfg.enablePeakShaving, false) || boolOr(cfg && cfg.peakShaving && cfg.peakShaving.atypical && cfg.peakShaving.atypical.enabled, false),
           para14aEnabled: boolOr(cfg && cfg.installerConfig && cfg.installerConfig.para14a, false),
-          gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
+          gridConstraintsEnabled: true,
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: storageFarmAvailableEffective,
           storageFarmAppActive: storageFarmAppActive,

@@ -2443,20 +2443,31 @@ class CoreLimitsModule extends BaseModule {
                 peakShavingActive: false,
                 externalLimitActive: false,
             });
+            const modernTypedRuntime = budgetSnapshot && budgetSnapshot.tsCoreRuntime && typeof budgetSnapshot.tsCoreRuntime === 'object'
+                ? budgetSnapshot.tsCoreRuntime
+                : null;
+            const modernTypedRuntimeActive = !!(
+                modernTypedRuntime
+                && modernTypedRuntime.active === true
+                && modernTypedRuntime.productive === true
+                && modernTypedRuntime.fallback !== true
+            );
             const mismatches = [
                 compareShadowWatt('pv.rawW', pv.rawW, ts && ts.pv ? ts.pv.rawW : null),
                 compareShadowWatt('pv.effectiveW', pv.effectiveW, ts && ts.pv ? ts.pv.effectiveW : null),
-                // 0.8.60: grid.effectiveW ist im TS-Spiegel ein enger Netzbudget-Begriff,
-                // während die produktive JS-Runtime hier historisch `grid.headroomW` mit
-                // zusätzlichen High-Level-/Flex-Load-Kontexten vergleicht. Ein einzelner
-                // Unterschied an diesem Feld ist deshalb Diagnose, aber kein Grund für
-                // minütlichen Warn-Log-Spam. Produktiv bleibt JS trotzdem Fallback, solange
-                // der Gesamt-Shadow nicht vollständig passt.
+                // Der alte `core-budget`-Spiegel kennt weder den vollständigen signierten
+                // NVP-Vertrag noch die bereits laufende geregelte Istlast. Diese beiden
+                // Felder bleiben deshalb als Migrationsdiagnose sichtbar, dürfen aber die
+                // Betriebslogs nicht im Minutentakt füllen. Der produktive Core-Runtime-v2-
+                // Vergleich läuft bereits vorher über den vollständigen Snapshotvertrag.
                 compareShadowWatt('grid.effectiveW', grid.headroomW, ts && ts.grid ? ts.grid.effectiveW : null),
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
             ].filter(Boolean).map((m) => {
-                if (m && m.field === 'grid.effectiveW') {
-                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget' };
+                if (m && m.field === 'grid.effectiveW' && modernTypedRuntimeActive) {
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-grid-shadow-superseded-by-core-runtime-v2' };
+                }
+                if (m && m.field === 'total.effectiveW' && modernTypedRuntimeActive) {
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-total-shadow-superseded-by-core-runtime-v2' };
                 }
                 return { ...m, diagnosticOnly: false, severity: 'warn' };
             });
@@ -2464,8 +2475,11 @@ class CoreLimitsModule extends BaseModule {
             const diagnosticOnlyMismatches = mismatches.filter((m) => m && m.diagnosticOnly === true);
             const result = {
                 available: true,
-                ok: mismatches.length === 0,
-                source: 'ts-mirror-shadow',
+                ok: warningMismatches.length === 0,
+                exactMatch: mismatches.length === 0,
+                source: modernTypedRuntimeActive ? 'legacy-ts-shadow-superseded' : 'ts-mirror-shadow',
+                supersededByTypedCoreRuntime: modernTypedRuntimeActive,
+                modernTypedRuntime: modernTypedRuntime || null,
                 mismatches,
                 warningMismatches,
                 diagnosticOnlyMismatches,
@@ -2487,11 +2501,15 @@ class CoreLimitsModule extends BaseModule {
                 tsSnapshot: ts || null,
             };
             if (warningMismatches.length > 0) {
-                const now = Date.now();
-                if (!this._coreTsShadowLastWarnMs || now - this._coreTsShadowLastWarnMs > 60000) {
-                    this._coreTsShadowLastWarnMs = now;
+                const signature = warningMismatches
+                    .map((m) => String((m && m.field) || 'unknown'))
+                    .sort()
+                    .join('|');
+                if (!this._coreTsShadowWarnedSignatures) this._coreTsShadowWarnedSignatures = new Set();
+                if (!this._coreTsShadowWarnedSignatures.has(signature)) {
+                    this._coreTsShadowWarnedSignatures.add(signature);
                     try {
-                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${warningMismatches.map(m => m.field).join(', ')}`);
+                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] Einmalige JS/TS-Diagnoseabweichung: ${warningMismatches.map(m => m.field).join(', ')}`);
                     } catch (_eLog) {}
                 }
             }
@@ -2701,6 +2719,21 @@ class CoreLimitsModule extends BaseModule {
         };
 
         if (!fallback || !fallback.gates || typeof fallback.gates !== 'object') return fallbackStatus('missing-js-snapshot');
+        const modernTypedRuntime = fallback.tsCoreRuntime && typeof fallback.tsCoreRuntime === 'object'
+            ? fallback.tsCoreRuntime
+            : null;
+        if (modernTypedRuntime && modernTypedRuntime.active === true && modernTypedRuntime.productive === true && modernTypedRuntime.fallback !== true) {
+            fallback.tsProductive = {
+                ts: Date.now(),
+                active: false,
+                source: 'ts-core-runtime',
+                fallback: false,
+                superseded: true,
+                reason: 'typed-core-runtime-v2-authoritative',
+                contractVersion: String(modernTypedRuntime.contractVersion || 'core-runtime-v2'),
+            };
+            return fallback;
+        }
         if (!coreTsShadow || typeof coreTsShadow !== 'object') return fallbackStatus('missing-ts-shadow');
         if (coreTsShadow.available !== true) return fallbackStatus('ts-mirror-unavailable', { shadow: coreTsShadow });
         if (coreTsShadow.ok !== true) return fallbackStatus('shadow-mismatch', { mismatches: coreTsShadow.mismatches || [] });

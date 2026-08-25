@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0df59833f7f64472444bc47b7f38e745f9aad644a93e0ce0bf694ed94106a01b
+ * Original-Hash: f99ec1a663d0d958bd02a670a272113e98e74e7ef0dbd80a88c7654df61ad6d0
  */
 
 /**
@@ -428,7 +428,8 @@ class FakeAdapter {
     && tariffIndex > coordinatorIndex,
   'Reihenfolge muss Grid-Planung → EVCS → Speicher → flexible Aktoren/Erzeuger → finaler NVP/PV-Koordinator → Tarifstatus sein');
   assert(managerSource.includes('gridConstraintsModule.setDeferredDynamicPv(true)'), 'Dynamische PV-Regelung muss bis nach dem Speicher verschoben werden');
-  assert(managerSource.includes("() => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints"), 'Nachgelagerte PV-Regelung muss dasselbe Lizenz-/App-Gate wie GridConstraints verwenden');
+  assert(managerSource.includes('() => true'), 'Nachgelagerte PV-Regelung muss wie GridConstraints als nicht abschaltbarer Kernpfad registriert sein');
+  assert(!managerSource.includes("() => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints"), 'Ein Legacy-Konfigurationsflag darf den dauerhaften Netzschutz nicht mehr abschalten');
   assert(gridSource.includes("status: coordinated ? 'handled_by_central_ems'"), 'Koordinierter Export-Guard darf keine zweite Senken-Schreibstrecke starten');
   assert(gridSource.includes('const sinkCommandReady = !coordinated && sinkCommandReadyRaw'), 'Senkenkommando muss im koordinierten Modus gesperrt sein');
 

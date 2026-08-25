@@ -1,12 +1,12 @@
-NexoWatt EOS 0.8.206 RC81 – NVP-Zuordnung als Single Source of Truth
+NexoWatt EOS 0.8.207 RC82 – Netzlimits dauerhaft aktiv / Stable Candidate
 
 Veröffentlichen aus einem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.206 auf npm noch frei ist,
+- ob Version 0.8.207 auf npm noch frei ist,
 - ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
 - ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
 
-RC81 verwendet ausschließlich AppCenter → Zuordnung → Allgemein für Netzanschlussleistung und signierte NVP-Messung. Hard = 100 %, Soft = 90 %, Reserve = 10 %. Netzlimits enthält kein zweites Hard-Limit und keinen zweiten NVP-Datenpunkt. Alte Overrides werden ignoriert; RLM kann die zentrale Grenze nur absenken. Die 0-Einspeisung bleibt unter Netzlimits und nutzt denselben zentralen NVP.
+RC82 hält Netzlimits als nicht abschaltbaren Kernschutz dauerhaft aktiv. Netzanschlussleistung und signierter NVP stammen ausschließlich aus AppCenter → Zuordnung → Allgemein. Hard = 100 %, Soft = 90 %, Reserve = exakt 10 %. Alte App-, Legacy-, Backup- oder Lizenzzustände können den Kernschutz nicht deaktivieren. Die 0-Einspeisung bleibt unter Netzlimits separat optional und standardmäßig aus. Der bisher minütlich wiederkehrende `core-limits-ts-shadow`-Warnlog ist bereinigt; die Diagnose bleibt ohne Log-Spam im State erhalten.

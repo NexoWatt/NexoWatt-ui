@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC81 / 0.8.206
+ * RC81 / 0.8.207
  * Single Source of Truth fuer Netzanschlussleistung und NVP:
  * - installerConfig.gridConnectionPower aus Zuordnung -> Allgemein = statisches Hard-Limit
  * - datapoints.gridPointPower aus Zuordnung -> Allgemein = alleinige signierte NVP-Messung
@@ -62,8 +62,8 @@ async function runPlanning({ connectionW, legacyHardW, peakLegacyW, rlmEnabled =
 (async () => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.206');
-  assert.strictEqual(io.common.version, '0.8.206');
+  assert.strictEqual(pkg.version, '0.8.207');
+  assert.strictEqual(io.common.version, '0.8.207');
 
   // 1) Zuordnung gewinnt gegen alte Netzlimits- und Peak-Shaving-Overrides.
   const assignment = await runPlanning({
@@ -138,7 +138,7 @@ async function runPlanning({ connectionW, legacyHardW, peakLegacyW, rlmEnabled =
   assert(ui.includes('Führungsgröße ist der signierte NVP aus Zuordnung → Allgemein → Netzpunkt'));
 
   // 7) Browsercache und Dokumentation gehoeren zum neuen Release.
-  assert(readFirst('src-ts/runtime-executables/www/sw.ts', 'www/sw.js').includes("const CACHE_NAME = 'nexowatt-cache-v487'"));
+  assert(readFirst('src-ts/runtime-executables/www/sw.ts', 'www/sw.js').includes("const CACHE_NAME = 'nexowatt-cache-v488'"));
   const docs = read('docs/RC81_NVP_ASSIGNMENT_SINGLE_SOURCE_DE.md');
   assert(docs.includes('einzige statische Quelle'));
   assert(docs.includes('Hard-Limit = 30.000 W'));

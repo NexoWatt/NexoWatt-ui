@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.206",
+  "version": "0.8.207",
   "files": [
     {
       "path": "LICENSE",
@@ -9,14 +9,14 @@
       "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
     },
     {
-      "path": "RC81_FELDTEST_CHECKLISTE_DE.md",
-      "size": 1246,
-      "sha256": "944fcef8e85aecbd6c75cfe3a3d1b126555552c9a0d2e44ffdc5edfaae590f66"
+      "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
+      "size": 2187,
+      "sha256": "3d1438891963774cd7549c99b1eeab541719f15f47f7a24b67a47c7b7e6db70f"
     },
     {
-      "path": "RC81_VALIDATION_REPORT.md",
-      "size": 2644,
-      "sha256": "f6d17cf41d1f1e3f8a47246307e8e141aaece9a8edde692032f8fa5876bd5e23"
+      "path": "RC82_VALIDATION_REPORT.md",
+      "size": 5021,
+      "sha256": "2e832f3729ca8bdaf8eb06446d18a0f5777c158ce52a6077b7fe7467fcda7f9b"
     },
     {
       "path": "README.md",
@@ -294,6 +294,11 @@
       "sha256": "543bd6fdd8b7705f76fefd7ce16606c87244de4cb0bb2d52dcc8c6a3826a8b85"
     },
     {
+      "path": "docs/RC82_PERMANENT_GRID_PROTECTION_DE.md",
+      "size": 3852,
+      "sha256": "3aad5eda65dac57e79b0ad10a5fd972e42d4d71b77b72d2f490e0fdc3c51f5da"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 18385,
       "sha256": "53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd"
@@ -340,8 +345,8 @@
     },
     {
       "path": "ems/module-manager.js",
-      "size": 48196,
-      "sha256": "2c9094853f741603619dc69bee27c77bd50c581a950ced9ce7200656df87a862"
+      "size": 48058,
+      "sha256": "22f506f25e8dd113c1174fda3f061d3885ca3ffb5a215a92cc1bc8bb9b7b4c86"
     },
     {
       "path": "ems/modules/ai-advisor.js",
@@ -370,8 +375,8 @@
     },
     {
       "path": "ems/modules/core-limits.js",
-      "size": 197786,
-      "sha256": "1b5324d26b8bc5e749350fc89429d39a60400647e10b9b98c5c28aebff538fa4"
+      "size": 199737,
+      "sha256": "9a1ef679355a48edbb8db43ca7db5f0bc21cb9aa92dfd1d0457c3a7ff2c0c7e0"
     },
     {
       "path": "ems/modules/country-profile.js",
@@ -395,8 +400,8 @@
     },
     {
       "path": "ems/modules/grid-constraints.js",
-      "size": 153113,
-      "sha256": "813850a06b8cd095deb7015407a52d2a84d5152f61e8505149cf2c4b722f079f"
+      "size": 153321,
+      "sha256": "f172e4787e37f427376d4fc04e22f5e420964ab40f762527b4ab32e450e35eb9"
     },
     {
       "path": "ems/modules/heating-rod-control.js",
@@ -445,8 +450,8 @@
     },
     {
       "path": "ems/modules/peak-shaving.js",
-      "size": 132635,
-      "sha256": "3fefc82a754c1a53eb5d85496f23c987808bc17a32c0b7b6d2c9f34053856389"
+      "size": 132590,
+      "sha256": "089decddfe269ad5049c4e68bfc7f2a1f01c7963f9ee2af342f8949507c6e9ef"
     },
     {
       "path": "ems/modules/prime-mover-control.js",
@@ -465,8 +470,8 @@
     },
     {
       "path": "ems/modules/storage-control.js",
-      "size": 604131,
-      "sha256": "ffd41de71981066480b1f282503ddcd8cae399fa63b60e054018aaa30bf0e545"
+      "size": 604053,
+      "sha256": "a656bbefc377e145f8839ae70ba04a83982400b59ba79e2355fbc4b1fb6ec5e9"
     },
     {
       "path": "ems/modules/storage-mapping.js",
@@ -610,8 +615,8 @@
     },
     {
       "path": "ems/services/feature-flags.js",
-      "size": 10024,
-      "sha256": "c3bf49ab75bc51097d736bbcf715b14db1f2f56208c28071faf2fa551eefe887"
+      "size": 10034,
+      "sha256": "82e7b23a9127948e239edc910b13796a05806e6f30948fc3e57a3c4a58e6fd68"
     },
     {
       "path": "ems/services/fenecon-hybrid-control.js",
@@ -735,8 +740,8 @@
     },
     {
       "path": "io-package.json",
-      "size": 26125,
-      "sha256": "56f10fe988ffcc182c15b18f9c960846690addcb196c3e92c2f5cf63a5ba41a7"
+      "size": 23830,
+      "sha256": "0884f01b5221f0b944c27b20649335030d311e98d053f87697ec90af9ac3f9ba"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -980,13 +985,18 @@
     },
     {
       "path": "main.js",
-      "size": 1727045,
-      "sha256": "7c2c403296d509a38f87c0d10a488a14555579cd573ff1d0784dc6b7a71ca979"
+      "size": 1727599,
+      "sha256": "461ebee9fb552134e54bbb2d44f43ccf5ff40ccf465df9896d6e2a9b2cf961c7"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
       "size": 7222,
-      "sha256": "8e2da505a772f96fcc3374b79086b914c2d91d5359190b53a79622cb226bda5d"
+      "sha256": "3dacb3f0f55d4821c643231369fa58860204a2095867f2ebb5f394f9208c5bc4"
+    },
+    {
+      "path": "scripts/verify-rc82-permanent-grid-protection.cjs",
+      "size": 10585,
+      "sha256": "13c159ea1362a55b28b29a7108f76ecfb1ac9bea4f02c241a58f46cc21fd5c07"
     },
     {
       "path": "www/admin-guard.js",
@@ -1135,8 +1145,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 931887,
-      "sha256": "a48c6452dcc6d4e7c9c6c182e0e45a75323b02d6cb5b55919139104e2a6ff785"
+      "size": 934020,
+      "sha256": "7db9c9e3946b3fcbc963ef8c9d9ce574b837549e0835b51ab40436d63139ef88"
     },
     {
       "path": "www/energy-ledger.html",
@@ -1266,7 +1276,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "df3ec3a206a866d7e9f09086fc121a9db9af3f5ed5d915dfb1b6c777e9817744"
+      "sha256": "78a17a2be1b8d547bb3359fc83dcc6f4cd6a287448a1db0fdd0890ac9793d1e9"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1441,7 +1451,7 @@
     {
       "path": "www/sw.js",
       "size": 4927,
-      "sha256": "fb7c5f3c2fe99d1510753c8004983e8da4383c2517cf6f3e8145758ba46aaca9"
+      "sha256": "13082a62bfbafe5142d794faed9bfafa539d41903326de8b22fb74b280cd5bae"
     },
     {
       "path": "www/tariff-report.html",

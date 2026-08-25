@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a48c6452dcc6d4e7c9c6c182e0e45a75323b02d6cb5b55919139104e2a6ff785
+ * Original-Hash: 7db9c9e3946b3fcbc963ef8c9d9ce574b837549e0835b51ab40436d63139ef88
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3fefc82a754c1a53eb5d85496f23c987808bc17a32c0b7b6d2c9f34053856389
+ * Original-Hash: 089decddfe269ad5049c4e68bfc7f2a1f01c7963f9ee2af342f8949507c6e9ef
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/peak-shaving.ts
- * Quell-Hash: sha256:d354048612b7790d7df967414edae425f9fd3cd1d35bc3d7024567ed967e33eb
+ * Quell-Hash: sha256:87ff648a293a8aa487711128aaba7953636f6aa0539e33cb9c10ea639c302d44
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1562,7 +1562,7 @@ class PeakShavingModule extends BaseModule {
 
         // GridConstraints (RLM): zusätzliche dynamische Obergrenze für den Netzbezug
         // (wird nur berücksichtigt, wenn das GridConstraints-Modul aktiv ist und RLM eingeschaltet ist)
-        if (this.adapter.config.enableGridConstraints && this.adapter.config.gridConstraints && this.adapter.config.gridConstraints.rlmEnabled) {
+        if (this.adapter.config.gridConstraints && this.adapter.config.gridConstraints.rlmEnabled) {
             try {
                 const st = await this.adapter.getStateAsync('gridConstraints.rlm.capNowW');
                 const cap = (st && typeof st.val === 'number') ? st.val : Number(st && st.val);

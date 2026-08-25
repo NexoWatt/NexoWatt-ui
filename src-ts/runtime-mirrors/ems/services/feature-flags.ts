@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c3bf49ab75bc51097d736bbcf715b14db1f2f56208c28071faf2fa551eefe887
+ * Original-Hash: 82e7b23a9127948e239edc910b13796a05806e6f30948fc3e57a3c4a58e6fd68
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:e12de3cd57cbbdbbe0f04c7c456b4e7adca745e9411649abd4fe00c0fa1caf99
+ * Quell-Hash: sha256:ced36081eb40e61a0ffb8e18655599c55323c8bab6dd896299b3f7290ee8557e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -64,6 +64,7 @@ const HOME_APP_IDS = new Set([
   'heatingrod',
   'threshold',
   'relay',
+  'grid',
   'aiAdvisor',
   'tariff',
   'para14a',
@@ -115,6 +116,8 @@ const HOME_FEATURES = new Set([
   'thermalControl',
   'heatingRodControl',
   'relayControl',
+  'gridConstraints',
+  'gridLimits',
   'para14a',
   'thresholdControl',
   'energyFlow',
@@ -139,8 +142,6 @@ const EOS_ONLY_FEATURES = new Set([
   'peakShaving',
   'storageFarm',
   'multiUse',
-  'gridLimits',
-  'gridConstraints',
   'generatorControl',
   'bhkwControl',
   'advancedChargingPark',

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2c9094853f741603619dc69bee27c77bd50c581a950ced9ce7200656df87a862
+ * Original-Hash: 22f506f25e8dd113c1174fda3f061d3885ca3ffb5a215a92cc1bc8bb9b7b4c86
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:95f8faa3cc9eb6fb0421190566ffcaac69d86203dc18a3747cd1956d173c9c19
+ * Quell-Hash: sha256:fb27ccbbd599e520da17d5fd32ddde4b021dba276e2b93bbd18e1c5f6732414f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -235,7 +235,7 @@ class ModuleManager {
             return true;
         if (edition !== 'hems')
             return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
         return hemsApps.has(String(appId || ''));
     }
     _getDiagCfg() {
@@ -467,7 +467,7 @@ class ModuleManager {
         this.modules.push({
             key: 'gridConstraints',
             instance: gridConstraintsModule,
-            enabledFn: () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
+            enabledFn: () => true,
         });
         // Peak shaving
         this.modules.push({
@@ -665,7 +665,7 @@ class ModuleManager {
         // Same-cycle-Ledger eingetragen. Die PV bearbeitet ausschließlich den Rest.
         this.modules.push({
             key: 'nvpCoordinator',
-            instance: new NvpCoordinatorModule(this.adapter, this.dp, gridConstraintsModule, () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints),
+            instance: new NvpCoordinatorModule(this.adapter, this.dp, gridConstraintsModule, () => true),
             enabledFn: () => true,
         });
         // Die sichtbare Tarifwahrheit wird erst nach Speicher-, Verbraucher-,

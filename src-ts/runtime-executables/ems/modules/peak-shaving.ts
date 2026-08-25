@@ -1533,7 +1533,7 @@ class PeakShavingModule extends BaseModule {
 
         // GridConstraints (RLM): zusätzliche dynamische Obergrenze für den Netzbezug
         // (wird nur berücksichtigt, wenn das GridConstraints-Modul aktiv ist und RLM eingeschaltet ist)
-        if (this.adapter.config.enableGridConstraints && this.adapter.config.gridConstraints && this.adapter.config.gridConstraints.rlmEnabled) {
+        if (this.adapter.config.gridConstraints && this.adapter.config.gridConstraints.rlmEnabled) {
             try {
                 const st = await this.adapter.getStateAsync('gridConstraints.rlm.capNowW');
                 const cap = (st && typeof st.val === 'number') ? st.val : Number(st && st.val);
