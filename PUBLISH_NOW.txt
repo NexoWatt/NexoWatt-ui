@@ -1,13 +1,12 @@
-NexoWatt EOS 0.8.204 RC79 – Import Soft/Hard + 0-Einspeise-Feed-forward
+NexoWatt EOS 0.8.206 RC81 – NVP-Zuordnung als Single Source of Truth
 
-1. ZIP vollständig in einen frischen Projektordner entpacken.
-2. Optional: npm ci
-3. npm publish
+Veröffentlichen aus einem frisch entpackten Repository-ZIP:
 
-Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.204 auf npm noch frei ist,
-- ob alle Versionsdateien synchron sind,
-- ob das Release-Artefaktmanifest exakt passt,
-- ob keine freigegebene Produktdatei verändert wurde.
+npm publish
 
-RC79 trennt die vorausschauende Soft-Grenze von der absoluten Hard-Grenze für Netzbezug. Bei 0-Einspeisung unter Netzlimits folgt die PV-Vorgabe dem realen Verbrauch, bestätigter Speicherladung und akzeptierten flexiblen Lasten; nur nicht nutzbarer Überschuss wird abgeregelt. Cold-Start-Warnungen fehlender Thermal-/Threshold-Objekte sind ebenfalls korrigiert.
+Der Prepublish-Guard prüft automatisch:
+- ob Version 0.8.206 auf npm noch frei ist,
+- ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
+- ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
+
+RC81 verwendet ausschließlich AppCenter → Zuordnung → Allgemein für Netzanschlussleistung und signierte NVP-Messung. Hard = 100 %, Soft = 90 %, Reserve = 10 %. Netzlimits enthält kein zweites Hard-Limit und keinen zweiten NVP-Datenpunkt. Alte Overrides werden ignoriert; RLM kann die zentrale Grenze nur absenken. Die 0-Einspeisung bleibt unter Netzlimits und nutzt denselben zentralen NVP.

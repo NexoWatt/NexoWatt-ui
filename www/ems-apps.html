@@ -1683,17 +1683,17 @@
         <h2 class="nw-config-section__title">Netzlimits</h2>
       </div>
       <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-        Netzrestriktionen, zweistufige Bezugsbegrenzung und 0‑Einspeisung. Diese Schutzfunktionen werden ausschließlich im Installer‑/App‑Center konfiguriert.
+        Netzrestriktionen, zweistufige Bezugsbegrenzung und 0‑Einspeisung. Die zentrale Zuordnung bleibt die einzige Quelle für Anschlussleistung und NVP‑Messung.
         <br/>
-        Hinweis: Die Netzanschlussleistung wird unter <b>Zuordnung → Allgemein</b> gesetzt und dient standardmäßig als Hard‑Limit. Das Importlimit gilt nur für Netzbezug; Einspeisung wird mit negativem NVP geführt.
+        Hinweis: <b>Zuordnung → Allgemein</b> setzt die Netzanschlussleistung als Hard‑Limit (100 %) und den signierten NVP‑Datenpunkt. Das Soft‑Limit wird automatisch mit 90 % berechnet. Netzlimits enthält keine zweite Leistungs- oder Messpunktvorgabe.
       </div>
 
       <div class="nw-config-grid">
 
         <div class="nw-config-card">
           <div class="nw-config-card__header">
-            <div class="nw-config-card__title">Messung &amp; Stale‑Timeout</div>
-            <div class="nw-config-card__subtitle">Optionaler Fallback‑Datenpunkt + maximales Alter der Netzmessung</div>
+            <div class="nw-config-card__title">NVP‑Messung &amp; Stale‑Timeout</div>
+            <div class="nw-config-card__subtitle">Messpunkt aus Zuordnung → Allgemein + maximales Alter</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsMeter"></div>
@@ -1702,8 +1702,8 @@
 
         <div class="nw-config-card">
           <div class="nw-config-card__header">
-            <div class="nw-config-card__title">Import Soft‑/Hard‑Limit</div>
-            <div class="nw-config-card__subtitle">Vorausschauender Puffer und absolute Bezugsgrenze am NVP</div>
+            <div class="nw-config-card__title">Importgrenzen aus Zuordnung</div>
+            <div class="nw-config-card__subtitle">Hard 100 %, Soft 90 % der zentralen Netzanschlussleistung</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsImportLimits"></div>

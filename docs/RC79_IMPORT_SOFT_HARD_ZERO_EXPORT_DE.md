@@ -1,5 +1,7 @@
 # RC79 – Import-Soft-/Hard-Limit und verbrauchsgeführte 0-Einspeisung
 
+> **Hinweis für Version 0.8.205 / RC80:** Die in RC79 noch konfigurierbare beziehungsweise begrenzte Soft-Reserve wurde ersetzt. Aktuell gilt verbindlich: Reserve = exakt 10 % der wirksamen NVP-/Hard-Vorgabe und Soft-Limit = 90 %. Es gibt keinen Mindestwert, keinen Maximalwert und keine manuelle Übersteuerung. Maßgeblich ist `RC80_SOFT_LIMIT_FIXED_TEN_PERCENT_DE.md`.
+
 ## Ziel
 
 RC79 trennt die Netzbezugsregelung in zwei Ebenen und erweitert die vorhandene 0-Einspeiseregelung um eine vorausschauende PV-Vorgabe. Die Konfiguration befindet sich im AppCenter unter **Netzlimits**.
@@ -23,13 +25,15 @@ Das Hard-Limit bleibt in Safety-Envelope und Final-Writer wirksam. §14a, Park-/
 
 ## Soft-Limit
 
-Das Soft-Limit liegt unterhalb des Hard-Limits und wird für die vorausschauende Planung flexibler Lasten verwendet. Es kann direkt in Watt vorgegeben oder automatisch aus einer Reserve gebildet werden:
+Das Soft-Limit liegt unterhalb des Hard-Limits und wird für die vorausschauende Planung flexibler Lasten verwendet. Ab RC80 wird es verbindlich aus der wirksamen NVP-/Hard-Vorgabe berechnet:
 
 ```text
-Soft-Limit = Hard-Limit − Reserve
+Soft-Reserve = Hard-Limit × 10 %
+Soft-Limit   = Hard-Limit − Soft-Reserve
+             = Hard-Limit × 90 %
 ```
 
-Ohne explizite Reserve verwendet EOS 10 % des Hard-Limits, mindestens 1 kW und höchstens 3 kW. Die Werte bleiben im AppCenter änderbar.
+Es gibt keinen Mindestwert, keinen Maximalwert und keine manuelle Übersteuerung. Eine dynamisch strengere RLM- oder Netzbetreibergrenze wird zunächst zum wirksamen Hard-Limit; anschließend werden daraus erneut 10 % Reserve und 90 % Soft-Limit berechnet.
 
 ```text
 Soft-Headroom = Soft-Limit − signierter NVP
@@ -96,7 +100,7 @@ Unter **Netzlimits** befinden sich jetzt gemeinsam:
 
 - NVP-/Netzpunktzuordnung;
 - Import-Hard-Limit;
-- Import-Soft-Limit beziehungsweise automatische Reserve;
+- automatisch berechnetes Import-Soft-Limit (90 %) und feste Reserve (10 %), jeweils nur lesend;
 - Hysterese und Wiederfreigabeverzögerung;
 - RLM;
 - 0-Einspeisung beziehungsweise Einspeisebegrenzung;
@@ -146,4 +150,4 @@ ems.core.gridImportRequiredReductionW
 
 ## Regressionsschutz
 
-Der RC79-Testverbund prüft die signed-NVP-Berechnung, automatische Reserve, Soft-/Hard-Stufen, Hysterese, verzögerte Wiederfreigabe, dynamische PV-Vorgabe, Speicherentladekonflikt, AppCenter-Platzierung, Cold-Start-Objektinitialisierung sowie die Trennung von Soft-Planung und Hard-Safety.
+Der RC79-/RC80-Testverbund prüft die signed-NVP-Berechnung, die feste 10-%-Reserve ohne Mindest-/Maximalgrenze, Soft-/Hard-Stufen, Hysterese, verzögerte Wiederfreigabe, dynamische PV-Vorgabe, Speicherentladekonflikt, AppCenter-Platzierung, Cold-Start-Objektinitialisierung sowie die Trennung von Soft-Planung und Hard-Safety.

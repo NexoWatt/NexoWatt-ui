@@ -179,7 +179,7 @@ function makeSafetyAdapter({ nvpW, importLimitW }) {
   assert(!chargingSource.includes('gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)'));
   assert(safetySource.includes('maxImportW - signedNvpW'));
   assert(read('src-ts/runtime-executables/www/ems-apps.ts').includes('EVCS Cap (NVP / Importgrenze)'));
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v485'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v487'"));
 }
 
 // 2) Feldfall: 30 kW Bezugsgrenze, 10,1 kW Einspeisung, 0 W Istlast.

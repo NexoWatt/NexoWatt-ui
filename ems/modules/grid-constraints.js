@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:99fccb65e7d2e6bf8bec54bf56b80468500228a424d2de873da2a9f9b53c4863
+ * Quell-Hash: sha256:b48e4100718d1c7b7af0cf45f97a01558a6ebdbdaf8abc5fa653bf61804e3058
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -309,6 +309,8 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.importLimits.requiredReductionW', 'Required flexible-load reduction (W)', 'number', 'value.power');
         await mk('gridConstraints.importLimits.stage', 'Import limit stage', 'string', 'text');
         await mk('gridConstraints.importLimits.reason', 'Import limit reason', 'string', 'text');
+        await mk('gridConstraints.importLimits.source', 'Import limit source', 'string', 'text');
+        await mk('gridConstraints.importLimits.baseConnectionPowerW', 'Assigned grid connection power (W)', 'number', 'value.power');
         await mk('gridConstraints.importLimits.softLimitMode', 'Soft limit mode', 'string', 'text');
         await mk('gridConstraints.importLimits.releasePending', 'Soft-limit release pending', 'boolean', 'indicator');
 
@@ -441,16 +443,10 @@ class GridConstraintsModule extends BaseModule {
         const cfg = this._cfg();
         const dp = this.dp;
 
-        // Grid power mapping:
-        // - Do NOT override the global `grid.powerW` key here.
-        //   `grid.powerW` is intentionally bound to the internal filtered NVP (ems.gridPowerW) to stabilize *all* EMS logics.
-        // - Instead, register a module-local fallback key.
-        //   The module will use `grid.powerW` first (filtered), and fall back to `gc.gridPowerW` if needed.
-        const gridPowerId = String(cfg.gridPowerId || this.adapter.config.peakShaving?.gridPointPowerId || '').trim();
-        if (gridPowerId) {
-            // Use alive-prefix heartbeat to avoid false stale detections for event-driven meters.
-            await dp.upsert({ key: 'gc.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
-        }
+        // RC81: Der NVP wird ausschließlich zentral unter Zuordnung → Allgemein
+        // (`datapoints.gridPointPower`) gemappt und als gefiltertes `grid.powerW`
+        // bereitgestellt. Ein zweites Modul-Mapping würde Vorzeichen, Stale-Status
+        // und Regelhoheit auseinanderlaufen lassen und wird daher nicht mehr angelegt.
 
         // PV/WR curtail controls
         if (cfg.pvFeedInLimitWId) {
@@ -823,11 +819,8 @@ class GridConstraintsModule extends BaseModule {
         const dp = this.dp;
         if (!dp) return true;
 
-        const staleFiltered = dp.isStale('grid.powerW', staleMs);
-        const staleFallback = dp.isStale('gc.gridPowerW', staleMs);
-
-        // stale only if both are stale
-        return !!(staleFiltered && staleFallback);
+        // RC81: Nur der zentral zugeordnete und gefilterte NVP ist autoritativ.
+        return !!dp.isStale('grid.powerW', staleMs);
     }
 
     _getGridW(cfg) {
@@ -840,16 +833,10 @@ class GridConstraintsModule extends BaseModule {
         const dp = this.dp;
         if (!dp) return null;
 
-        // Prefer filtered global NVP
-        let gridW = dp.getNumberFresh('grid.powerW', staleMs, null);
-        if (typeof gridW !== 'number') {
-            // Fallback to module-local mapping
-            gridW = dp.getNumberFresh('gc.gridPowerW', staleMs, null);
-        }
-        if (typeof gridW !== 'number') {
-            // Fallback to Peak-Shaving mapping (raw)
-            gridW = dp.getNumberFresh('ps.gridPowerW', staleMs, null);
-        }
+        // RC81: Der gefilterte globale NVP aus Zuordnung → Allgemein ist die
+        // einzige Messquelle. Verdeckte Modul-/Peak-Shaving-Fallbacks sind nicht
+        // zulässig, weil sie Vorzeichen- und Stale-Verträge umgehen könnten.
+        const gridW = dp.getNumberFresh('grid.powerW', staleMs, null);
         return (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
     }
 
@@ -2209,25 +2196,28 @@ class GridConstraintsModule extends BaseModule {
         // unabhängig vom nachgelagerten Speicher-/PV-Koordinator aktiv.
         await this._tickPvEvu(nowMs, cfg);
 
-        const configuredHardLimitW = this._num(cfg.importHardLimitW ?? cfg.gridImportHardLimitW, 0);
+        // RC81 Single Source of Truth:
+        // Die statische Bezugsgrenze stammt ausschließlich aus
+        // Zuordnung → Allgemein → Netzanschlussleistung. Alte Netzlimits- oder
+        // Peak-Shaving-Overrides dürfen diese physische Vorgabe weder ersetzen
+        // noch erhöhen. RLM darf eine vorhandene Basis nur dynamisch absenken.
         const instLimitW = this._num(this.adapter.config.installerConfig?.gridConnectionPower, 0);
-        const legacyLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
-        const connectionLimitW = (typeof configuredHardLimitW === 'number' && Number.isFinite(configuredHardLimitW) && configuredHardLimitW > 0)
-            ? configuredHardLimitW
-            : ((typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
-                ? instLimitW
-                : legacyLimitW);
-        let maxImportFinal = connectionLimitW > 0 ? connectionLimitW : 0;
-        if (cfg.rlmEnabled && rlm && typeof rlm.capNowW === 'number' && Number.isFinite(rlm.capNowW) && rlm.capNowW > 0) {
-            maxImportFinal = maxImportFinal > 0 ? Math.min(maxImportFinal, rlm.capNowW) : rlm.capNowW;
+        const connectionLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
+            ? instLimitW
+            : 0;
+        let maxImportFinal = connectionLimitW;
+        let importLimitSource = connectionLimitW > 0 ? 'assignment' : 'unconfigured';
+        if (maxImportFinal > 0 && cfg.rlmEnabled && rlm && typeof rlm.capNowW === 'number' && Number.isFinite(rlm.capNowW) && rlm.capNowW > 0) {
+            const reduced = Math.min(maxImportFinal, rlm.capNowW);
+            if (reduced < maxImportFinal) importLimitSource = 'assignment+rlm';
+            maxImportFinal = reduced;
         }
 
         const importPolicy = resolveGridImportLimitPolicy({
             nowMs,
             hardLimitW: maxImportFinal,
-            softLimitEnabled: cfg.importSoftLimitEnabled !== false,
-            softLimitW: cfg.importSoftLimitW,
-            reserveW: cfg.importSoftReserveW,
+            // RC80: Soft ist verbindlich Hard minus exakt 10 %. Frühere
+            // explizite Soft-/Reservewerte werden bewusst nicht mehr übergeben.
             hysteresisW: cfg.importSoftHysteresisW,
             releaseDelaySec: cfg.importSoftReleaseDelaySec,
             signedNvpW: gridW,
@@ -2256,6 +2246,8 @@ class GridConstraintsModule extends BaseModule {
         await this.adapter.setStateAsync('gridConstraints.importLimits.requiredReductionW', Math.round(importPolicy.requiredReductionW || 0), true);
         await this.adapter.setStateAsync('gridConstraints.importLimits.stage', String(importPolicy.stage || ''), true);
         await this.adapter.setStateAsync('gridConstraints.importLimits.reason', String(importPolicy.reason || ''), true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.source', importLimitSource, true);
+        await this.adapter.setStateAsync('gridConstraints.importLimits.baseConnectionPowerW', Math.round(connectionLimitW || 0), true);
         await this.adapter.setStateAsync('gridConstraints.importLimits.softLimitMode', String(importPolicy.softLimitMode || ''), true);
         await this.adapter.setStateAsync('gridConstraints.importLimits.releasePending', importPolicy.releasePending === true, true);
 

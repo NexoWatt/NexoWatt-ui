@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/grid-import-limit-policy.ts
- * Quell-Hash: sha256:6421bde68e5afa0e8a58823ea50562c3be36329f23c67652772707ef01d7a2f4
+ * Quell-Hash: sha256:188beb49c47c0b9793024138936a63c80eb8ac9ff233885c51df709c428f0d46
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -25,39 +25,35 @@ function finiteOrNull(value) {
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
-function resolveAutoReserveW(hardLimitW, configuredReserveW) {
-    const hard = Math.max(0, Number(hardLimitW) || 0);
-    const configured = finiteOrNull(configuredReserveW);
-    if (configured !== null && configured > 0)
-        return Math.min(hard, configured);
+function resolveAutoReserveW(hardLimitW, _configuredReserveW) {
+    // RC80: Die Soft-Reserve ist verbindlich immer exakt 10 % der wirksamen
+    // NVP-/Hard-Limit-Vorgabe. Frühere Mindest-/Maximalgrenzen sowie manuelle
+    // Reservewerte werden aus Kompatibilitätsgründen noch angenommen, aber
+    // bewusst ignoriert.
+    const hard = Math.max(0, Math.round(finiteOrNull(hardLimitW) ?? 0));
     if (!(hard > 0))
         return 0;
-    return Math.min(hard, clamp(hard * 0.1, 1000, 3000));
+    return Math.min(hard, Math.max(0, Math.round(hard * 0.1)));
 }
 function resolveGridImportLimitPolicy(input = {}) {
     const nowMs = Math.max(0, Math.round(finiteOrNull(input.nowMs) ?? Date.now()));
-    const enabled = input.softLimitEnabled !== false;
-    const hardLimitW = Math.max(0, finiteOrNull(input.hardLimitW) ?? 0);
-    const explicitSoftW = Math.max(0, finiteOrNull(input.softLimitW) ?? 0);
-    const reserveW = resolveAutoReserveW(hardLimitW, input.reserveW);
+    const hardLimitW = Math.max(0, Math.round(finiteOrNull(input.hardLimitW) ?? 0));
+    // RC80: Sobald ein Hard-Limit vorhanden ist, ist das Soft-Limit immer aktiv.
+    // softLimitEnabled, softLimitW und reserveW bleiben nur als tolerierte
+    // Legacy-Eingaben im Vertrag, beeinflussen die Regelung aber nicht mehr.
+    const enabled = hardLimitW > 0;
+    const reserveW = resolveAutoReserveW(hardLimitW);
     const hysteresisW = Math.max(0, finiteOrNull(input.hysteresisW) ?? 500);
     const releaseDelayMs = Math.max(0, (finiteOrNull(input.releaseDelaySec) ?? 10) * 1000);
     const nvpUsable = input.nvpUsable === true;
     const signedNvpW = nvpUsable ? finiteOrNull(input.signedNvpW) : null;
     let softLimitW = hardLimitW;
     let softLimitMode = 'disabled';
-    if (enabled && hardLimitW > 0) {
-        if (explicitSoftW > 0 && explicitSoftW < hardLimitW) {
-            softLimitW = explicitSoftW;
-            softLimitMode = 'explicit';
-        }
-        else {
-            softLimitW = Math.max(0, hardLimitW - reserveW);
-            softLimitMode = 'auto-reserve';
-        }
+    if (hardLimitW > 0) {
+        softLimitW = Math.max(0, hardLimitW - reserveW);
+        softLimitMode = 'fixed-10-percent';
     }
-    softLimitW = Math.min(hardLimitW, Math.max(0, softLimitW));
-    const planningLimitW = enabled && softLimitW > 0 ? softLimitW : hardLimitW;
+    const planningLimitW = softLimitW;
     const rawPreviousStage = String(input.previousStage || '');
     const previousStage = rawPreviousStage === 'soft' || rawPreviousStage === 'hard'
         ? rawPreviousStage

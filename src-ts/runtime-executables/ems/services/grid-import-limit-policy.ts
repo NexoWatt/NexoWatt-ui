@@ -2,22 +2,24 @@
 'use strict';
 
 /**
- * RC79: Reine, typisierte Berechnung fuer die zweistufige Netzbezugsbegrenzung.
+ * RC80: Reine, typisierte Berechnung fuer die zweistufige Netzbezugsbegrenzung.
  *
  * Vorzeichen am NVP:
  * - positiv: Netzbezug
  * - negativ: Netzeinspeisung
  *
  * Das Hard-Limit ist die absolute Anschluss-/RLM-Grenze. Das Soft-Limit liegt
- * darunter und wird fuer die vorausschauende Budgetierung flexibler Lasten
- * genutzt. Negative NVP-Werte erhoehen den verfuegbaren Headroom automatisch.
+ * verbindlich bei 90 % des wirksamen Hard-Limits; die Reserve entspricht damit
+ * immer exakt 10 % der NVP-Vorgabe, ohne Mindest- oder Maximalwert. Es wird fuer
+ * die vorausschauende Budgetierung flexibler Lasten genutzt. Negative NVP-Werte
+ * erhoehen den verfuegbaren Headroom automatisch.
  */
 
 declare const module: { exports: unknown };
 
 type NumericInput = number | string | null | undefined;
 type ImportLimitStage = 'unconfigured' | 'stale' | 'normal' | 'soft' | 'hard';
-type SoftLimitMode = 'disabled' | 'explicit' | 'auto-reserve';
+type SoftLimitMode = 'disabled' | 'fixed-10-percent';
 
 type GridImportLimitPolicyInput = {
   nowMs?: NumericInput;
@@ -87,20 +89,24 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function resolveAutoReserveW(hardLimitW: NumericInput, configuredReserveW?: NumericInput): number {
-  const hard = Math.max(0, Number(hardLimitW) || 0);
-  const configured = finiteOrNull(configuredReserveW);
-  if (configured !== null && configured > 0) return Math.min(hard, configured);
+function resolveAutoReserveW(hardLimitW: NumericInput, _configuredReserveW?: NumericInput): number {
+  // RC80: Die Soft-Reserve ist verbindlich immer exakt 10 % der wirksamen
+  // NVP-/Hard-Limit-Vorgabe. Frühere Mindest-/Maximalgrenzen sowie manuelle
+  // Reservewerte werden aus Kompatibilitätsgründen noch angenommen, aber
+  // bewusst ignoriert.
+  const hard = Math.max(0, Math.round(finiteOrNull(hardLimitW) ?? 0));
   if (!(hard > 0)) return 0;
-  return Math.min(hard, clamp(hard * 0.1, 1000, 3000));
+  return Math.min(hard, Math.max(0, Math.round(hard * 0.1)));
 }
 
 function resolveGridImportLimitPolicy(input: GridImportLimitPolicyInput = {}): GridImportLimitPolicy {
   const nowMs = Math.max(0, Math.round(finiteOrNull(input.nowMs) ?? Date.now()));
-  const enabled = input.softLimitEnabled !== false;
-  const hardLimitW = Math.max(0, finiteOrNull(input.hardLimitW) ?? 0);
-  const explicitSoftW = Math.max(0, finiteOrNull(input.softLimitW) ?? 0);
-  const reserveW = resolveAutoReserveW(hardLimitW, input.reserveW);
+  const hardLimitW = Math.max(0, Math.round(finiteOrNull(input.hardLimitW) ?? 0));
+  // RC80: Sobald ein Hard-Limit vorhanden ist, ist das Soft-Limit immer aktiv.
+  // softLimitEnabled, softLimitW und reserveW bleiben nur als tolerierte
+  // Legacy-Eingaben im Vertrag, beeinflussen die Regelung aber nicht mehr.
+  const enabled = hardLimitW > 0;
+  const reserveW = resolveAutoReserveW(hardLimitW);
   const hysteresisW = Math.max(0, finiteOrNull(input.hysteresisW) ?? 500);
   const releaseDelayMs = Math.max(0, (finiteOrNull(input.releaseDelaySec) ?? 10) * 1000);
   const nvpUsable = input.nvpUsable === true;
@@ -108,17 +114,11 @@ function resolveGridImportLimitPolicy(input: GridImportLimitPolicyInput = {}): G
 
   let softLimitW = hardLimitW;
   let softLimitMode: SoftLimitMode = 'disabled';
-  if (enabled && hardLimitW > 0) {
-    if (explicitSoftW > 0 && explicitSoftW < hardLimitW) {
-      softLimitW = explicitSoftW;
-      softLimitMode = 'explicit';
-    } else {
-      softLimitW = Math.max(0, hardLimitW - reserveW);
-      softLimitMode = 'auto-reserve';
-    }
+  if (hardLimitW > 0) {
+    softLimitW = Math.max(0, hardLimitW - reserveW);
+    softLimitMode = 'fixed-10-percent';
   }
-  softLimitW = Math.min(hardLimitW, Math.max(0, softLimitW));
-  const planningLimitW = enabled && softLimitW > 0 ? softLimitW : hardLimitW;
+  const planningLimitW = softLimitW;
 
   const rawPreviousStage = String(input.previousStage || '');
   const previousStage: 'normal' | 'soft' | 'hard' = rawPreviousStage === 'soft' || rawPreviousStage === 'hard'

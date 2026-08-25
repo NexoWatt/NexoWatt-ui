@@ -1,3 +1,23 @@
+## 0.8.206 - 2026-08-24
+
+- RC81 macht **Zuordnung → Allgemein** zur einzigen statischen Quelle für Netzanschlussleistung und signierte NVP-Messung.
+- Hard-Limit = 100 % der zugeordneten Netzanschlussleistung; Soft-Limit = 90 %; Reserve = exakt 10 %.
+- Das editierbare Hard-Limit und der optionale NVP-Fallback-Datenpunkt wurden aus **Netzlimits** entfernt. Die Seite zeigt die abgeleiteten Werte nur noch lesend an.
+- Alte `gridConstraints.importHardLimitW`, `gridImportHardLimitW`, `gridPowerId` sowie der Legacy-Fallback über `peakShaving.maxPowerW` werden neutralisiert und von der Runtime ignoriert.
+- RLM darf eine vorhandene zentrale Anschlussgrenze nur absenken; ohne Netzanschlussleistung erzeugt RLM kein verborgenes Ersatz-Hard-Limit.
+- Die 0-Einspeisung bleibt unter Netzlimits und verwendet denselben zentralen signierten NVP aus der Zuordnung.
+- Neue Runtime-Diagnose veröffentlicht Quelle und Basis-Netzanschlussleistung; Service-Worker-Cache auf `nexowatt-cache-v487` erhöht.
+- Neuer RC81-Regressionsverbund prüft Feldstandard 30/27/3 kW, signed-NVP-Headroom, Legacy-Ignorierung, RLM-Absenkung, fehlende Basis und die AppCenter-Single-Source-Oberfläche.
+
+## 0.8.205 - 2026-08-24
+
+- RC80 setzt das Import-Soft-Limit verbindlich auf 90 % der wirksamen NVP-/Hard-Vorgabe; die Reserve beträgt immer exakt 10 %.
+- Die bisherige Mindestreserve von 1 kW und Maximalreserve von 3 kW ist vollständig entfernt. Beispiele: 5 kW Hard → 4,5 kW Soft; 30 kW Hard → 27 kW Soft; 100 kW Hard → 90 kW Soft.
+- Manuelle beziehungsweise ältere Werte für `importSoftLimitW`, `importSoftReserveW` und `importSoftLimitEnabled` beeinflussen die Regelung nicht mehr. Damit kann die feste 10-%-Vorgabe nicht versehentlich übersteuert oder deaktiviert werden.
+- AppCenter → Netzlimits zeigt den automatisch berechneten Soft-Wert und die 10-%-Reserve nur noch lesend. Die Eingabefelder für explizites Soft-Limit und Reserve wurden entfernt; Hysterese und Wiederfreigabe-Verzögerung bleiben einstellbar.
+- Eine dynamisch strengere RLM-/Netzbetreibergrenze wird zuerst zum wirksamen Hard-Limit; daraus werden anschließend erneut exakt 10 % Reserve und 90 % Soft-Limit berechnet.
+- Neuer RC80-Regressionsverbund prüft kleine, normale und große Anschlussleistungen, ignorierte Legacy-Overrides, AppCenter-Felder, Runtime-Modus, signed-NVP-Headroom und die unveränderte Hard-Safety.
+
 ## 0.8.204 - 2026-08-24
 
 - RC79 ergänzt eine zweistufige Netzbezugsbegrenzung. Der NVP bleibt signiert: Netzbezug ist positiv, Einspeisung negativ. Das Hard-Limit ist die absolute Anschluss-/Safety-Grenze; das Soft-Limit bildet mit expliziter oder automatischer Reserve den vorausschauenden Planungswert für flexible Lasten.

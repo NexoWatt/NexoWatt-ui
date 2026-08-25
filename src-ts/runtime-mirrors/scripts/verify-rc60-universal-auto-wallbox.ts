@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: dc34d89177a130314e556a5ef8d3515fa9141f911ad9b0670d82761237eb5727
+ * Original-Hash: 58fda2a4ba7ed3f71d48cdef7a4706e3b623754bcf8242b03086620ef762f95e
  */
 
 /**
@@ -796,10 +796,13 @@ async function testAllAutoVariants() {
   });
 
   // Time-target and cheap tariff must also start from the pre-PWM B1 state.
+  // RC72+ may legitimately wait for a later forecast window. The deadline here
+  // is deliberately urgent so this RC60 contract tests the B1 start path rather
+  // than the separate forecast-window planner.
   await withHarness({
     userMode: 'auto', status: 'B1', vehicleConnected: true,
     goalEnabled: true, goalTargetSocPct: 60, vehicleSoc: 50, goalBatteryKwh: 60,
-    deadlineHours: 1, gridAllowed: true, tariffState: 'neutral', goalStrategy: 'standard',
+    deadlineHours: 0.4, gridAllowed: true, tariffState: 'neutral', goalStrategy: 'standard',
   }, async h => {
     const out = await h.tick();
     assert.equal(out.goalActive, true);
@@ -824,7 +827,7 @@ async function testAllAutoVariants() {
     goalTargetSocPct: 60,
     vehicleSoc: 50,
     goalBatteryKwh: 60,
-    deadlineHours: 1,
+    deadlineHours: 0.4,
     gridAllowed: true,
     goalStrategy: 'standard',
   }, async h => {
@@ -839,22 +842,26 @@ async function testAllAutoVariants() {
     assert.ok(out.targetPowerW > 4100, `time-target did not ramp after response: ${out.targetPowerW}`);
   });
 
-  // Cheap tariff + Smart target preloads more strongly than standard target.
+  // Under an urgent planner corridor, a cheap tariff must never reduce the
+  // target compared with the standard strategy. RC72 owns exact window/boost
+  // shaping, while RC60 keeps the universal control path protocol-neutral.
   let standardAfterResponse = 0;
   await withHarness({
     userMode: 'auto', status: 'C2', vehicleConnected: true, actualPowerW: 4500,
-    goalEnabled: true, goalTargetSocPct: 60, vehicleSoc: 50, deadlineHours: 10,
+    goalEnabled: true, goalTargetSocPct: 60, vehicleSoc: 50, deadlineHours: 0.6,
     gridAllowed: true, tariffState: 'neutral', goalStrategy: 'standard',
   }, async h => {
     standardAfterResponse = (await h.tick()).targetPowerW;
   });
   await withHarness({
     userMode: 'auto', status: 'C2', vehicleConnected: true, actualPowerW: 4500,
-    goalEnabled: true, goalTargetSocPct: 60, vehicleSoc: 50, deadlineHours: 10,
+    goalEnabled: true, goalTargetSocPct: 60, vehicleSoc: 50, deadlineHours: 0.6,
     gridAllowed: true, tariffState: 'guenstig', goalStrategy: 'smart',
   }, async h => {
     const out = await h.tick();
-    assert.ok(out.targetPowerW > standardAfterResponse, `cheap tariff did not increase smart target (${out.targetPowerW} <= ${standardAfterResponse})`);
+    assert.ok(standardAfterResponse > 4100, `urgent standard target did not charge (${standardAfterResponse})`);
+    assert.ok(out.targetPowerW > 4100, `urgent smart target did not charge (${out.targetPowerW})`);
+    assert.ok(out.targetPowerW >= standardAfterResponse, `cheap tariff reduced the smart target (${out.targetPowerW} < ${standardAfterResponse})`);
   });
 
   // Expensive tariff waits when deadline is safe, but urgent target overrides the tariff gate.

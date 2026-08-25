@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:a6f6f4e5431795c0671b2072a82ebe389aaece1ec623b3e5b04f8ca0e80ed83e
+ * Quell-Hash: sha256:4327f37f05bc973e274eeb473353a06888baa0a3c957ef0657dcbe26e94b6cdd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -7434,17 +7434,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (typeof gc.rlmEnabled !== 'boolean') gc.rlmEnabled = false;
     if (typeof gc.rlmAligned !== 'boolean') gc.rlmAligned = true;
 
-    // RC79: zweistufige Netzbezugsbegrenzung. 0 beim Hard-Limit bedeutet,
-    // dass die Netzanschlussleistung aus Zuordnung → Allgemein verwendet wird.
-    // 0 beim Soft-Limit bzw. bei der Reserve aktiviert die automatische Reserve
-    // (10 %, mindestens 1 kW, höchstens 3 kW).
-    if (typeof gc.importSoftLimitEnabled !== 'boolean') gc.importSoftLimitEnabled = true;
-    const importHardLimitW = Number(gc.importHardLimitW ?? gc.gridImportHardLimitW ?? 0);
-    gc.importHardLimitW = Number.isFinite(importHardLimitW) && importHardLimitW >= 0 ? Math.round(importHardLimitW) : 0;
-    const importSoftLimitW = Number(gc.importSoftLimitW ?? 0);
-    gc.importSoftLimitW = Number.isFinite(importSoftLimitW) && importSoftLimitW >= 0 ? Math.round(importSoftLimitW) : 0;
-    const importSoftReserveW = Number(gc.importSoftReserveW ?? 0);
-    gc.importSoftReserveW = Number.isFinite(importSoftReserveW) && importSoftReserveW >= 0 ? Math.round(importSoftReserveW) : 0;
+    // RC81: Zuordnung → Allgemein ist die einzige statische Quelle für
+    // Netzanschlussleistung und signierte NVP-Messung. Netzlimits darf weder
+    // eine zweite Hard-Limit-Vorgabe noch einen zweiten NVP-Datenpunkt führen.
+    // Alte RC79/RC80-Overrides werden beim nächsten Speichern neutralisiert und
+    // von der Runtime zusätzlich ignoriert. Soft bleibt automatisch 90 % der
+    // wirksamen, aus der Zuordnung abgeleiteten Hard-Grenze.
+    gc.importSoftLimitEnabled = true;
+    gc.importHardLimitW = 0;
+    gc.gridImportHardLimitW = 0;
+    gc.gridPowerId = '';
+    gc.importSoftLimitW = 0;
+    gc.importSoftReserveW = 0;
     const importSoftHysteresisW = Number(gc.importSoftHysteresisW ?? 500);
     gc.importSoftHysteresisW = Number.isFinite(importSoftHysteresisW) && importSoftHysteresisW >= 0 ? Math.round(importSoftHysteresisW) : 500;
     const importSoftReleaseDelaySec = Number(gc.importSoftReleaseDelaySec ?? 10);
@@ -7973,7 +7974,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     };
 
     /**
-     * RC79: Runtime-Diagnose fuer das zweistufige Importlimit. Die Anzeige ist
+     * RC81: Runtime-Diagnose fuer das zentral zugeordnete Importlimit. Die Anzeige ist
      * rein lesend und zeigt bewusst den signierten NVP: Bezug positiv,
      * Einspeisung negativ.
      */
@@ -8009,9 +8010,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           const stage = readVal(data, 'gridConstraints.importLimits.stage');
           const rows = [
             ['Stufe', stageLabel(stage)],
+            ['Quelle', String(readVal(data, 'gridConstraints.importLimits.source') || '—')],
+            ['Netzanschlussleistung (Zuordnung)', fmtW(readVal(data, 'gridConstraints.importLimits.baseConnectionPowerW'))],
             ['Signierter NVP', fmtW(readVal(data, 'gridConstraints.importLimits.signedNvpW'))],
-            ['Soft-Limit', fmtW(readVal(data, 'gridConstraints.importLimits.softLimitW'))],
-            ['Hard-Limit', fmtW(readVal(data, 'gridConstraints.importLimits.hardLimitW'))],
+            ['Soft-Limit wirksam', fmtW(readVal(data, 'gridConstraints.importLimits.softLimitW'))],
+            ['Hard-Limit wirksam', fmtW(readVal(data, 'gridConstraints.importLimits.hardLimitW'))],
             ['Reserve Soft → Hard', fmtW(readVal(data, 'gridConstraints.importLimits.reserveW'))],
             ['Headroom bis Soft', fmtW(readVal(data, 'gridConstraints.importLimits.softHeadroomW'))],
             ['Headroom bis Hard', fmtW(readVal(data, 'gridConstraints.importLimits.hardHeadroomW'))],
@@ -8045,29 +8048,27 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         });
     };
 
-    // Meter / Timeout
+    // NVP-Messung / Timeout: Zuordnung → Allgemein ist die einzige Quelle.
     if (meterEl) {
-      const gridPowerId = String(gc.gridPowerId || '').trim();
-      meterEl.appendChild(mkDpField('Netzleistung (Fallback) (optional)', 'gc_gridPowerId', gridPowerId, (v) => { gc.gridPowerId = v; }, 'Datenpunkt-ID (W)'));
+      const assignedNvpId = String(currentConfig?.datapoints?.gridPointPower || '').trim();
+      meterEl.appendChild(mkHint(assignedNvpId
+        ? `Verwendeter NVP-Datenpunkt aus Zuordnung → Allgemein: ${assignedNvpId}`
+        : 'Kein NVP-Datenpunkt zugeordnet. Bitte unter Zuordnung → Allgemein → Netzpunkt-Messung auswählen.'));
       meterEl.appendChild(mkNum('Stale‑Timeout', 'gc_staleTimeoutSec', (gc.staleTimeoutSec !== undefined && gc.staleTimeoutSec !== null) ? Number(gc.staleTimeoutSec) : 15, (n) => { gc.staleTimeoutSec = (n > 0) ? Math.max(5, Math.round(n)) : 15; }, 's', 'z.B. 15'));
-      meterEl.appendChild(mkHint('Wenn der NVP älter als der Timeout ist, werden keine neuen positiven Lastfreigaben erteilt.'));
+      meterEl.appendChild(mkHint('Wenn der zugeordnete NVP älter als der Timeout ist, werden keine neuen positiven Lastfreigaben erteilt.'));
     }
 
-    // Zweistufiges Importlimit
+    // Zweistufiges Importlimit: ausschließlich aus Zuordnung → Allgemein.
     if (importEl) {
-      importEl.appendChild(mkNum('Hard‑Limit Netzbezug', 'gc_importHardLimitW', Number(gc.importHardLimitW || 0) || 0, (n) => { gc.importHardLimitW = Math.max(0, Math.round(n)); }, 'W', '0 = Netzanschlussleistung'));
-      importEl.appendChild(mkChk('Soft‑Limit verwenden', 'gc_importSoftLimitEnabled', gc.importSoftLimitEnabled !== false, (b) => {
-        gc.importSoftLimitEnabled = b;
-        buildGridConstraintsUI();
-        scheduleValidation(200);
-      }));
-      if (gc.importSoftLimitEnabled !== false) {
-        importEl.appendChild(mkNum('Soft‑Limit explizit', 'gc_importSoftLimitW', Number(gc.importSoftLimitW || 0) || 0, (n) => { gc.importSoftLimitW = Math.max(0, Math.round(n)); }, 'W', '0 = automatisch'));
-        importEl.appendChild(mkNum('Reserve unter Hard‑Limit', 'gc_importSoftReserveW', Number(gc.importSoftReserveW || 0) || 0, (n) => { gc.importSoftReserveW = Math.max(0, Math.round(n)); }, 'W', '0 = auto 10 % / 1–3 kW'));
-        importEl.appendChild(mkNum('Hysterese', 'gc_importSoftHysteresisW', Number(gc.importSoftHysteresisW || 500) || 0, (n) => { gc.importSoftHysteresisW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 500'));
-        importEl.appendChild(mkNum('Wiederfreigabe‑Verzögerung', 'gc_importSoftReleaseDelaySec', Number(gc.importSoftReleaseDelaySec || 10) || 0, (n) => { gc.importSoftReleaseDelaySec = Math.max(0, Math.round(n)); }, 's', 'z.B. 10'));
-      }
-      importEl.appendChild(mkHint('Soft begrenzt vorausschauend neue flexible Lasten. Hard ist die absolute Bezugsgrenze und wird zusätzlich unmittelbar vor jedem Hardware‑Write geprüft. Einspeisung (negativer NVP) erhöht den verfügbaren Headroom.'));
+      const assignedHardW = Number(currentConfig?.installerConfig?.gridConnectionPower || 0) || 0;
+      const fixedReserveW = assignedHardW > 0 ? Math.round(assignedHardW * 0.10) : 0;
+      const fixedSoftW = assignedHardW > 0 ? Math.max(0, Math.round(assignedHardW) - fixedReserveW) : 0;
+      importEl.appendChild(mkHint(assignedHardW > 0
+        ? `Quelle: Zuordnung → Allgemein. Netzanschlussleistung / Hard‑Limit: ${Math.round(assignedHardW).toLocaleString('de-DE')} W (100 %). Soft‑Limit: ${fixedSoftW.toLocaleString('de-DE')} W (90 %). Reserve: ${fixedReserveW.toLocaleString('de-DE')} W (10 %).`
+        : 'Keine Netzanschlussleistung gesetzt. Bitte unter Zuordnung → Allgemein eintragen; dort wird das Hard‑Limit zentral festgelegt.'));
+      importEl.appendChild(mkNum('Hysterese', 'gc_importSoftHysteresisW', Number(gc.importSoftHysteresisW || 500) || 0, (n) => { gc.importSoftHysteresisW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 500'));
+      importEl.appendChild(mkNum('Wiederfreigabe‑Verzögerung', 'gc_importSoftReleaseDelaySec', Number(gc.importSoftReleaseDelaySec || 10) || 0, (n) => { gc.importSoftReleaseDelaySec = Math.max(0, Math.round(n)); }, 's', 'z.B. 10'));
+      importEl.appendChild(mkHint('Netzlimits besitzt bewusst keine zweite Leistungs- oder NVP-Vorgabe. Ein RLM-/Netzbetreiberdeckel darf die aus der Zuordnung stammende Grenze nur absenken, niemals ersetzen oder erhöhen. Einspeisung (negativer NVP) erhöht den Headroom bis zur Bezugsgrenze.'));
       renderGridImportRuntimeDiagnostics(importEl);
     }
 
