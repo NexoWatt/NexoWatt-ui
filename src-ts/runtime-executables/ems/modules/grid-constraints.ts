@@ -403,6 +403,10 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.sinkAckSummaryJson', '0-export sink ACK summary JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkAckHistoryJson', '0-export sink ACK history JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkAckFieldProtocolJson', '0-export sink ACK field protocol JSON', 'string', 'json');
+        // RC83: Das kombinierte Feldprotokoll wird im schnellen 0-Einspeise-Pfad
+        // zyklisch geschrieben. Das Objekt muss zwingend vor dem ersten Write
+        // existieren, sonst erzeugt ioBroker alle paar Sekunden eine Warnung.
+        await mk('gridConstraints.exportLimit.sinkFieldProtocolJson', '0-export sink field protocol JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkAckOkCount', '0-export sink ACK ok count', 'number', 'value');
         await mk('gridConstraints.exportLimit.sinkAckPendingCount', '0-export sink ACK pending count', 'number', 'value');
         await mk('gridConstraints.exportLimit.sinkAckErrorCount', '0-export sink ACK error count', 'number', 'value');

@@ -452,14 +452,22 @@ async function runTick({
     lastSource: 'eigenverbrauch',
     storagePatch: { pvEnabled: false, tariffPermissionHoldSec: 0, allowGridCharge: true },
     tarifVis: {
+      ts: Date.now(),
       aktiv: true,
-      state: 'cheap',
+      tarifAktiv: true,
+      currentPriceFresh: true,
+      state: 'guenstig',
       speicherSollW: -4000,
       negativeActive: true,
       gridImportPreferred: true,
       netzbezugBevorzugt: true,
       storageGridChargeAllowed: true,
+      storageGridChargeSource: 'dynamic-tariff-cheap',
       storageGridChargeBlockReason: '',
+      netFeeEnabled: false,
+      netFeeMode: 'off',
+      storageManualWindowActive: false,
+      storageChargeWindowOk: false,
     },
   });
   assert.strictEqual(tariffChargeReverse.targetW, -4000, `Tarif-Richtungswechsel muss direkt Netzladen schreiben: ${tariffChargeReverse.targetW}`);

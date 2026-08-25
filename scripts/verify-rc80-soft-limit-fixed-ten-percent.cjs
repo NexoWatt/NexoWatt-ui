@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC80 / 0.8.207
+ * RC80 / 0.8.208
  * Verbindliche Soft-Limit-Regel:
  * - Reserve = exakt 10 % des wirksamen NVP-/Hard-Limits
  * - Soft-Limit = exakt 90 % des wirksamen Hard-Limits
@@ -44,8 +44,8 @@ function verifyPair(hardLimitW, expectedReserveW, expectedSoftW) {
 (() => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.207');
-  assert.strictEqual(io.common.version, '0.8.207');
+  assert.strictEqual(pkg.version, '0.8.208');
+  assert.strictEqual(io.common.version, '0.8.208');
 
   // 1) Keine Mindestreserve: 5 kW ergeben exakt 500 W Reserve.
   verifyPair(5000, 500, 4500);
@@ -115,7 +115,7 @@ function verifyPair(hardLimitW, expectedReserveW, expectedSoftW) {
   const safety = read('src-ts/runtime-executables/ems/services/safety-envelope.ts');
   assert(safety.includes('maxImportW - signedNvpW'));
   assert(!safety.includes('gridImportLimitW_planning'));
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v488'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v489'"));
 
   // 10) Dokumentation nennt explizit das Ende der 1-/3-kW-Klammer.
   const docs = read('docs/RC80_SOFT_LIMIT_FIXED_TEN_PERCENT_DE.md');

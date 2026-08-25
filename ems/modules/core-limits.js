@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:16812ea2538f1f8e6965f6c0c7e4e2fe82818301288a4b8c21f462d5d331d9a4
+ * Quell-Hash: sha256:e9c9831a20a1d2448ad38bb5a38059f31ed9c6d41fa2ef06a53b76cc43452e37
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2462,7 +2462,7 @@ class CoreLimitsModule extends BaseModule {
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
             ].filter(Boolean).map((m) => {
                 if (m && m.field === 'grid.effectiveW' && modernTypedRuntimeActive) {
-                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-grid-shadow-superseded-by-core-runtime-v2' };
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget · legacy-grid-shadow-superseded-by-core-runtime-v2' };
                 }
                 if (m && m.field === 'total.effectiveW' && modernTypedRuntimeActive) {
                     return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-total-shadow-superseded-by-core-runtime-v2' };

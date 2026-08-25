@@ -2464,7 +2464,7 @@ class CoreLimitsModule extends BaseModule {
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
             ].filter(Boolean).map((m) => {
                 if (m && m.field === 'grid.effectiveW' && modernTypedRuntimeActive) {
-                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-grid-shadow-superseded-by-core-runtime-v2' };
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget · legacy-grid-shadow-superseded-by-core-runtime-v2' };
                 }
                 if (m && m.field === 'total.effectiveW' && modernTypedRuntimeActive) {
                     return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-total-shadow-superseded-by-core-runtime-v2' };

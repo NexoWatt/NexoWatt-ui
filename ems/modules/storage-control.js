@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:d6e8057c058b43921476d1061b8b7bdee5f40eba7028bbc33a86185e9e3c630d
+ * Quell-Hash: sha256:0a33ac9b0fc7e7d2d9ca0fab4f5005ae577c54079a99e1e31eadcac7b104b61a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -104,6 +104,114 @@ function isCentralStorageGridChargeSource(src, signedTargetW) {
         || normalized === 'grid_charge';
 }
 
+/**
+ * RC83: Unabhängige, fail-closed Prüfung des TarifVis-Snapshots unmittelbar
+ * vor der Speicherregelung. Ein altes/persistiertes `true` darf Netzladen nicht
+ * freigeben. Zulässig ist ausschließlich ein frischer, aktiver und günstiger
+ * dynamischer Tarif; bei aktivem variablem Netzentgelt zusätzlich nur das
+ * konfigurierte NT-/Quartalsfenster.
+ */
+function resolveStrictStorageTariffPermission(snapshot = {}, {
+    nowMs = Date.now(),
+    snapshotMaxAgeMs = 15000,
+} = {}) {
+    const snap = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    const advertisedAllowed = snap.storageGridChargeAllowed === true;
+    const advertisedReason = String(snap.storageGridChargeBlockReason || '').trim();
+    const ts = strictFiniteNumber(snap.ts, null);
+    const maxAgeMs = Math.max(1000, strictFiniteNumber(snapshotMaxAgeMs, 15000));
+    const ageMs = ts === null ? null : Math.max(0, Number(nowMs) - ts);
+
+    if (ts === null || ageMs > maxAgeMs) {
+        return {
+            allowed: false,
+            source: 'snapshot-stale',
+            reason: ts === null
+                ? 'Tarif-Freigabesnapshot fehlt – Speicher bleibt eigenverbrauchsoptimiert'
+                : `Tarif-Freigabesnapshot ist ${Math.round(ageMs / 1000)} s alt – Speicher bleibt eigenverbrauchsoptimiert`,
+            ageMs,
+        };
+    }
+    if (!advertisedAllowed) {
+        return {
+            allowed: false,
+            source: String(snap.storageGridChargeSource || 'blocked'),
+            reason: advertisedReason || 'Speicher-Netzladen ist nicht freigegeben – Eigenverbrauchsoptimierung aktiv',
+            ageMs,
+        };
+    }
+    if (snap.tarifAktiv !== true) {
+        return {
+            allowed: false,
+            source: 'dynamic-tariff',
+            reason: 'Dynamischer Tarif ist nicht aktiv – Speicher bleibt eigenverbrauchsoptimiert',
+            ageMs,
+        };
+    }
+    if (snap.currentPriceFresh !== true) {
+        return {
+            allowed: false,
+            source: 'dynamic-tariff',
+            reason: 'Aktueller Tarifpreis fehlt oder ist veraltet – Speicher bleibt eigenverbrauchsoptimiert',
+            ageMs,
+        };
+    }
+
+    const state = String(snap.state || 'unknown').trim().toLowerCase().replace(/ü/g, 'ue');
+    if (state !== 'guenstig') {
+        const label = state === 'neutral' ? 'neutral' : state === 'teuer' ? 'teuer' : String(snap.state || 'unbekannt');
+        return {
+            allowed: false,
+            source: 'dynamic-tariff',
+            reason: `Tarif ist ${label} – Netzladen gesperrt, Eigenverbrauchsoptimierung aktiv`,
+            ageMs,
+        };
+    }
+
+    const netFeeEnabled = snap.netFeeEnabled === true;
+    if (netFeeEnabled) {
+        const netFeeMode = String(snap.netFeeMode || '').trim().toUpperCase();
+        const manualWindowActive = snap.storageManualWindowActive === true || snap.storageChargeWindowOk === true;
+        if (netFeeMode !== 'NT' || !manualWindowActive) {
+            return {
+                allowed: false,
+                source: 'net-fee',
+                reason: 'Tarif ist günstig, aber das konfigurierte NT-/Quartalsfenster ist nicht aktiv – Eigenverbrauchsoptimierung aktiv',
+                ageMs,
+            };
+        }
+    }
+
+    return {
+        allowed: true,
+        source: netFeeEnabled ? 'net-fee-nt-cheap' : 'dynamic-tariff-cheap',
+        reason: netFeeEnabled
+            ? 'Dynamischer Tarif günstig und konfiguriertes NT-/Quartalsfenster aktiv'
+            : 'Dynamischer Tarif günstig und frisch',
+        ageMs,
+    };
+}
+
+/**
+ * Ermittelt unmittelbar vor dem Hardware-Writer die fachliche Herkunft eines
+ * negativen Speicher-Sollwerts. Herstellerprofile und die 0-W-Firewall dürfen
+ * den ursprünglichen Tarif-/Reservepfad nicht verdecken. Gleichzeitig hat eine
+ * nach der Firewall wiederhergestellte aktuelle Quelle (z. B. `tarif`) Vorrang
+ * vor dem vor dem Herstellerprofil gemerkten Wert (z. B. `idle`).
+ */
+function resolveStorageGridChargeGateSource({
+    targetW = 0,
+    source = '',
+    policySourceBeforeVendor = '',
+} = {}) {
+    const currentSource = String(source || '').trim();
+    const upstreamSource = String(policySourceBeforeVendor || '').trim();
+
+    if (isCentralStorageGridChargeSource(currentSource, targetW)) return currentSource;
+    if (isCentralStorageGridChargeSource(upstreamSource, targetW)) return upstreamSource;
+    return currentSource || upstreamSource;
+}
+
 function resolveStorageGridChargeFinalGate({
     targetW = 0,
     source = '',
@@ -116,9 +224,128 @@ function resolveStorageGridChargeFinalGate({
         return { blocked: false, targetW: Number(targetW) || 0, reason: '', gridChargeSource };
     }
     const reason = configured === true
-        ? (String(blockReason || '').trim() || 'Speicher-Netzladen nur bei aktivem konfiguriertem NT-Fenster oder – bei ausgeschaltetem Netzentgelt – günstigem dynamischem Tarif erlaubt')
+        ? (String(blockReason || '').trim() || 'Speicher-Netzladen nur bei frischem günstigen dynamischen Tarif und – bei aktivem Netzentgelt – aktivem NT-/Quartalsfenster erlaubt')
         : 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
     return { blocked: true, targetW: 0, reason, gridChargeSource: true };
+}
+
+
+/**
+ * RC83: Physikalische letzte Ladebegrenzung für alle negativen Speicherziele,
+ * deren Herkunft nicht eindeutig als zentraler Tarif-/Reserve-Netzladepfad
+ * erkannt wurde. Ist die wirtschaftliche Netzladefreigabe nicht aktiv, darf
+ * der Speicher nur so weit laden, wie lokaler PV-Überschuss am NVP vorhanden
+ * ist. Damit können weder Hersteller-Assists noch Hold-/Rampenpfade einen alten
+ * hohen Ladebefehl weiterführen und dadurch teuren Netzbezug erzeugen.
+ *
+ * Vorzeichenvertrag:
+ * - NVP positiv = Netzbezug, negativ = Einspeisung
+ * - Batterie positiv = Entladung, negativ = Beladung
+ * - NVP ohne Batterie = gemessener NVP + Batterie-Istleistung
+ */
+function resolveStoragePvOnlyChargeSafetyGate({
+    targetW = 0,
+    gridChargeAllowed = false,
+    signedNvpW = null,
+    batteryPowerW = null,
+    batteryPowerTrusted = false,
+    targetImportW = 0,
+    validatedPvFeedForwardChargeW = null,
+    blockReason = '',
+} = {}) {
+    const requestedTargetW = strictFiniteNumber(targetW, 0);
+    if (!(requestedTargetW < 0) || gridChargeAllowed === true) {
+        return {
+            limited: false,
+            blocked: false,
+            targetW: requestedTargetW,
+            requestedChargeW: Math.max(0, -requestedTargetW),
+            allowedChargeW: Math.max(0, -requestedTargetW),
+            pvOnlyCapW: null,
+            nvpDerivedPvOnlyCapW: null,
+            validatedFeedForwardCapW: null,
+            capSource: '',
+            baseNvpWithoutBatteryW: null,
+            targetImportW: Math.max(0, strictFiniteNumber(targetImportW, 0)),
+            batteryFeedbackUsed: false,
+            reason: '',
+        };
+    }
+
+    const requestedChargeW = Math.max(0, -requestedTargetW);
+    const nvpW = strictFiniteNumber(signedNvpW, null);
+    const targetNvpW = Math.max(0, strictFiniteNumber(targetImportW, 0));
+    const trustedBatteryW = batteryPowerTrusted === true
+        ? strictFiniteNumber(batteryPowerW, null)
+        : null;
+    const batteryFeedbackUsed = trustedBatteryW !== null;
+
+    // Ohne gültigen NVP wird fail-closed kein negativer Sollwert freigegeben.
+    // Ist kein vertrauenswürdiger Batterie-Istwert vorhanden, wird konservativ
+    // angenommen, dass die Batterie aktuell 0 W beiträgt. Dadurch kann nur eine
+    // tatsächlich gemessene Einspeisung als Ladefreigabe dienen.
+    const baseNvpWithoutBatteryW = nvpW === null
+        ? null
+        : nvpW + (batteryFeedbackUsed ? trustedBatteryW : 0);
+    const nvpDerivedPvOnlyCapW = baseNvpWithoutBatteryW === null
+        ? 0
+        : Math.max(0, targetNvpW - baseNvpWithoutBatteryW);
+
+    // Bei einigen Hybridspeichern ist der Batterie-Istwert kurzzeitig 0 W oder
+    // deutlich zeitversetzt, obwohl direkte PV- und Lastmessungen bereits einen
+    // stabilen lokalen PV-Ueberschuss bestaetigen. Der gemeinsame NVP-Regler
+    // markiert einen solchen Feed-forward nur dann als `used`, wenn PV, Last und
+    // NVP direkt gemappt, frisch, zeitlich plausibel und untereinander konsistent
+    // sind. Dieser bereits validierte Wert darf deshalb als zweite, physikalisch
+    // belastbare Obergrenze dienen. Ein beliebiger Sollwert oder eine ungepruefte
+    // PV-Messung wird hier ausdruecklich nicht akzeptiert.
+    const feedForwardRawW = strictFiniteNumber(validatedPvFeedForwardChargeW, null);
+    const validatedFeedForwardCapW = feedForwardRawW === null
+        ? 0
+        : Math.max(0, feedForwardRawW);
+    const pvOnlyCapW = nvpW === null
+        ? 0
+        : Math.max(nvpDerivedPvOnlyCapW, validatedFeedForwardCapW);
+    const capSource = pvOnlyCapW <= 0
+        ? 'none'
+        : (validatedFeedForwardCapW > nvpDerivedPvOnlyCapW
+            ? 'validated-pv-load-feed-forward'
+            : 'nvp-battery-balance');
+    const allowedChargeW = Math.min(requestedChargeW, pvOnlyCapW);
+    const finalTargetW = allowedChargeW > 0 ? -allowedChargeW : 0;
+    const limited = (requestedChargeW - allowedChargeW) > 1;
+    const blocked = limited && allowedChargeW <= 1;
+    const tariffReason = String(blockReason || '').trim()
+        || 'Speicher-Netzladen ist außerhalb eines frischen günstigen Tarifzeitpunkts gesperrt';
+
+    let reason = '';
+    if (limited) {
+        if (nvpW === null) {
+            reason = `${tariffReason} · NVP-Messung fehlt oder ist veraltet; Ladebefehl sicher auf 0 W gesetzt`;
+        } else if (blocked) {
+            reason = `${tariffReason} · kein lokaler PV-Überschuss für Speicherladung verfügbar`;
+        } else if (capSource === 'validated-pv-load-feed-forward') {
+            reason = `${tariffReason} · Speicherladung auf validierten lokalen PV-/Last-Überschuss ${Math.round(allowedChargeW)} W begrenzt`;
+        } else {
+            reason = `${tariffReason} · Speicherladung auf lokalen PV-Überschuss ${Math.round(allowedChargeW)} W begrenzt`;
+        }
+    }
+
+    return {
+        limited,
+        blocked,
+        targetW: finalTargetW,
+        requestedChargeW,
+        allowedChargeW,
+        pvOnlyCapW,
+        nvpDerivedPvOnlyCapW,
+        validatedFeedForwardCapW,
+        capSource,
+        baseNvpWithoutBatteryW,
+        targetImportW: targetNvpW,
+        batteryFeedbackUsed,
+        reason,
+    };
 }
 
 /**
@@ -2013,15 +2240,15 @@ class SpeicherRegelungModule extends BaseModule {
         const tariffSnapshot = (this.adapter && this.adapter._tarifVis && typeof this.adapter._tarifVis === 'object')
             ? this.adapter._tarifVis
             : null;
-        let gridChargeAllowedRaw = false;
-        let gridChargeBlockReason = 'Tarif-/NT-Freigabe fehlt';
-        if (tariffSnapshot && typeof tariffSnapshot.storageGridChargeAllowed === 'boolean') {
-            gridChargeAllowedRaw = tariffSnapshot.storageGridChargeAllowed === true;
-            gridChargeBlockReason = String(tariffSnapshot.storageGridChargeBlockReason || '');
-        } else if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('st.tariffGridChargeAllowed')) {
-            gridChargeAllowedRaw = this.dp.getBoolean('st.tariffGridChargeAllowed', false) === true;
-            gridChargeBlockReason = gridChargeAllowedRaw ? '' : 'Tarif-/NT-Freigabe ist nicht aktiv';
-        }
+        const strictTariffPermission = resolveStrictStorageTariffPermission(tariffSnapshot || {}, {
+            nowMs: now,
+            snapshotMaxAgeMs: Math.round(clamp(num(cfg.tariffPermissionSnapshotMaxAgeSec, 15), 1, 60) * 1000),
+        });
+        // Kein Fallback mehr auf einen einzelnen persistierten Boolean-State:
+        // Ein altes `tarif.speicherNetzLadenErlaubt=true` könnte sonst nach einem
+        // Tarifwechsel auf neutral/teuer oder bei ausgefallenem TarifVis weiterwirken.
+        const gridChargeAllowedRaw = strictTariffPermission.allowed === true;
+        let gridChargeBlockReason = gridChargeAllowedRaw ? '' : String(strictTariffPermission.reason || 'Tarif-Freigabe fehlt');
 
         let dischargeAllowedRaw = true;
         if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('cm.dischargeAllowed')) {
@@ -2074,7 +2301,7 @@ class SpeicherRegelungModule extends BaseModule {
         } else if (!gridChargeAllowed && !gridChargeBlockReason) {
             gridChargeBlockReason = gridChargeAllowedRaw
                 ? 'Speicher-Netzladefreigabe wird stabilisiert'
-                : 'Weder ein aktives konfiguriertes NT-Fenster noch ein günstiger dynamischer Tarifpfad ist freigegeben';
+                : 'Kein frischer günstiger dynamischer Tarifpfad freigegeben';
         } else if (gridChargeAllowed) {
             gridChargeBlockReason = '';
         }
@@ -5526,10 +5753,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // Defense-in-depth: Selbst wenn ein Herstellerprofil, Hold-Pfad,
         // Reserve- oder Refill-Modul einen negativen Netzlade-Sollwert weiterträgt,
         // muss unmittelbar vor dem Writer erneut die zentrale wirtschaftliche
-        // Freigabe gelten. PV-/NVP-Laden bleibt absichtlich unangetastet.
+        // Freigabe gelten. Echte PV-/NVP-Ladung bleibt möglich, wird aber in
+        // der nachfolgenden physikalischen Schutzebene strikt auf den nachweisbar
+        // lokalen PV-Überschuss begrenzt.
+        const gridChargeGateSource = resolveStorageGridChargeGateSource({
+            targetW,
+            source,
+            policySourceBeforeVendor,
+        });
         const gridChargeFinalGate = resolveStorageGridChargeFinalGate({
             targetW,
-            source: policySourceBeforeVendor || source,
+            source: gridChargeGateSource,
             configured: gridChargeConfigured,
             allowed: gridChargeAllowed,
             blockReason: gridChargeBlockReason,
@@ -5549,7 +5783,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             pvBudgetPostVendorNoWriteHold = false;
             pvBudgetPostVendorNoWriteReason = '';
             if (sungrowHybridActive) {
-                sungrowWriteMode = 'write-grid-charge-config-stop';
+                sungrowWriteMode = gridChargeBlockedByConfig
+                    ? 'write-grid-charge-config-stop'
+                    : 'write-grid-charge-tariff-stop';
                 this._sungrowHybridLastMode = sungrowWriteMode;
             }
             storageNvpBalanceDiag = {
@@ -5561,6 +5797,164 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 gridChargeBlockedByTariffGate: !!gridChargeBlockedByTariffGate,
                 gridChargeBlockReason: String(gridChargeBlockReason || ''),
                 mode: gridChargeBlockedByConfig ? 'grid-charge-config-stop' : 'grid-charge-tariff-window-stop',
+            };
+        }
+
+        // Zweite, physikalische Schutzebene: Auch ein negativer Sollwert aus
+        // Hersteller-Assist, Hold oder einem als PV markierten Pfad darf bei
+        // gesperrtem Netzladen maximal den real lokal vorhandenen PV-Überschuss
+        // aufnehmen. Für die NVP-Seite wird der konservativere (höhere) frische
+        // Messwert verwendet. Bei mehreren Batterie-Istwerten gilt ebenfalls der
+        // numerisch höhere Wert, weil er den verfügbaren Überschuss nie zu groß
+        // schätzt (bei Ladung also den weniger negativen Wert).
+        let storagePvOnlyTariffSafetyDiag = null;
+        if (!gridChargeFinalGate.blocked && targetW < 0 && !gridChargeAllowed) {
+            const nvpSafetyCandidates = [gridRawW, gridW]
+                .map((value) => strictFiniteNumber(value, null))
+                .filter((value) => value !== null);
+            const signedNvpForTariffSafetyW = nvpSafetyCandidates.length
+                ? Math.max(...nvpSafetyCandidates)
+                : null;
+
+            const batterySafetyCandidates = [];
+            let tariffSafetyBatteryBasis = '';
+
+            const lastAcceptedTargetW = strictFiniteNumber(this._lastTargetW, null);
+            const lastAcceptedSource = String(this._lastSource || '');
+            const lastAcceptedPvOnly = lastAcceptedTargetW !== null
+                && lastAcceptedTargetW < 0
+                && isStorageBalanceSource(lastAcceptedSource)
+                && !isCentralStorageGridChargeSource(lastAcceptedSource, lastAcceptedTargetW);
+
+            // Nur wirklich frische Batterie-Istwerte dürfen den aktuellen
+            // Kommando-Anker verdrängen. Ein bereits als `held` markierter 0-W-
+            // Messwert ist bei träger Telemetrie nicht belastbar genug, um eine
+            // laufende PV-Beladung schlagartig zu stoppen.
+            const directBatteryFreshForTariffSafety = battPowerTrusted
+                && Number.isFinite(Number(battPowerW))
+                && (!battPowerAgeKnown || Number(battPowerAge) <= balanceFeedbackFreshMs);
+            const balanceBatteryFreshForTariffSafety = balanceBatteryTrusted
+                && Number.isFinite(Number(balanceBatteryPowerW))
+                && storageBalanceFeedback.held !== true
+                && storageBalanceFeedback.predicted !== true;
+
+            if (balanceBatteryFreshForTariffSafety) {
+                batterySafetyCandidates.push(Number(balanceBatteryPowerW));
+                tariffSafetyBatteryBasis = 'fresh-nvp-balance-feedback';
+            }
+            if (directBatteryFreshForTariffSafety) {
+                batterySafetyCandidates.push(Number(battPowerW));
+                tariffSafetyBatteryBasis = tariffSafetyBatteryBasis
+                    ? `${tariffSafetyBatteryBasis}+fresh-battery-feedback`
+                    : 'fresh-battery-feedback';
+            }
+
+            // Anlagen ohne zeitnahen Batterie-Istwert halten im NVP-Zielband den
+            // zuletzt akzeptierten PV-/Eigenverbrauchsbefehl. Dieser bestehende
+            // Kommando-Anker ist dann die beste verfügbare Näherung der aktuell
+            // wirksamen Batterie-Leistung. Tarif-/Reservequellen sind ausdrücklich
+            // ausgeschlossen und werden bereits vom ersten Gate vollständig auf
+            // 0 W gesetzt.
+            if (!batterySafetyCandidates.length && lastAcceptedPvOnly) {
+                batterySafetyCandidates.push(lastAcceptedTargetW);
+                tariffSafetyBatteryBasis = 'last-accepted-pv-command';
+            }
+
+            // Nur wenn weder frisches Feedback noch ein PV-Kommando-Anker existiert,
+            // darf ein begrenzt gehaltener Messwert als konservativer Fallback dienen.
+            if (!batterySafetyCandidates.length && balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))) {
+                batterySafetyCandidates.push(Number(balanceBatteryPowerW));
+                tariffSafetyBatteryBasis = 'held-nvp-balance-feedback';
+            }
+            if (!batterySafetyCandidates.length && battPowerTrusted && Number.isFinite(Number(battPowerW))) {
+                batterySafetyCandidates.push(Number(battPowerW));
+                tariffSafetyBatteryBasis = 'stale-window-battery-feedback';
+            }
+
+            const batteryPowerForTariffSafetyW = batterySafetyCandidates.length
+                ? Math.max(...batterySafetyCandidates)
+                : null;
+
+            // Nur ein vom gemeinsamen NVP-Regler tatsaechlich verwendeter und dort
+            // bereits auf direkte, frische, zeitlich ausgerichtete PV-/Lastwerte
+            // gepruefter Feed-forward darf die konservative NVP+Batterie-Schaetzung
+            // ergaenzen. Das ist insbesondere fuer Sungrow-/Hybrid-Telemetrie noetig,
+            // wenn der Batterie-Istwert kurzzeitig 0 W meldet, obwohl PV und lokale
+            // Last einen eindeutigen Ueberschuss ausweisen.
+            const feedForwardTargetForTariffSafetyW = storageNvpBalanceDiag
+                && storageNvpBalanceDiag.feedForwardUsed === true
+                && Number.isFinite(Number(storageNvpBalanceDiag.feedForwardTargetW))
+                && Number(storageNvpBalanceDiag.feedForwardTargetW) < 0
+                ? Math.max(0, -Number(storageNvpBalanceDiag.feedForwardTargetW))
+                : null;
+
+            const pvOnlyChargeSafety = resolveStoragePvOnlyChargeSafetyGate({
+                targetW,
+                gridChargeAllowed,
+                signedNvpW: signedNvpForTariffSafetyW,
+                batteryPowerW: batteryPowerForTariffSafetyW,
+                batteryPowerTrusted: batteryPowerForTariffSafetyW !== null,
+                targetImportW: Math.max(0, selfTargetGridW),
+                validatedPvFeedForwardChargeW: feedForwardTargetForTariffSafetyW,
+                blockReason: gridChargeConfigured
+                    ? gridChargeBlockReason
+                    : 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)',
+            });
+            storagePvOnlyTariffSafetyDiag = pvOnlyChargeSafety;
+
+            if (pvOnlyChargeSafety.limited) {
+                targetW = Number(pvOnlyChargeSafety.targetW) || 0;
+                reason = pvOnlyChargeSafety.reason;
+                source = targetW < 0 ? 'pv' : 'policy';
+                const existingChargeCapW = Number.isFinite(Number(chargeDemandHardCapW)) && Number(chargeDemandHardCapW) >= 0
+                    ? Number(chargeDemandHardCapW)
+                    : Number.POSITIVE_INFINITY;
+                chargeDemandHardCapW = Math.min(existingChargeCapW, Number(pvOnlyChargeSafety.allowedChargeW) || 0);
+                chargeDemandHardCapReason = reason;
+                if (pvOnlyChargeSafety.blocked) {
+                    storagePolicyBlocked = true;
+                    storagePolicyBlockReason = reason;
+                }
+
+                // Ein alter höherer Ladebefehl muss aktiv zurückgenommen werden.
+                // Daher dürfen Hold-/No-Write-Pfade den korrigierten Sollwert nicht
+                // verschlucken. Echte FEMS-Reglerhoheit bleibt davon unberührt.
+                storageZeroNoWrite = false;
+                sungrowNoWrite = false;
+                pvBudgetPostVendorNoWriteHold = false;
+                pvBudgetPostVendorNoWriteReason = '';
+                if (sungrowHybridActive) {
+                    sungrowWriteMode = targetW < 0
+                        ? 'write-pv-only-tariff-cap'
+                        : 'write-grid-charge-tariff-stop';
+                    this._sungrowHybridLastMode = sungrowWriteMode;
+                }
+            }
+
+            storageNvpBalanceDiag = {
+                ...(storageNvpBalanceDiag || {}),
+                targetW,
+                tariffPvOnlySafetyActive: true,
+                tariffPvOnlySafetyLimited: !!pvOnlyChargeSafety.limited,
+                tariffPvOnlySafetyBlocked: !!pvOnlyChargeSafety.blocked,
+                tariffPvOnlyRequestedChargeW: Number(pvOnlyChargeSafety.requestedChargeW) || 0,
+                tariffPvOnlyAllowedChargeW: Number(pvOnlyChargeSafety.allowedChargeW) || 0,
+                tariffPvOnlyCapW: Number(pvOnlyChargeSafety.pvOnlyCapW) || 0,
+                tariffPvOnlyNvpDerivedCapW: Number(pvOnlyChargeSafety.nvpDerivedPvOnlyCapW) || 0,
+                tariffPvOnlyValidatedFeedForwardCapW: Number(pvOnlyChargeSafety.validatedFeedForwardCapW) || 0,
+                tariffPvOnlyCapSource: String(pvOnlyChargeSafety.capSource || ''),
+                tariffPvOnlyBaseNvpW: Number.isFinite(Number(pvOnlyChargeSafety.baseNvpWithoutBatteryW))
+                    ? Number(pvOnlyChargeSafety.baseNvpWithoutBatteryW)
+                    : null,
+                tariffPvOnlySignedNvpW: signedNvpForTariffSafetyW,
+                tariffPvOnlyBatteryPowerW: batteryPowerForTariffSafetyW,
+                tariffPvOnlyBatteryFeedbackUsed: !!pvOnlyChargeSafety.batteryFeedbackUsed,
+                tariffPvOnlyBatteryBasis: tariffSafetyBatteryBasis,
+                tariffPvOnlyTargetImportW: Number(pvOnlyChargeSafety.targetImportW) || 0,
+                tariffPvOnlyReason: String(pvOnlyChargeSafety.reason || ''),
+                mode: pvOnlyChargeSafety.limited
+                    ? (pvOnlyChargeSafety.blocked ? 'tariff-pv-only-stop' : 'tariff-pv-only-cap')
+                    : String((storageNvpBalanceDiag && storageNvpBalanceDiag.mode) || ''),
             };
         }
 
@@ -10216,5 +10610,8 @@ module.exports = {
     applyStorageLicensePowerLimit,
     resolveNvpBandTarget,
     isCentralStorageGridChargeSource,
+    resolveStrictStorageTariffPermission,
+    resolveStorageGridChargeGateSource,
     resolveStorageGridChargeFinalGate,
+    resolveStoragePvOnlyChargeSafetyGate,
 };

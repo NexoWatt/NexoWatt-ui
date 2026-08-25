@@ -1,3 +1,15 @@
+## 0.8.208 - 2026-08-25
+
+- RC83 erlaubt Speicher-Netzladen ausschließlich bei **aktivem, frischem und günstigem** dynamischem Tarif. `neutral`, `teuer`, `unbekannt`, deaktivierter Tarif oder veraltete Preis-/Freigabedaten sperren Netzladen sofort; die normale Eigenverbrauchsoptimierung übernimmt.
+- Ist das variable Netzentgelt aktiviert, bleibt zusätzlich das manuell konfigurierte NT-/Quartalsfenster Pflicht. Ein NT-Fenster ohne günstigen dynamischen Tarif reicht nicht mehr aus.
+- TarifVis erzeugt außerhalb der vollständigen Freigabe keinen eigenen Lade- oder Entladesollwert. Die normale Eigenverbrauchsregelung übernimmt; jeder verbleibende negative Sollwert wird unmittelbar vor dem Writer physikalisch auf den lokal nachweisbaren PV-Überschuss begrenzt.
+- Die Speicherregelung verwendet keinen persistierten Einzel-Boolean mehr als Freigabe-Fallback. Stattdessen wird ein frischer, in sich konsistenter Tarif-Snapshot fail-closed geprüft; Sperren wirken sofort, Freigaben bleiben stabilisiert.
+- Unmittelbar vor dem Hardware-Writer werden Tarif-, Reserve- und Lastspitzen-Nachladequellen erneut gegatet. Die Quellauflösung berücksichtigt Herstellerprofile und die 0-W-Firewall, sodass ein gehaltener alter Netzladebefehl beim Tarifwechsel tatsächlich auf 0 W beendet wird.
+- Für Hersteller-/Hold-/Eigenverbrauchspfade ergänzt RC83 eine zweite PV-only-Sicherheitsgrenze aus signiertem NVP und Batterie-Istleistung. Bei träger Hybrid-Telemetrie darf ausschließlich ein bereits vom NVP-Regler validierter, frischer und zeitlich plausibler PV-/Last-Feed-forward die lokale Überschussobergrenze ergänzen; ohne gültigen NVP gilt fail-closed 0 W.
+- Eine zweite physikalische Schutzebene begrenzt Hersteller-, Hold- und Rampen-Ladepfade außerhalb günstig auf realen lokalen PV-Überschuss. Ein vom NVP-Regler bereits validierter PV-/Last-Feed-forward bleibt als sichere Eigenverbrauchsquelle zulässig, damit verzögerte Batterie-Telemetrie bei Sungrow/Hybrid keinen unnötigen 0-W-Stopp auslöst.
+- `gridConstraints.exportLimit.sinkFieldProtocolJson` wird jetzt in der Modulinitialisierung als String-/JSON-State angelegt, bevor der schnelle 0-Einspeise-Pfad ihn beschreibt. Damit endet die alle wenigen Sekunden wiederholte ioBroker-Warnung `has no existing object` nach dem Adapterneustart.
+- RC83 ergänzt einen eigenen Regressionstest für Tarifmatrix, stale Snapshot, finale Writer-Sperre, gehaltene Sollwerte, physikalische PV-only-Begrenzung, validierten Hybrid-Feed-forward und Objektinitialisierung.
+
 ## 0.8.207 - 2026-08-25
 
 - RC82 macht **Netzlimits** zum dauerhaft aktiven Kernschutz. Im AppCenter gibt es für diese Funktion keinen Installiert-/Aktiv-Schalter mehr; stattdessen wird der Status „Netzschutz dauerhaft aktiv · nicht abschaltbar“ angezeigt.

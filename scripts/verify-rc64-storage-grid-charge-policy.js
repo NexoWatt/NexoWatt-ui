@@ -29,26 +29,32 @@ const matrix = [
   {
     name: 'Netzentgelt an + NT aktiv + Dynamiktarif aus',
     input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: false, currentPriceFresh: false, tariffState: 'unknown' },
-    allowed: true,
-    source: 'net-fee-nt',
+    allowed: false,
+    source: 'dynamic-tariff',
   },
   {
     name: 'Netzentgelt an + NT aktiv + Tarif neutral und frisch',
     input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: true, currentPriceFresh: true, tariffState: 'neutral' },
+    allowed: false,
+    source: 'dynamic-tariff',
+  },
+  {
+    name: 'Netzentgelt an + NT aktiv + Tarif günstig und frisch',
+    input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: true, currentPriceFresh: true, tariffState: 'guenstig' },
     allowed: true,
-    source: 'net-fee-nt',
+    source: 'net-fee-nt-cheap',
   },
   {
     name: 'Netzentgelt an + NT aktiv + Tarif teuer',
     input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: true, currentPriceFresh: true, tariffState: 'teuer' },
     allowed: false,
-    source: 'net-fee-tariff',
+    source: 'dynamic-tariff',
   },
   {
     name: 'Netzentgelt an + NT aktiv + Preis veraltet',
-    input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: true, currentPriceFresh: false, tariffState: 'neutral' },
+    input: { manualNetFeeEnabled: true, manualNtWindowActive: true, tariffActive: true, currentPriceFresh: false, tariffState: 'guenstig' },
     allowed: false,
-    source: 'net-fee-tariff',
+    source: 'dynamic-tariff',
   },
   {
     name: 'Netzentgelt an + außerhalb NT + Tarif günstig',
@@ -99,13 +105,16 @@ for (const [name, input] of [
 }
 
 const tariffSource = fs.readFileSync(path.join(__dirname, '../ems/modules/tarif-vis.js'), 'utf8');
-assert.match(tariffSource, /if \(manualNetFeeEnabled\)/, 'variable net fee must select the configured NT path');
-assert.match(tariffSource, /source: 'net-fee-nt'/);
-assert.match(tariffSource, /source: 'dynamic-tariff-cheap'/);
-assert.doesNotMatch(tariffSource, /storageGridChargePermission\.source !== 'net-fee-nt'/, 'stale dynamic price must also block an active NT window when the dynamic tariff is enabled');
-assert.match(tariffSource, /normalizedTariffState === 'teuer'/, 'expensive dynamic tariff must block inside NT');
-assert.doesNotMatch(tariffSource, /Tarif günstig \+ manuelles NT-Fenster aktiv \+ AppCenter-Freigabe/);
+const helperStart = tariffSource.indexOf('function resolveStorageGridChargePermission');
+const helperEnd = tariffSource.indexOf('function formatStorageNtWindowLabel', helperStart);
+assert(helperStart >= 0 && helperEnd > helperStart, 'storage tariff permission helper missing');
+const helperSource = tariffSource.slice(helperStart, helperEnd);
+assert.match(helperSource, /normalizedTariffState !== 'guenstig'/, 'only a cheap dynamic tariff may release storage grid charging');
+assert.match(helperSource, /manualNetFeeEnabled && !manualNtWindowActive/, 'enabled variable net fee must additionally require the configured NT window');
+assert.match(helperSource, /source: 'net-fee-nt-cheap'/);
+assert.match(helperSource, /source: 'dynamic-tariff-cheap'/);
+assert.doesNotMatch(helperSource, /\['guenstig', 'neutral'\]/, 'neutral must never be part of the storage grid-charge allow list');
 assert.doesNotMatch(tariffSource, /\? '22:00' : ntStartRaw/);
 assert.doesNotMatch(tariffSource, /\? '06:00' : ntEndRaw/);
 
-console.log('[rc64-storage-grid-charge-policy] OK: NT requires a non-expensive fresh tariff when the dynamic tariff is active; NT alone works when it is disabled; cheap tariff governs when net fee is disabled.');
+console.log('[rc64-storage-grid-charge-policy] OK: storage grid charging requires a fresh cheap dynamic tariff; active variable net fee additionally requires the configured NT window.');

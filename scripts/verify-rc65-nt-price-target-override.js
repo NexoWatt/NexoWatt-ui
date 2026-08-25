@@ -3,9 +3,10 @@
 
 /**
  * RC65 regression contract:
- * - NT may authorize grid charging by itself only when the dynamic tariff is disabled.
- * - With an active dynamic tariff, NT requires fresh cheap/neutral data.
- * - Expensive or stale dynamic tariff data blocks storage and normal EVCS grid charging.
+ * - Storage grid charging always requires a fresh cheap dynamic tariff.
+ * - With variable net fee enabled, the configured NT/quarter window is an additional requirement.
+ * - Neutral, expensive, stale or disabled dynamic tariff data blocks storage grid charging.
+ * - EVCS tariff behavior remains independent and keeps its time-target override contract.
  * - An Auto time-target may override the economic EVCS lock only at the calculated
  *   latest start, while all hard grid/station/§14a/safety limits remain in force.
  */
@@ -28,12 +29,13 @@ const master = {
 
 const decide = (input = {}) => resolveStorageGridChargePermission({ ...master, ...input });
 
-assert.strictEqual(decide({ tariffActive: false, currentPriceFresh: false, tariffState: 'unknown' }).allowed, true,
-  'NT must work by itself when the dynamic tariff is disabled.');
-assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: true, tariffState: 'guenstig' }).allowed, true,
-  'Fresh cheap tariff may charge inside NT.');
-assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: true, tariffState: 'neutral' }).allowed, true,
-  'Fresh neutral tariff may charge inside NT.');
+assert.strictEqual(decide({ tariffActive: false, currentPriceFresh: false, tariffState: 'unknown' }).allowed, false,
+  'NT alone must never charge when the dynamic tariff is disabled.');
+const cheapNt = decide({ tariffActive: true, currentPriceFresh: true, tariffState: 'guenstig' });
+assert.strictEqual(cheapNt.allowed, true, 'Fresh cheap tariff may charge inside NT.');
+assert.strictEqual(cheapNt.source, 'net-fee-nt-cheap');
+assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: true, tariffState: 'neutral' }).allowed, false,
+  'Fresh neutral tariff must not charge inside NT.');
 assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: true, tariffState: 'teuer' }).allowed, false,
   'Expensive tariff must block inside NT.');
 assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: false, tariffState: 'neutral' }).allowed, false,
@@ -45,8 +47,9 @@ assert.strictEqual(decide({ tariffActive: true, currentPriceFresh: true, tariffS
 
 const storageSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/tarif-vis.ts'), 'utf8');
 const chargingSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
-assert.match(storageSource, /NT-Fenster aktiv, aber der dynamische Tarif ist teuer/);
-assert.match(storageSource, /NT-Fenster aktiv, aber der dynamische Tarifpreis fehlt oder ist veraltet/);
+assert.match(storageSource, /normalizedTariffState !== 'guenstig'/);
+assert.match(storageSource, /Netzladen gesperrt, Eigenverbrauchsoptimierung aktiv/);
+assert.match(storageSource, /Tarif ist günstig, aber das konfigurierte NT-\/Quartalsfenster ist nicht aktiv/);
 assert.match(chargingSource, /tariffDynamicStale/);
 assert.match(chargingSource, /decideGoalTariffOverride/);
 assert.match(chargingSource, /latest_start/);
@@ -66,4 +69,4 @@ if (fullTick.status !== 0) {
   process.exit(fullTick.status || 1);
 }
 
-console.log('[rc65-nt-price-target-override] OK: NT blocks expensive/stale active tariffs; dynamic-off NT remains valid; urgent Auto time-target override remains active.');
+console.log('[rc65-nt-price-target-override] OK: storage requires fresh cheap tariff plus active NT when configured; urgent EVCS Auto time-target override remains active.');

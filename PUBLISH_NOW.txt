@@ -1,12 +1,12 @@
-NexoWatt EOS 0.8.207 RC82 – Netzlimits dauerhaft aktiv / Stable Candidate
+NexoWatt EOS 0.8.208 RC83 – Speicher-Netzladen nur bei günstigem Tarif / Log-Spam-Fix
 
 Veröffentlichen aus einem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.207 auf npm noch frei ist,
+- ob Version 0.8.208 auf npm noch frei ist,
 - ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
 - ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
 
-RC82 hält Netzlimits als nicht abschaltbaren Kernschutz dauerhaft aktiv. Netzanschlussleistung und signierter NVP stammen ausschließlich aus AppCenter → Zuordnung → Allgemein. Hard = 100 %, Soft = 90 %, Reserve = exakt 10 %. Alte App-, Legacy-, Backup- oder Lizenzzustände können den Kernschutz nicht deaktivieren. Die 0-Einspeisung bleibt unter Netzlimits separat optional und standardmäßig aus. Der bisher minütlich wiederkehrende `core-limits-ts-shadow`-Warnlog ist bereinigt; die Diagnose bleibt ohne Log-Spam im State erhalten.
+RC83 erlaubt Speicher-Netzladen nur bei aktivem, frischem und günstigem dynamischen Tarif. Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht. Neutral, teuer, unbekannt, Tarif aus oder stale Preis führen sofort zur Eigenverbrauchsoptimierung. Auch gehaltene alte Tarif-/Reserve-Sollwerte werden unmittelbar vor dem Hardware-Write gestoppt. Andere Ladepfade bleiben auf lokalen PV-Überschuss begrenzt; validierter PV-/Last-Feed-forward erhält die Eigenverbrauchsladung bei träger Batterie-Telemetrie. Das fehlende Objekt gridConstraints.exportLimit.sinkFieldProtocolJson wird vor dem ersten Write angelegt; die wiederkehrende ioBroker-Warnflut endet nach dem Adapterneustart.

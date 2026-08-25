@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9a1ef679355a48edbb8db43ca7db5f0bc21cb9aa92dfd1d0457c3a7ff2c0c7e0
+ * Original-Hash: 4dc1db7d1c39e51b5d7661df8a9c3cbd5a5acd435cec5e1166077c30f05f88aa
  */
 
 /**
@@ -2225,7 +2225,7 @@ class CoreLimitsModule extends BaseModule {
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
             ].filter(Boolean).map((m) => {
                 if (m && m.field === 'grid.effectiveW' && modernTypedRuntimeActive) {
-                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-grid-shadow-superseded-by-core-runtime-v2' };
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget · legacy-grid-shadow-superseded-by-core-runtime-v2' };
                 }
                 if (m && m.field === 'total.effectiveW' && modernTypedRuntimeActive) {
                     return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'legacy-total-shadow-superseded-by-core-runtime-v2' };

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 42a1f14756c18ab2a02af57cc1b0668e2a88bf56699ebc7050628290a3ba8aec
+ * Original-Hash: 92942e968d2af3ec00f26c1e3a860aee8c2f93c78bbf6c648283cbf243a23dae
  */
 
 /**
@@ -559,14 +559,22 @@ async function runTick({
     lastSource: 'eigenverbrauch',
     storagePatch: { pvEnabled: false, tariffPermissionHoldSec: 0, allowGridCharge: true },
     tarifVis: {
+      ts: Date.now(),
       aktiv: true,
-      state: 'cheap',
+      tarifAktiv: true,
+      currentPriceFresh: true,
+      state: 'guenstig',
       speicherSollW: -4000,
       negativeActive: true,
       gridImportPreferred: true,
       netzbezugBevorzugt: true,
       storageGridChargeAllowed: true,
+      storageGridChargeSource: 'dynamic-tariff-cheap',
       storageGridChargeBlockReason: '',
+      netFeeEnabled: false,
+      netFeeMode: 'off',
+      storageManualWindowActive: false,
+      storageChargeWindowOk: false,
     },
   });
   assert.strictEqual(tariffChargeReverse.targetW, -4000, `Tarif-Richtungswechsel muss direkt Netzladen schreiben: ${tariffChargeReverse.targetW}`);

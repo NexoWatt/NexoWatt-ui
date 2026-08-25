@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC82 / 0.8.207
+ * RC82 / 0.8.208
  * Permanenter Netzlimits-Kernschutz:
  * - Netzlimits ist in Home und Pro verfügbar und als Pflicht-App normalisiert.
  * - Legacy/AppCenter/Backup-Flags können den Import-/NVP-Schutz nicht abschalten.
@@ -32,8 +32,8 @@ function sliceBetween(source, startMarker, endMarker) {
 (() => {
   const pkg = readJson('package.json');
   const io = readJson('io-package.json');
-  assert.strictEqual(pkg.version, '0.8.207');
-  assert.strictEqual(io.common.version, '0.8.207');
+  assert.strictEqual(pkg.version, '0.8.208');
+  assert.strictEqual(io.common.version, '0.8.208');
 
   // 1) Netzschutz gehört zu Home und Pro. Die sichtbare Featurematrix bleibt
   //    lizenzgebunden, der eigentliche Sicherheitskern wird davon aber nicht abgeschaltet.
@@ -172,7 +172,7 @@ function sliceBetween(source, startMarker, endMarker) {
   assert(warns[0].includes('Einmalige JS/TS-Diagnoseabweichung'));
 
   // 10) Cache, Paketvertrag und Dokumentation gehören zum RC82-Stand.
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v488'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v489'"));
   for (const required of [
     'RC82_FELDTEST_CHECKLISTE_DE.md',
     'RC82_VALIDATION_REPORT.md',
