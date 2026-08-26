@@ -24,6 +24,23 @@ function compactChargingAuditText(value: unknown, maxLen = 240): string {
     return text.length > maxLen ? `${text.slice(0, Math.max(0, maxLen - 3))}...` : text;
 }
 
+/**
+ * Informational operating states are useful per charging point, but they are
+ * not active power limitations. In particular, a connected vehicle without a
+ * current charging request and an unplugged vehicle must never turn the global
+ * EMS status yellow. The NVP import guard remains active in the background and
+ * is represented separately through `snapshot.grid.monitoring`.
+ */
+function isChargingAuditInformationalLimiter(value: unknown): boolean {
+    const limiter = String(value || 'none').trim().toLowerCase();
+    return ['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus', 'grid-monitor', 'export-monitor'].includes(limiter);
+}
+
+/** True only when a limiter is currently reducing or blocking a request. */
+function isChargingAuditActiveLimiter(value: unknown): boolean {
+    return !isChargingAuditInformationalLimiter(value);
+}
+
 function deriveChargingAuditLimiter(entry: AnyRecord = {}, global: AnyRecord = {}): string {
     const safetyBinding = String(entry.safetyBinding || '').trim().toLowerCase();
     const reason = String(entry.safetyReason || entry.reason || '').trim().toUpperCase();
@@ -66,7 +83,7 @@ function deriveChargingAuditGlobalLimiter(input: AnyRecord = {}, wallboxes: AnyR
     if (input.gridCapBinding === true) return 'grid-import';
     if (input.phaseCapBinding === true) return 'phase';
     const perLp = Array.isArray(wallboxes) ? wallboxes.map((row: AnyRecord) => String(row.limiter || 'none')) : [];
-    for (const limiter of ['grid-and-phase', 'grid-import', 'phase', 'para14a', 'station', 'device', 'write-error', 'no-setpoint', 'budget', 'pv-surplus', 'no-charge-demand', 'no-vehicle']) {
+    for (const limiter of ['grid-and-phase', 'grid-import', 'phase', 'para14a', 'station', 'device', 'write-error', 'no-setpoint', 'budget', 'peak-shaving']) {
         if (perLp.includes(limiter)) return limiter;
     }
     return 'none';
@@ -235,7 +252,7 @@ function buildChargingAuditSnapshot(input: AnyRecord = {}): AnyRecord {
         ? 'EOS-SAFETY-STOP'
         : (safetyStageByLimiter[snapshot.activeLimiter] || 'NORMAL');
     snapshot.safetyActive = snapshot.safetyStage !== 'NORMAL';
-    snapshot.limitActive = snapshot.activeLimiter !== 'none';
+    snapshot.limitActive = isChargingAuditActiveLimiter(snapshot.activeLimiter);
     snapshot.problemCount = wallboxes.filter((row: AnyRecord) => !['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus'].includes(row.limiter)).length
         + (snapshot.safety.valid === false || snapshot.safety.emergencyStop ? 1 : 0);
     return snapshot;
@@ -293,7 +310,12 @@ function buildChargingAuditEvents(previousSnapshot: AnyRecord | null, snapshot: 
         || previousSnapshot.mode !== snapshot.mode;
     if (globalChanged) {
         const severity = snapshot.safetyStage === 'EOS-SAFETY-STOP' ? 'error'
-            : (snapshot.activeLimiter !== 'none' ? 'warn' : 'info');
+            : (snapshot.limitActive === true ? 'warn' : 'info');
+        const globalStateText = snapshot.limitActive === true
+            ? `aktive Begrenzung: ${snapshot.activeLimiter}`
+            : (snapshot.grid && snapshot.grid.monitoring
+                ? 'NVP-Bezug wird überwacht; keine aktive Begrenzung'
+                : 'keine aktive Begrenzung');
         events.push({
             ts: now,
             type: 'global',
@@ -313,7 +335,7 @@ function buildChargingAuditEvents(previousSnapshot: AnyRecord | null, snapshot: 
             safetyStage: snapshot.safetyStage,
             budgetW: snapshot.budgetW,
             remainingPowerW: snapshot.remainingPowerW,
-            message: compactChargingAuditText(`Globaler Zustand: ${snapshot.status || snapshot.mode || 'aktualisiert'}; aktive Begrenzung: ${snapshot.activeLimiter}`, 320),
+            message: compactChargingAuditText(`Globaler Zustand: ${snapshot.status || snapshot.mode || 'aktualisiert'}; ${globalStateText}`, 320),
         });
     }
     for (const row of Array.isArray(snapshot.wallboxes) ? snapshot.wallboxes : []) {
@@ -477,7 +499,7 @@ class ChargingManagementAuditStore {
       const signature = chargingAuditEventSignature(snapshot);
       const now = Number(snapshot.ts) || Date.now();
       const active = snapshot.actualPowerW > 0 || snapshot.targetPowerW > 0 || snapshot.reservedPowerW > 0
-        || snapshot.activeLimiter !== 'none' || snapshot.safetyStage !== 'NORMAL';
+        || snapshot.limitActive === true || snapshot.safetyStage !== 'NORMAL';
       const heartbeat = active && (now - (this.lastEventMs || 0)) >= this.heartbeatMs;
       let created: AnyRecord[] = [];
       if (signature !== this.lastSignature) created = buildChargingAuditEvents(this.snapshot, snapshot, { heartbeat: false });
@@ -505,6 +527,7 @@ class ChargingManagementAuditStore {
 
 module.exports = {
   finiteChargingAuditNumber, compactChargingAuditText, deriveChargingAuditLimiter,
+  isChargingAuditInformationalLimiter, isChargingAuditActiveLimiter,
   deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature,
   buildChargingAuditEvents, ChargingManagementAuditStore,
 };

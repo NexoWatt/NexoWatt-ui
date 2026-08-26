@@ -24,7 +24,9 @@
   const LIMITER_TEXT: Readonly<Record<string, string>> = Object.freeze({
     none: 'Keine Begrenzung', 'eos-safety-stop': 'EOS Safety Stop',
     'stale-meter-failsafe': 'Messwert-Failsafe', 'grid-and-phase': 'Netz- und Phasengrenze',
-    'grid-import': 'Netzanschluss / Importgrenze', phase: 'Phasengrenze', para14a: '§14a',
+    'grid-import': 'Netzanschluss / Importgrenze', 'grid-monitor': 'Netzschutz überwacht',
+    'export-limit': 'Export-Limit', 'export-monitor': 'Export-Limit überwacht',
+    phase: 'Phasengrenze', para14a: '§14a',
     station: 'Stationsgrenze', device: 'Ladepunkt-/Gerätegrenze', budget: 'Verfügbares Ladebudget',
     'peak-shaving': 'Peak-Shaving', 'pv-surplus': 'PV-Überschuss fehlt / reicht nicht',
     'no-charge-demand': 'Fahrzeug fordert keine Ladung', 'no-vehicle': 'Kein Fahrzeug',
@@ -96,7 +98,7 @@
     const sev = String(severity || '').toLowerCase();
     const lim = String(limiter || 'none').toLowerCase();
     if (sev === 'error' || ['eos-safety-stop', 'stale-meter-failsafe', 'write-error', 'fault', 'offline', 'unavailable', 'no-setpoint'].includes(lim)) return 'error';
-    if (sev === 'warn' || !['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus'].includes(lim)) return 'warn';
+    if (sev === 'warn' || !['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus', 'grid-monitor', 'export-monitor'].includes(lim)) return 'warn';
     return 'ok';
   };
   const setStatus = (text: string, statusKind: string = 'idle'): void => {
@@ -176,7 +178,7 @@
     const problemsOnly = onlyProblems();
     const rows: AnyRecord[] = Array.isArray(snapshot.wallboxes) ? snapshot.wallboxes : [];
     const visibleRows = rows.filter((row) => (!selected || String(row.safe || '') === selected)
-      && (!problemsOnly || !['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus'].includes(String(row.limiter || 'none'))));
+      && (!problemsOnly || !['none', 'no-vehicle', 'no-charge-demand', 'pv-surplus', 'grid-monitor', 'export-monitor'].includes(String(row.limiter || 'none'))));
     if (!visibleRows.length) {
       const empty = document.createElement('div'); empty.className = 'nw-charging-audit__empty';
       empty.textContent = problemsOnly ? 'Aktuell keine passenden Probleme oder Begrenzungen.' : 'Keine Ladepunkte für den gewählten Filter.';

@@ -1,3 +1,13 @@
+## 0.8.212 - 2026-08-26
+
+- RC87: Read-only EMS/Lademanagement-Diagnose trennt dauerhaft aktive NVP-Überwachung von einer tatsächlich bindenden Leistungsbegrenzung.
+- `no-charge-demand`, `no-vehicle`, `pv-surplus` und `grid-monitor` werden nicht mehr als aktive globale Begrenzung oder gelber Warnstatus dargestellt.
+- Unterhalb von Soft- und Hardlimit bleibt die Übersicht grün und meldet „NVP-Bezug überwacht – keine aktive Begrenzung“.
+- Gelb wird erst bei aktivem Import-Softlimit bzw. tatsächlicher Reduktion; das Hardlimit wird als eigener harter Zustand angezeigt.
+- Einspeisung erzeugt nur bei aktiviertem, überschrittenem und im Aktivbetrieb befindlichem Export-Limit eine Begrenzungsmeldung; im Diagnosemodus wird eine Überschreitung ausdrücklich nur als Diagnosehinweis ausgewiesen.
+- Semantische Ereignis-Deduplizierung verhindert wiederholte Meldungen allein durch kleine Speicher-Istwertänderungen.
+- Keine Änderung an NVP-Regelung, Leistungszuteilung, Safety-Writer, Speicher- oder Ladepunktsteuerung.
+
 ## 0.8.211 - 2026-08-25
 
 - RC86 korrigiert Gate A des Lademanagements: Die zugeordnete Netzanschlussleistung bleibt die absolute, reine NVP-Bezugsgrenze. Das 90-%-Soft-Limit ist nur noch der Beginn einer progressiven Rampenbegrenzung und keine starre EVCS-Leistungsobergrenze.

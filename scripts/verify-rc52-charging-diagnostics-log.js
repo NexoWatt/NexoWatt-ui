@@ -210,7 +210,9 @@ const idleSnapshot = buildChargingAuditSnapshot({
     wallboxes: [{ safe: 'idle', name: 'Idle', online: true, enabled: true, connected: false, vehicleDemandConfirmed: false }],
     allocations: [{ safe: 'idle', name: 'Idle', online: true, enabled: true, connected: false, vehicleDemandConfirmed: false, targetW: 0, targetA: 0, reason: 'NO_VEHICLE' }],
 });
-assert.strictEqual(idleSnapshot.activeLimiter, 'no-vehicle');
+assert.strictEqual(idleSnapshot.activeLimiter, 'none', 'Kein Fahrzeug ist ein Informationszustand, keine globale Begrenzung');
+assert.strictEqual(idleSnapshot.wallboxes[0].limiter, 'no-vehicle');
+assert.strictEqual(idleSnapshot.limitActive, false);
 assert.strictEqual(idleSnapshot.safetyStage, 'NORMAL', 'Kein Fahrzeug ist keine Sicherungsstufe');
 assert.strictEqual(idleSnapshot.safetyActive, false);
 

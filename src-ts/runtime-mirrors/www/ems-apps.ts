@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c58a9ed7e52ad180715ab811a29081167b54ec63f6704d685a09f16d2021d539
+ * Original-Hash: 81d9afa8b3ffbe41ae483269eb0855e481dc97fbba043df32d4b3956e3ebdc55
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -15543,7 +15543,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // First show the central overview, then the gates in alphabetic/functional order.
     if (centralActive) {
       const centralBinding = String(ctrl.emsBudgetBinding || '').toLowerCase();
+      const centralMonitoringOnly = ['grid-monitor', 'import-monitor', 'grid-import-monitor', 'export-monitor', 'grid-export-monitor'].includes(centralBinding);
       const cKind = /nvp_|grid-hard|grid-soft|peak|14a/.test(centralBinding) ? 'warn' : 'ok';
+      const centralBindingLabel = centralMonitoringOnly ? 'Status' : 'Binding';
+      const centralBindingValue = centralBinding === 'grid-monitor' || centralBinding === 'import-monitor' || centralBinding === 'grid-import-monitor'
+        ? 'NVP-Bezug überwacht – kein Eingriff'
+        : (centralBinding === 'export-monitor' || centralBinding === 'grid-export-monitor'
+          ? 'Einspeisung überwacht – Eingriff nur am Exportlimit'
+          : String(ctrl.emsBudgetBinding || ''));
       els.chargingBudget.appendChild(mkCard('Zentrales EMS-Budget', [
         { label: 'Mode', value: String(ctrl.emsBudgetMode || 'central-background') },
         { label: 'PV Budget raw', value: _fmtW(centralPvRawW) },
@@ -15551,7 +15558,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { label: 'PV Rest nach Priorität', value: _fmtW(centralRemainingPvW) },
         { label: 'Gesamtbudget', value: _fmtW(centralTotalW) },
         { label: 'Rest Gesamt', value: _fmtW(centralRemainingTotalW) },
-        { label: 'Binding', value: String(ctrl.emsBudgetBinding || '') },
+        { label: centralBindingLabel, value: centralBindingValue },
       ], cKind));
 
       els.chargingBudget.appendChild(mkCard('Zentrale Messbasis', [

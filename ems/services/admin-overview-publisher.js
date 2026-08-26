@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/admin-overview-publisher.ts
- * Quell-Hash: sha256:6d5e1c9a6852d65dba0183e3e75fd6fd7f86f70bbcbf4c9104b671e83e860d97
+ * Quell-Hash: sha256:a749d423a5117782f5e41c68dbaa6639f416b13d6d0bdcc406df7dcb74bab2b2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -83,6 +83,20 @@ function normalizeLimiter(value) {
         return 'none';
     return raw;
 }
+/**
+ * These tokens describe an enabled monitor or a normal waiting state. They do
+ * not mean that EOS is currently reducing power. Keeping this distinction in
+ * the read-only overview prevents a permanently yellow UI while the NVP import
+ * guard continues to run on every EMS cycle.
+ */
+function isInformationalLimiter(value) {
+    const limiter = normalizeLimiter(value);
+    return ['none', 'no-charge-demand', 'no-vehicle', 'pv-surplus', 'grid-monitor', 'import-monitor', 'grid-import-monitor', 'export-monitor', 'grid-export-monitor'].includes(limiter);
+}
+function activeLimiterForDisplay(value) {
+    const limiter = normalizeLimiter(value);
+    return isInformationalLimiter(limiter) ? 'none' : limiter;
+}
 function humanizeLimiter(value) {
     const limiter = normalizeLimiter(value);
     const map = {
@@ -93,6 +107,13 @@ function humanizeLimiter(value) {
         'para14a': '§14a',
         'grid-and-phase': 'Netz- und Phasenlimit',
         'grid-import': 'Netzanschlusslimit',
+        'grid-soft': 'Netzanschluss-Softlimit',
+        'grid-hard': 'Netzanschluss-Hardlimit',
+        'grid-monitor': 'Netzschutz überwacht',
+        'export-limit': 'Export-Limit',
+        'grid-export': 'Export-Limit',
+        'zero-export': '0-Einspeiselimit',
+        'export-monitor': 'Export-Limit überwacht',
         'phase': 'Phasenlimit',
         'station': 'Stationslimit',
         'device': 'Gerätelimit',
@@ -110,7 +131,7 @@ function humanizeLimiter(value) {
 }
 function statusFromAudit(audit, paraFallback, storageWriteOk, forecastFresh) {
     const safetyStage = text(audit && audit.safetyStage, '').toUpperCase();
-    const limiter = normalizeLimiter(audit && audit.activeLimiter);
+    const limiter = activeLimiterForDisplay(audit && audit.activeLimiter);
     const wallboxes = Array.isArray(audit && audit.wallboxes) ? audit.wallboxes : [];
     if (safetyStage === 'EOS-SAFETY-STOP'
         || limiter === 'eos-safety-stop'
@@ -178,10 +199,11 @@ function buildOverviewContract(adapter, now = Date.now()) {
         'ems.budget.remainingPvW',
         'chargingManagement.control.pvCentralRemainingAfterEvcsW',
     ], 0), 0)));
-    const centralBudgetBinding = normalizeLimiter(firstValue(adapter, [
+    const centralBudgetBindingRaw = normalizeLimiter(firstValue(adapter, [
         'ems.budget.binding',
         'chargingManagement.audit.activeLimiter',
     ], audit && audit.activeLimiter));
+    const centralBudgetBinding = activeLimiterForDisplay(centralBudgetBindingRaw);
     const centralBudgetMode = text(stateValue(adapter, 'ems.budget.mode', ''), '', 80);
     const centralBudgetSource = text(stateValue(adapter, 'ems.budget.source', ''), '', 100);
     const centralBudgetActive = bool(stateValue(adapter, 'ems.budget.active', budgetTotalW > 0), budgetTotalW > 0);
@@ -190,6 +212,12 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const gridImportW = nullableNumber(stateValue(adapter, 'ems.budget.gridImportW', null));
     const gridExportW = nullableNumber(stateValue(adapter, 'ems.budget.gridExportW', null));
     const pvPowerW = nullableNumber(stateValue(adapter, 'ems.budget.pvPowerW', null));
+    const exportLimitEnabled = bool(stateValue(adapter, 'gridConstraints.exportLimit.enabled', false), false);
+    const exportLimitOverW = Math.max(0, Math.round(finite(stateValue(adapter, 'gridConstraints.exportLimit.exportOverLimitW', 0), 0)));
+    const exportLimitStatus = text(stateValue(adapter, 'gridConstraints.exportLimit.statusLabel', ''), '', 120);
+    const exportLimitDiagnosticOnly = bool(stateValue(adapter, 'gridConstraints.exportLimit.diagnosticOnly', false), false);
+    const exportLimitExceeded = exportLimitEnabled && exportLimitOverW > 0;
+    const exportLimitActive = exportLimitExceeded && !exportLimitDiagnosticOnly;
     const safetyValid = bool(stateValue(adapter, 'ems.safety.valid', true), true);
     const safetyEmergencyStop = bool(stateValue(adapter, 'ems.safety.emergencyStop', false), false);
     const safetyReason = text(stateValue(adapter, 'ems.safety.reason', ''), '', 220);
@@ -278,9 +306,30 @@ function buildOverviewContract(adapter, now = Date.now()) {
     // Some installations do not enable every EMS module. Missing tick telemetry is
     // therefore an informational startup/idle state, not an adapter failure.
     const emsOnline = !tickKnown || (lastTickAgeMs !== null && lastTickAgeMs <= 20000);
-    const auditLimiter = normalizeLimiter(firstValue(adapter, [
+    const auditLimiterRaw = normalizeLimiter(firstValue(adapter, [
         'chargingManagement.audit.activeLimiter',
     ], audit && audit.activeLimiter));
+    const auditLimiter = activeLimiterForDisplay(auditLimiterRaw);
+    const chargingInformationalState = auditWallboxes.some((row) => row.limiter === 'no-charge-demand')
+        ? 'no-charge-demand'
+        : (auditWallboxes.some((row) => row.limiter === 'no-vehicle')
+            ? 'no-vehicle'
+            : (auditWallboxes.some((row) => row.limiter === 'pv-surplus') ? 'pv-surplus' : 'none'));
+    const auditGrid = audit && audit.grid && typeof audit.grid === 'object' ? audit.grid : {};
+    const effectiveImportLimitW = nullableNumber(auditGrid.effectiveLimitW ?? auditGrid.limitW);
+    const currentImportW = Math.max(0, Math.round(finite(auditGrid.importW ?? gridImportW ?? (gridPowerW !== null && gridPowerW > 0 ? gridPowerW : 0), 0)));
+    const gridSoftRampFactor = nullableNumber(auditGrid.softRampFactor);
+    const gridReductionW = Math.max(0, Math.round(finite(auditGrid.reductionW, 0)));
+    const gridControlBinding = bool(firstValue(adapter, [
+        'chargingManagement.control.gridCapBinding',
+    ], auditGrid.binding), false);
+    const gridHardActive = effectiveImportLimitW !== null && effectiveImportLimitW > 0
+        && currentImportW >= effectiveImportLimitW;
+    const gridSoftActive = !gridHardActive && (gridControlBinding
+        || gridReductionW > 0
+        || (gridSoftRampFactor !== null && gridSoftRampFactor < 0.999));
+    const gridLimitActive = gridHardActive || gridSoftActive;
+    const gridMonitoring = effectiveImportLimitW !== null && effectiveImportLimitW > 0;
     const safetyStage = text(firstValue(adapter, [
         'chargingManagement.audit.safetyStage',
     ], audit && audit.safetyStage), 'NORMAL', 80);
@@ -289,8 +338,14 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const safetyStop = safetyStage.toUpperCase() === 'EOS-SAFETY-STOP';
     const status = maxSeverity(statusFromAudit({ ...audit, activeLimiter: auditLimiter, safetyStage }, paraFallback, storageWriteOk, forecastFresh), (!safetyValid || safetyEmergencyStop || safetyStop || lastTickError || !emsOnline)
         ? 'error'
-        : (safetyActive ? 'warning' : (!tickKnown ? 'info' : 'ok')), chargingFaultCount > 0 ? 'error' : 'ok');
+        : (safetyActive ? 'warning' : (!tickKnown ? 'info' : 'ok')), chargingFaultCount > 0 ? 'error' : 'ok', gridHardActive ? 'error' : (gridSoftActive || exportLimitExceeded ? 'warning' : 'ok'));
     let binding = centralBudgetBinding !== 'none' ? centralBudgetBinding : auditLimiter;
+    if (binding === 'none' && gridHardActive)
+        binding = 'grid-hard';
+    if (binding === 'none' && gridSoftActive)
+        binding = 'grid-soft';
+    if (binding === 'none' && exportLimitActive)
+        binding = 'export-limit';
     if (binding === 'none' && paraFallback)
         binding = 'para14a';
     if (binding === 'none' && peakActive)
@@ -302,18 +357,30 @@ function buildOverviewContract(adapter, now = Date.now()) {
         headline = 'EMS-Diagnose bereit – noch kein aktiver Regeltick';
     else if (!emsOnline)
         headline = 'NexoWatt EMS ist nicht aktuell';
+    else if (gridHardActive && safetyValid && !safetyEmergencyStop && !safetyStop)
+        headline = 'Netzanschluss-Hardlimit aktiv';
     else if (status === 'error')
         headline = (!safetyValid || safetyEmergencyStop || safetyStop) ? 'EOS Safety überwacht – Regelung sicher eingeschränkt' : 'EMS-Teilstörung erkannt';
     else if (paraFallback)
         headline = '§14a-Kommunikationsfallback aktiv';
+    else if (gridSoftActive)
+        headline = gridReductionW > 0 ? 'Netzanschluss-Softlimit begrenzt aktuell die Regelung' : 'Netzanschluss-Softlimit aktiv';
+    else if (exportLimitActive)
+        headline = 'Export-Limit begrenzt aktuell die Einspeisung';
+    else if (exportLimitExceeded)
+        headline = 'Export-Limit überschritten – Diagnosemodus';
     else if (auditLimiter !== 'none')
         headline = `${humanizeLimiter(auditLimiter)} begrenzt aktuell die Regelung`;
     else if (chargingActiveCount > 0)
         headline = `${chargingActiveCount} Ladepunkt${chargingActiveCount === 1 ? '' : 'e'} aktiv`;
+    else if (chargingWaitingCount > 0 && chargingInformationalState === 'no-charge-demand')
+        headline = 'Kein aktiver Ladebedarf – Netzschutz überwacht';
     else if (chargingWaitingCount > 0)
-        headline = `${chargingWaitingCount} Fahrzeug${chargingWaitingCount === 1 ? '' : 'e'} wartet${chargingWaitingCount === 1 ? '' : 'en'} auf Freigabe`;
+        headline = `${chargingWaitingCount} Fahrzeug${chargingWaitingCount === 1 ? '' : 'e'} wartet${chargingWaitingCount === 1 ? '' : 'en'} – Netzschutz überwacht`;
     else if (storageAvailable && Math.abs(storageTargetW) > 50)
         headline = storageTargetW < 0 ? 'Speicherladung aktiv' : 'Speicherentladung aktiv';
+    else if (gridMonitoring)
+        headline = 'EMS arbeitet normal – NVP-Bezug wird überwacht';
     const adapterVersion = text(adapter && adapter.version, text(adapter && adapter.packageVersion, '', 32), 32)
         || text(adapter && adapter.ioPack && adapter.ioPack.common && adapter.ioPack.common.version, '', 32);
     const port = Math.max(1, Math.round(finite(adapter && adapter.config && adapter.config.port, 8188)));
@@ -331,7 +398,13 @@ function buildOverviewContract(adapter, now = Date.now()) {
                 ? 'Noch kein Regeltick veröffentlicht; optionale EMS-Module dürfen deaktiviert sein.'
                 : (status === 'error'
                     ? (safetyReason || lastTickError || (audit && (audit.safetyReason || audit.status)))
-                    : (binding !== 'none' ? humanizeLimiter(binding) : (audit && (audit.status || audit.mode))))), status === 'ok' ? 'EMS arbeitet innerhalb aller aktiven Grenzen.' : humanizeLimiter(binding), 260),
+                    : (binding !== 'none'
+                        ? humanizeLimiter(binding)
+                        : (gridMonitoring
+                            ? `NVP-Bezug wird dauerhaft überwacht und liegt aktuell unter Soft- und Hardlimit. ${exportLimitEnabled ? 'Die Einspeisung wird über das konfigurierte Export-Limit überwacht.' : 'Die Einspeisung wird ohne aktiviertes Export-Limit nicht begrenzt.'}`
+                            : (audit && (audit.status || audit.mode)))))), status === 'ok'
+            ? (gridMonitoring ? 'NVP-Bezug überwacht – keine aktive Begrenzung.' : 'EMS arbeitet innerhalb aller aktiven Grenzen.')
+            : humanizeLimiter(binding), 260),
         binding,
         details: { port, path: '/ems-apps.html?tab=status' },
         ems: {
@@ -369,10 +442,22 @@ function buildOverviewContract(adapter, now = Date.now()) {
             gridHeadroomW: safetyGridHeadroomW,
             evcsSafetyCapW: safetyEvcsCapW,
             binding,
-            bindingText: binding === 'storage-write' ? 'Speicher-Schreibstatus' : humanizeLimiter(binding),
-            gridBinding: bool(firstValue(adapter, ['chargingManagement.control.gridCapBinding'], audit && audit.grid && audit.grid.binding), false),
+            bindingText: binding === 'storage-write'
+                ? 'Speicher-Schreibstatus'
+                : (binding === 'none' && gridMonitoring ? 'NVP-Bezug überwacht – keine aktive Begrenzung' : humanizeLimiter(binding)),
+            rawBinding: centralBudgetBindingRaw,
+            gridMonitoring,
+            gridSoftActive,
+            gridHardActive,
+            gridBinding: gridLimitActive,
             phaseBinding: bool(firstValue(adapter, ['chargingManagement.control.phaseCapBinding'], audit && audit.phase && audit.phase.binding), false),
             para14aBinding: paraBinding,
+            exportLimitEnabled,
+            exportLimitDiagnosticOnly,
+            exportLimitExceeded,
+            exportLimitActive,
+            exportLimitOverW,
+            exportLimitStatus,
         },
         charging: {
             available: configuredWallboxCount > 0 || auditWallboxes.length > 0,
@@ -385,6 +470,9 @@ function buildOverviewContract(adapter, now = Date.now()) {
             reservedW: chargingReservedW,
             limiter: auditLimiter,
             limiterText: humanizeLimiter(auditLimiter),
+            informationalState: chargingInformationalState !== 'none'
+                ? chargingInformationalState
+                : (isInformationalLimiter(auditLimiterRaw) && auditLimiterRaw !== 'none' ? auditLimiterRaw : 'none'),
             status: controlStatus,
             wallboxes: auditWallboxes.slice(0, 12),
         },
@@ -463,7 +551,9 @@ function buildOverviewContract(adapter, now = Date.now()) {
                     subsystem: 'budget',
                     severity: binding !== 'none' ? 'warning' : 'ok',
                     title: `Restbudget ${budgetRemainingW} W`,
-                    reason: binding !== 'none' ? humanizeLimiter(binding) : (centralBudgetMode || 'Zentrale Budgetkoordination'),
+                    reason: binding !== 'none'
+                        ? humanizeLimiter(binding)
+                        : (gridMonitoring ? 'NVP-Bezug überwacht – aktuell keine aktive Begrenzung' : (centralBudgetMode || 'Zentrale Budgetkoordination')),
                     details: `Gesamt ${budgetTotalW} W · genutzt ${budgetUsedW} W · PV-Rest ${remainingPvW} W`,
                 }] : []),
         ].slice(0, 6),
@@ -474,9 +564,9 @@ function eventSignature(contract) {
         status: contract.status,
         headline: contract.headline,
         binding: contract.binding,
-        budget: [contract.budget.totalW, contract.budget.remainingW, contract.budget.remainingPvW],
-        charging: [contract.charging.activeCount, contract.charging.waitingCount, contract.charging.faultCount, contract.charging.actualW, contract.charging.targetW, contract.charging.limiter],
-        storage: [contract.storage.available, contract.storage.topology, contract.storage.actualW, contract.storage.targetW, contract.storage.writeOk, contract.storage.reason],
+        budget: [contract.budget.gridSoftActive, contract.budget.gridHardActive, contract.budget.exportLimitExceeded, contract.budget.exportLimitActive],
+        charging: [contract.charging.activeCount, contract.charging.waitingCount, contract.charging.faultCount, contract.charging.limiter, contract.charging.informationalState],
+        storage: [contract.storage.available, contract.storage.topology, contract.storage.writeOk, contract.storage.reason],
         para14a: [contract.para14a.active, contract.para14a.binding, contract.para14a.communicationFallbackActive, contract.para14a.fallbackCapW],
         tariff: [contract.tariff.active, contract.tariff.state, contract.tariff.fresh],
         forecast: [contract.forecast.available, contract.forecast.source, contract.forecast.fresh],
@@ -509,17 +599,26 @@ function normalizeAuditEvent(event) {
     if (!ts)
         return null;
     const severityRaw = text(event.severity, 'info', 20).toLowerCase();
-    const severity = ['error', 'warning', 'warn', 'info', 'ok'].includes(severityRaw)
+    const eventLimiter = normalizeLimiter(event.limiter);
+    const normalizedSeverity = ['error', 'warning', 'warn', 'info', 'ok'].includes(severityRaw)
         ? (severityRaw === 'warn' ? 'warning' : severityRaw)
         : 'info';
+    const informational = isInformationalLimiter(eventLimiter);
+    const severity = informational && normalizedSeverity === 'warning' ? 'info' : normalizedSeverity;
+    const legacyNoDemandMessage = eventLimiter === 'no-charge-demand'
+        && /aktive begrenzung|begrenzt aktuell/i.test(String(event.message || event.reason || ''));
     return {
         id: `audit-${ts}-${text(event.safe || event.type, 'global', 40)}-${text(event.limiter, 'none', 40)}`,
         ts,
         severity,
         subsystem: text(event.type, 'charging', 40),
         title: text(event.name, 'Lademanagement', 100),
-        message: text(event.message || event.reason, '', 280),
-        reason: text(event.reason || event.limiter, '', 160),
+        message: legacyNoDemandMessage
+            ? 'Fahrzeug wartet ohne aktiven Ladebedarf; der NVP-Bezug wird weiterhin überwacht.'
+            : text(event.message || event.reason, '', 280),
+        reason: informational
+            ? (eventLimiter === 'no-charge-demand' ? 'Keine aktive Begrenzung' : humanizeLimiter(eventLimiter))
+            : text(event.reason || event.limiter, '', 160),
         actualW: nullableNumber(event.actualPowerW) ?? undefined,
         targetW: nullableNumber(event.targetPowerW) ?? undefined,
     };
@@ -548,6 +647,7 @@ class AdminOverviewPublisher {
             'peakShaving.control.*',
             'tarif.*',
             'forecast.*',
+            'gridConstraints.exportLimit.*',
         ]) {
             try {
                 await this.adapter.subscribeForeignStatesAsync(`${this.adapter.namespace}.${pattern}`);
@@ -625,17 +725,23 @@ class AdminOverviewPublisher {
             const parsed = parseJson(state && state.val, []);
             if (Array.isArray(parsed)) {
                 this.events = parsed.filter((event) => event && typeof event === 'object')
-                    .map((event) => ({
-                    id: text(event.id, `restored-${event.ts}`, 120),
-                    ts: Math.max(0, Math.round(finite(event.ts, 0))),
-                    severity: ['ok', 'info', 'warning', 'error'].includes(String(event.severity)) ? event.severity : 'info',
-                    subsystem: text(event.subsystem, 'ems', 60),
-                    title: text(event.title, 'EMS', 120),
-                    message: text(event.message, '', 280),
-                    reason: text(event.reason, '', 160),
-                    actualW: nullableNumber(event.actualW) ?? undefined,
-                    targetW: nullableNumber(event.targetW) ?? undefined,
-                }))
+                    .map((event) => {
+                    const title = text(event.title, 'EMS', 120);
+                    const legacyFalseNoDemand = /kein fahrzeug-ladebedarf.*begrenzt aktuell/i.test(title);
+                    return {
+                        id: text(event.id, `restored-${event.ts}`, 120),
+                        ts: Math.max(0, Math.round(finite(event.ts, 0))),
+                        severity: legacyFalseNoDemand
+                            ? 'info'
+                            : (['ok', 'info', 'warning', 'error'].includes(String(event.severity)) ? event.severity : 'info'),
+                        subsystem: text(event.subsystem, 'ems', 60),
+                        title: legacyFalseNoDemand ? 'Kein aktiver Ladebedarf – Netzschutz überwacht' : title,
+                        message: text(event.message, '', 280),
+                        reason: legacyFalseNoDemand ? 'Keine aktive Begrenzung' : text(event.reason, '', 160),
+                        actualW: nullableNumber(event.actualW) ?? undefined,
+                        targetW: nullableNumber(event.targetW) ?? undefined,
+                    };
+                })
                     .filter((event) => event.ts > 0)
                     .slice(-this.maxEvents);
             }
@@ -654,6 +760,7 @@ class AdminOverviewPublisher {
             'ems.budget.active', 'ems.budget.mode', 'ems.budget.source', 'ems.budget.lastUpdate', 'ems.budget.totalBudgetW', 'ems.budget.remainingTotalW', 'ems.budget.flexUsedW',
             'ems.budget.binding', 'ems.budget.gridW', 'ems.budget.gridImportW', 'ems.budget.gridExportW', 'ems.budget.pvPowerW',
             'ems.budget.pvBudgetW', 'ems.budget.remainingPvW',
+            'gridConstraints.exportLimit.enabled', 'gridConstraints.exportLimit.diagnosticOnly', 'gridConstraints.exportLimit.exportOverLimitW', 'gridConstraints.exportLimit.statusLabel',
             'speicher.regelung.aktiv', 'speicher.regelung.aktivKonfig', 'speicher.regelung.topologie', 'speicher.regelung.topologieGrund', 'speicher.regelung.socPct',
             'speicher.regelung.sollW', 'speicher.regelung.acceptedSollW', 'speicher.regelung.batteryPowerFeedbackMeasuredW', 'speicher.regelung.batteryPowerFeedbackBasisW',
             'speicher.regelung.schreibOk', 'speicher.regelung.schreibStatus', 'speicher.regelung.safetyReason', 'speicher.regelung.grund', 'speicher.regelung.requestGrund',
@@ -671,6 +778,7 @@ class AdminOverviewPublisher {
             'ems.core.lastTickStart', 'ems.core.lastTickDurationMs', 'ems.core.lastTickError',
             'ems.safety.valid', 'ems.safety.emergencyStop', 'ems.safety.reason',
             'ems.budget.totalBudgetW', 'ems.budget.remainingTotalW', 'ems.budget.flexUsedW', 'ems.budget.binding', 'ems.budget.remainingPvW',
+            'gridConstraints.exportLimit.enabled', 'gridConstraints.exportLimit.diagnosticOnly', 'gridConstraints.exportLimit.exportOverLimitW', 'gridConstraints.exportLimit.statusLabel',
             'speicher.regelung.sollW', 'speicher.regelung.acceptedSollW', 'speicher.regelung.batteryPowerFeedbackMeasuredW',
             'forecast.effective.source', 'forecast.effective.fresh', 'forecast.effective.powerNowW',
         ])
@@ -754,6 +862,9 @@ class AdminOverviewPublisher {
 module.exports = {
     AdminOverviewPublisher,
     buildOverviewContract,
+    eventSignature,
     normalizeAuditEvent,
+    isInformationalLimiter,
+    activeLimiterForDisplay,
     humanizeLimiter,
 };

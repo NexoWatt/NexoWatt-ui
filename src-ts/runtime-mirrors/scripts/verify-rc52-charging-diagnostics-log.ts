@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 179b85826c0bf2d202b59a5e5f8837812f1cc22cac82508355ebda18fdf3cec7
+ * Original-Hash: 37d94076663739763d0c954bac13f22c127a8683cc502095f79e9b639d03eb64
  */
 
 /**
@@ -240,7 +240,9 @@ const idleSnapshot = buildChargingAuditSnapshot({
     wallboxes: [{ safe: 'idle', name: 'Idle', online: true, enabled: true, connected: false, vehicleDemandConfirmed: false }],
     allocations: [{ safe: 'idle', name: 'Idle', online: true, enabled: true, connected: false, vehicleDemandConfirmed: false, targetW: 0, targetA: 0, reason: 'NO_VEHICLE' }],
 });
-assert.strictEqual(idleSnapshot.activeLimiter, 'no-vehicle');
+assert.strictEqual(idleSnapshot.activeLimiter, 'none', 'Kein Fahrzeug ist ein Informationszustand, keine globale Begrenzung');
+assert.strictEqual(idleSnapshot.wallboxes[0].limiter, 'no-vehicle');
+assert.strictEqual(idleSnapshot.limitActive, false);
 assert.strictEqual(idleSnapshot.safetyStage, 'NORMAL', 'Kein Fahrzeug ist keine Sicherungsstufe');
 assert.strictEqual(idleSnapshot.safetyActive, false);
 

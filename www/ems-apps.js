@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:7d4c718b08535718e1e48a0ed04273afa1f43816076c74f8346707db12e83993
+ * Quell-Hash: sha256:8ad6a02d2b4f0506c45938acb1f83526159bfc1a8559d7cee0f5e9957eb6b42b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15272,7 +15272,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // First show the central overview, then the gates in alphabetic/functional order.
     if (centralActive) {
       const centralBinding = String(ctrl.emsBudgetBinding || '').toLowerCase();
+      const centralMonitoringOnly = ['grid-monitor', 'import-monitor', 'grid-import-monitor', 'export-monitor', 'grid-export-monitor'].includes(centralBinding);
       const cKind = /nvp_|grid-hard|grid-soft|peak|14a/.test(centralBinding) ? 'warn' : 'ok';
+      const centralBindingLabel = centralMonitoringOnly ? 'Status' : 'Binding';
+      const centralBindingValue = centralBinding === 'grid-monitor' || centralBinding === 'import-monitor' || centralBinding === 'grid-import-monitor'
+        ? 'NVP-Bezug überwacht – kein Eingriff'
+        : (centralBinding === 'export-monitor' || centralBinding === 'grid-export-monitor'
+          ? 'Einspeisung überwacht – Eingriff nur am Exportlimit'
+          : String(ctrl.emsBudgetBinding || ''));
       els.chargingBudget.appendChild(mkCard('Zentrales EMS-Budget', [
         { label: 'Mode', value: String(ctrl.emsBudgetMode || 'central-background') },
         { label: 'PV Budget raw', value: _fmtW(centralPvRawW) },
@@ -15280,7 +15287,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { label: 'PV Rest nach Priorität', value: _fmtW(centralRemainingPvW) },
         { label: 'Gesamtbudget', value: _fmtW(centralTotalW) },
         { label: 'Rest Gesamt', value: _fmtW(centralRemainingTotalW) },
-        { label: 'Binding', value: String(ctrl.emsBudgetBinding || '') },
+        { label: centralBindingLabel, value: centralBindingValue },
       ], cKind));
 
       els.chargingBudget.appendChild(mkCard('Zentrale Messbasis', [

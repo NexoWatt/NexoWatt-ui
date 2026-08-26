@@ -15274,7 +15274,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // First show the central overview, then the gates in alphabetic/functional order.
     if (centralActive) {
       const centralBinding = String(ctrl.emsBudgetBinding || '').toLowerCase();
+      const centralMonitoringOnly = ['grid-monitor', 'import-monitor', 'grid-import-monitor', 'export-monitor', 'grid-export-monitor'].includes(centralBinding);
       const cKind = /nvp_|grid-hard|grid-soft|peak|14a/.test(centralBinding) ? 'warn' : 'ok';
+      const centralBindingLabel = centralMonitoringOnly ? 'Status' : 'Binding';
+      const centralBindingValue = centralBinding === 'grid-monitor' || centralBinding === 'import-monitor' || centralBinding === 'grid-import-monitor'
+        ? 'NVP-Bezug überwacht – kein Eingriff'
+        : (centralBinding === 'export-monitor' || centralBinding === 'grid-export-monitor'
+          ? 'Einspeisung überwacht – Eingriff nur am Exportlimit'
+          : String(ctrl.emsBudgetBinding || ''));
       els.chargingBudget.appendChild(mkCard('Zentrales EMS-Budget', [
         { label: 'Mode', value: String(ctrl.emsBudgetMode || 'central-background') },
         { label: 'PV Budget raw', value: _fmtW(centralPvRawW) },
@@ -15282,7 +15289,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { label: 'PV Rest nach Priorität', value: _fmtW(centralRemainingPvW) },
         { label: 'Gesamtbudget', value: _fmtW(centralTotalW) },
         { label: 'Rest Gesamt', value: _fmtW(centralRemainingTotalW) },
-        { label: 'Binding', value: String(ctrl.emsBudgetBinding || '') },
+        { label: centralBindingLabel, value: centralBindingValue },
       ], cKind));
 
       els.chargingBudget.appendChild(mkCard('Zentrale Messbasis', [
