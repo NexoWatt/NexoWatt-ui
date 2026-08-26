@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:0c881d194e72c96fc441776873a9148f7b16b46cdd492b2d133bada24797ab0b
+ * Quell-Hash: sha256:8c4f8f0366e1a825dec94a00c60ef8e8ed51b1bfef7e4b24227347a5c8d1488e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -29,6 +29,7 @@ const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
+const { SseRuntimeGuard } = require('./lib/sse-runtime-guard');
 const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
@@ -169,7 +170,24 @@ class NexoWattVis extends utils.Adapter {
     // Public values may be normalized for UI/module safety (e.g. charge/discharge magnitudes).
     // Keep the original signed input values as well so signed battery fallbacks can be split correctly.
     this._nwRawValueCache = {};
-    this.sseClients = new Set();
+    // RC88_SSE_BACKPRESSURE_GUARD: Slow or half-open browser/VPN connections
+    // must never make Node.js buffer an unlimited number of live updates in the
+    // adapter heap. The guard stops writes on backpressure, resynchronizes after
+    // drain, removes stale clients and caps the total client/buffer count.
+    this._nwSseGuard = new SseRuntimeGuard({
+      log: this.log,
+      maxClients: this.config && this.config.sseMaxClients,
+      maxBufferedBytes: this.config && this.config.sseMaxBufferedBytes,
+      backpressureTimeoutMs: this.config && this.config.sseBackpressureTimeoutMs,
+      heartbeatMs: this.config && this.config.sseHeartbeatMs,
+      getSnapshotChunk: (client) => {
+        const snapshot = client && client.internal
+          ? this.stateCache
+          : nwBuildPublicStateSnapshot(this.stateCache, true);
+        return "data: " + JSON.stringify({ type: 'init', payload: snapshot }) + "\n\n";
+      },
+    });
+    this.sseClients = this._nwSseGuard.clients;
     // Batch SSE updates to prevent UI freezes on frequent state updates
     this._ssePendingPayload = {};
     this._sseFlushTimer = null;
@@ -392,6 +410,52 @@ class NexoWattVis extends utils.Adapter {
       if (!timer) resolve(false);
     });
   }
+  /** RC88: bounded runtime diagnostics for heap-pressure analysis. */
+  _nwGetMemoryDiagnostics() {
+    let sse = null;
+    try { sse = this._nwSseGuard && this._nwSseGuard.getStats ? this._nwSseGuard.getStats() : null; } catch (_e) {}
+    return {
+      sse,
+      ssePendingKeys: this._ssePendingPayload && typeof this._ssePendingPayload === 'object'
+        ? Object.keys(this._ssePendingPayload).length
+        : 0,
+      stateCacheKeys: this.stateCache && typeof this.stateCache === 'object' ? Object.keys(this.stateCache).length : 0,
+      rawCacheKeys: this._nwRawValueCache && typeof this._nwRawValueCache === 'object' ? Object.keys(this._nwRawValueCache).length : 0,
+      serverSockets: this._serverSockets && typeof this._serverSockets.size === 'number' ? this._serverSockets.size : 0,
+      shuttingDown: this._nwShuttingDown === true,
+    };
+  }
+
+  /** RC88: release buffered live clients without touching EMS control. */
+  _nwHandleHeapPressure(sample) {
+    let removed = 0;
+    try {
+      const ratio = Number(sample?.ratio || 0);
+      const level = ratio >= 0.82 ? 'critical' : 'pressure';
+      if (this._nwSseGuard && typeof this._nwSseGuard.mitigatePressure === 'function') {
+        removed = this._nwSseGuard.mitigatePressure(level);
+      }
+    } catch (_e) {}
+    // A pending coalesced patch is disposable: every browser receives a full
+    // current snapshot after reconnect/resync, while EMS control is untouched.
+    try { this._ssePendingPayload = {}; } catch (_e) {}
+    try {
+      if (removed > 0) {
+        this.log.warn(`[RC88 heap] ${removed} SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
+      }
+    } catch (_e) {}
+    return { removed };
+  }
+
+  /** RC88: final cleanup before the emergency restart safety net. */
+  _nwPrepareControlledRestart(sample) {
+    try { this._nwCloseSseClients(); } catch (_e) {}
+    try { this._ssePendingPayload = {}; } catch (_e) {}
+    try {
+      this.log.error(`[RC88 heap] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
+    } catch (_e) {}
+  }
+
   /** Code-Teil: ensureInfoConnectionState – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async ensureInfoConnectionState() {
     await this.setObjectNotExistsAsync('info', {
@@ -25780,22 +25844,30 @@ return res.json(out);
     app.get('/events', async (req, res) => {
       res.set({
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
       });
       res.flushHeaders();
 
       const access = authEnabled ? await resolveAccess(req) : null;
-      const client = { req, res, internal: !!(authEnabled && access && access.isInstaller) };
-      this.sseClients.add(client);
+      const client = this._nwSseGuard.addClient({
+        req,
+        res,
+        internal: !!(authEnabled && access && access.isInstaller),
+      });
+      if (!client) {
+        try { res.end(); } catch (_eEnd) {}
+        return;
+      }
 
       // Initialpayload folgt derselben Sicherheitsgrenze wie /api/state.
       const initialPayload = client.internal ? this.stateCache : nwBuildPublicStateSnapshot(this.stateCache, true);
-      res.write("data: " + JSON.stringify({ type: 'init', payload: initialPayload }) + "\n\n");
-
-      req.on('close', () => {
-        this.sseClients.delete(client);
-      });
+      this._nwSseGuard.write(
+        client,
+        "retry: 3000\n" + "data: " + JSON.stringify({ type: 'init', payload: initialPayload }) + "\n\n",
+        { kind: 'init' },
+      );
     });
 
     const bind = (this.config && (this.config.ip || this.config.bind)) || '0.0.0.0';
@@ -33503,6 +33575,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
 // push update to all SSE clients (batched to avoid UI freezes)
     try {
+      // RC88_SSE_IDLE_ZERO_ALLOCATION: without connected dashboards there is
+      // nothing to batch or serialize. Avoid a permanent 120-ms timer/allocation
+      // chain on headless customer systems.
+      if (!this.sseClients || !this.sseClients.size) {
+        this._ssePendingPayload = {};
+        return;
+      }
       if (!this._ssePendingPayload) this._ssePendingPayload = {};
       Object.assign(this._ssePendingPayload, payload);
 
@@ -33514,17 +33593,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           this._sseFlushTimer = null;
           if (!p || !Object.keys(p).length) return;
 
-          for (const client of Array.from(this.sseClients)) {
-            try {
-              const publicPatch = client && client.internal
-                ? p
-                : (typeof this._nwBuildPublicStatePatch === 'function' ? this._nwBuildPublicStatePatch(p) : {});
-              if (!publicPatch || !Object.keys(publicPatch).length) continue;
-              client.res.write("data: " + JSON.stringify({ type: 'update', payload: publicPatch }) + "\n\n");
-            } catch (_e) {
-              this.sseClients.delete(client);
-            }
-          }
+          if (!this.sseClients || !this.sseClients.size) return;
+          try {
+            const clients = Array.from(this.sseClients);
+            const hasInternal = clients.some((client) => client && client.internal);
+            const hasPublic = clients.some((client) => !(client && client.internal));
+            const internalChunk = hasInternal
+              ? "data: " + JSON.stringify({ type: 'update', payload: p }) + "\n\n"
+              : '';
+            const publicPatch = hasPublic
+              ? (typeof this._nwBuildPublicStatePatch === 'function' ? this._nwBuildPublicStatePatch(p) : {})
+              : null;
+            const publicChunk = publicPatch && Object.keys(publicPatch).length
+              ? "data: " + JSON.stringify({ type: 'update', payload: publicPatch }) + "\n\n"
+              : '';
+            this._nwSseGuard.broadcast({ internalChunk, publicChunk });
+          } catch (_e) {}
         }, Math.max(10, batchMs));
       }
     } catch (_e) {}
@@ -33550,20 +33634,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwCloseSseClients() {
+    try { this._nwClearTimer('_sseFlushTimer'); } catch (_e0) {}
     try {
-      for (const client of Array.from(this.sseClients || [])) {
-        if (!client) continue;
-        try { client.res && client.res.write("event: shutdown\ndata: {}\n\n"); } catch (_e0) {}
-        try { client.res && client.res.end(); } catch (_e1) {}
-        try {
-          const socket = (client.req && client.req.socket) || (client.res && client.res.socket) || null;
-          if (socket && typeof socket.destroy === 'function') socket.destroy();
-        } catch (_e2) {}
+      if (this._nwSseGuard && typeof this._nwSseGuard.closeAll === 'function') {
+        this._nwSseGuard.closeAll('adapter-unload');
+      } else {
+        for (const client of Array.from(this.sseClients || [])) {
+          try { client && client.res && client.res.end && client.res.end(); } catch (_e1) {}
+        }
+        try { this.sseClients.clear(); } catch (_e2) {}
       }
     } catch (_e3) {}
-
-    try { this.sseClients.clear(); } catch (_e4) {}
-    try { this._ssePendingPayload = {}; } catch (_e5) {}
+    try { this._ssePendingPayload = {}; } catch (_e4) {}
   }
   /**
    * Code-Teil: _nwCloseServer

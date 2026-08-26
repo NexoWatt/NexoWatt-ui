@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:b027e5e9a7fd83019ddf4188829cda2ffb8307ef4bcca2d3f65de64b44218471
+ * Quell-Hash: sha256:5f9789e531de81cb4361074ece3c327c459213a3b15dd4c0be117663cbba40f2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -18,7 +18,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // @ts-nocheck
-const rc85_runtime_hardening_1 = require("./rc85-runtime-hardening"); // RC85_IMPORT_HARDENING
+const rc85_runtime_hardening_1 = require("./rc85-runtime-hardening"); // RC88_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/module-manager.js
  *
@@ -91,7 +91,6 @@ const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
-(0, rc85_runtime_hardening_1.startRc85HeapMonitor)(console); // RC85_HEAP_MONITOR_START
 const featureFlags = require('./services/feature-flags');
 const { beginSafetyCycle, markSafetyModuleStarted, markSafetyModuleResult, invalidateSafetyEnvelope, } = require('./services/safety-envelope');
 const SAFETY_CRITICAL_MODULES = new Set([
@@ -152,6 +151,24 @@ class ModuleManager {
         // wird deshalb pro Modulzeile nachgefuehrt und bei Bedarf lazy gestartet.
         this._moduleInitRetryMs = 30000;
         this._moduleErrorLogAt = new Map();
+        // RC88_MEMORY_GUARD: The heap monitor is bound to the real adapter
+        // instance so it can close slow SSE clients before buffered live data
+        // grows into an OOM. Runtime/watchdog counters are included in the
+        // diagnostics but remain bounded.
+        this._stopHeapMonitor = (0, rc85_runtime_hardening_1.startRc85HeapMonitor)(this.adapter?.log || console, {
+            intervalMs: 30000,
+            warnRatio: 0.65,
+            pressureRatio: 0.75,
+            restartRatio: 0.86,
+            emergencyRatio: 0.92,
+            sustainedSamples: 2,
+            getDiagnostics: () => ({
+                runtime: (0, rc85_runtime_hardening_1.rc88RuntimeHardeningSnapshot)(),
+                adapter: this.adapter?._nwGetMemoryDiagnostics?.() || null,
+            }),
+            onPressure: (sample) => this.adapter?._nwHandleHeapPressure?.(sample),
+            onBeforeRestart: (sample) => this.adapter?._nwPrepareControlledRestart?.(sample),
+        });
         // Last tick diagnostics (always captured, even if diagnostics are disabled)
         /**
          * @type {{
@@ -900,6 +917,15 @@ class ModuleManager {
      * adapter.setTimeout-Aufrufe oder State-Publishes startet.
      */
     stop() {
+        try {
+            this._stopHeapMonitor?.();
+        }
+        catch (_error) { }
+        this._stopHeapMonitor = undefined;
+        try {
+            (0, rc85_runtime_hardening_1.rc88ClearRuntimeHardening)();
+        }
+        catch (_error) { }
         for (const m of this.modules || []) {
             try {
                 if (m && m.instance && typeof m.instance.stop === 'function')

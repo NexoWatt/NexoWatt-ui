@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC80 / 0.8.212
+ * RC80 / 0.8.213
  * Verbindliche Soft-Limit-Regel:
  * - Reserve = exakt 10 % des wirksamen NVP-/Hard-Limits
  * - Soft-Limit = exakt 90 % des wirksamen Hard-Limits
@@ -44,8 +44,8 @@ function verifyPair(hardLimitW, expectedReserveW, expectedSoftW) {
 (() => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.212');
-  assert.strictEqual(io.common.version, '0.8.212');
+  assert.strictEqual(pkg.version, '0.8.213');
+  assert.strictEqual(io.common.version, '0.8.213');
 
   // 1) Keine Mindestreserve: 5 kW ergeben exakt 500 W Reserve.
   verifyPair(5000, 500, 4500);

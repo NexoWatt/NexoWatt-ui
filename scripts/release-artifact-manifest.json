@@ -1,47 +1,17 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.212",
+  "version": "0.8.213",
   "files": [
     {
-      "path": "LICENSE",
-      "size": 2602,
-      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
-    },
-    {
-      "path": "RC83_FELDTEST_CHECKLISTE_DE.md",
-      "size": 2864,
-      "sha256": "dbba23d0d7112ddd9d7daef23b7c9738ca8d127e4313a95995fc3c88ae84befc"
-    },
-    {
-      "path": "RC83_VALIDATION_REPORT.md",
-      "size": 3735,
-      "sha256": "0de8728820aabff234e6810af6e73c311894be15600be8b56bb3dbcacbd67a99"
-    },
-    {
-      "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
-      "size": 2187,
-      "sha256": "3d1438891963774cd7549c99b1eeab541719f15f47f7a24b67a47c7b7e6db70f"
-    },
-    {
-      "path": "RC82_VALIDATION_REPORT.md",
-      "size": 5021,
-      "sha256": "2e832f3729ca8bdaf8eb06446d18a0f5777c158ce52a6077b7fe7467fcda7f9b"
-    },
-    {
-      "path": "README.md",
-      "size": 2428,
-      "sha256": "5506b7ab564fc77fcd4336774fd29edc6fb52baf172a8590a2695366af12f1f5"
+      "path": "admin/admin_logo_.ico",
+      "size": 4286,
+      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/admin.png",
       "size": 1466889,
       "sha256": "e1620f78bd502b3837db2b3e351d68ab88198f16e06052618d62d6e33d1ae402"
-    },
-    {
-      "path": "admin/admin_logo_.ico",
-      "size": 4286,
-      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/appcenter.html",
@@ -314,6 +284,16 @@
       "sha256": "d6a6266052c65c6b870ea721a1b5aa6e3ff634500dacf5a17be00133d4d9acf2"
     },
     {
+      "path": "docs/RC86_GATE_A_HARD_LIMIT_DEMAND_BINDING_DE.md",
+      "size": 2013,
+      "sha256": "1d98ff3fdd4e479f6a54d863b2eacd57366b2813474d7407d00b116713e02416"
+    },
+    {
+      "path": "docs/RC88_SSE_BACKPRESSURE_MEMORY_STABILITY_DE.md",
+      "size": 6129,
+      "sha256": "67231085e710ab09c3b5d4a1ad482570152521fb2479da1348fc34e59f10a628"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 18385,
       "sha256": "53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd"
@@ -350,8 +330,8 @@
     },
     {
       "path": "ems/engine.js",
-      "size": 78494,
-      "sha256": "12de4307d8e11f5bebbd9f7147ff0fb97d18b9b2ad4637c5741c435488d95b52"
+      "size": 78234,
+      "sha256": "59121fb5457d1e2b035362db38b7fb0fcabc436ea9e8aa5aa5fa05991b922932"
     },
     {
       "path": "ems/evcs-control-mapping.js",
@@ -360,8 +340,8 @@
     },
     {
       "path": "ems/module-manager.js",
-      "size": 50923,
-      "sha256": "6f982b83746a7942fb9e79cd60e0c5c1a5ce2f8ea2706b374855d0de4a3e773d"
+      "size": 52076,
+      "sha256": "ffe33ea908cdf9e69fbab86306c20f74b02141ce24adc3976c3d551190b0674a"
     },
     {
       "path": "ems/modules/ai-advisor.js",
@@ -519,11 +499,6 @@
       "sha256": "b27d78b820b53794522f372095b67888bb669743f1eb916eb5ddaf13c6308f68"
     },
     {
-      "path": "ems/netoperator/README.md",
-      "size": 2616,
-      "sha256": "c5abf6c7099d8644c5ce9e64431e245d7f4fca7ce6c9f10d72642b16e294cc50"
-    },
-    {
       "path": "ems/netoperator/acceptance-tests.json",
       "size": 2410,
       "sha256": "4c22fb2b9657978fbdda7f2cfa4f9b1701f3291e03c00bc2459222e5b5c21014"
@@ -574,9 +549,19 @@
       "sha256": "c5285daa0b59a5a82929373289ff4a447d1bfa144d754bea628dbec92f6cf7c6"
     },
     {
+      "path": "ems/netoperator/README.md",
+      "size": 2616,
+      "sha256": "c5abf6c7099d8644c5ce9e64431e245d7f4fca7ce6c9f10d72642b16e294cc50"
+    },
+    {
       "path": "ems/nexologic-engine.js",
       "size": 112845,
       "sha256": "46dc5fc1ef7ccb3431f70081fe5970f704b94e176843cea4abc593175363f610"
+    },
+    {
+      "path": "ems/rc85-runtime-hardening.js",
+      "size": 23790,
+      "sha256": "ff3aae664f43713807fb9316c929e3bab956e806109ba2ece4d79a658e2a83da"
     },
     {
       "path": "ems/reasons.js",
@@ -756,7 +741,7 @@
     {
       "path": "io-package.json",
       "size": 24405,
-      "sha256": "e168ddc86d8692d4aa644fca9ac5b4a04c74b11fa7fe5d8c59bf50226aa4f98e"
+      "sha256": "12e06c5749ac2e0f32ba0b6705fe53904ad67b514fe6d9725b71cd4fd76da854"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -777,6 +762,11 @@
       "path": "lib/smarthome-contract.js",
       "size": 34402,
       "sha256": "fc3c809fe1f209f9df4ae36e01dc72d27da3f675043740d8896b577bc7602fa6"
+    },
+    {
+      "path": "lib/sse-runtime-guard.js",
+      "size": 15923,
+      "sha256": "6b67bddfb6ab8214734745a615debd3fd30460ade8524fbec17017903abdf778"
     },
     {
       "path": "lib/station-display-presentation.js",
@@ -999,24 +989,79 @@
       "sha256": "463661dd3c3e8a08c0abbb8526960562de4a961c14b28720f5f4a12c12b00299"
     },
     {
+      "path": "LICENSE",
+      "size": 2602,
+      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
+    },
+    {
       "path": "main.js",
-      "size": 1730340,
-      "sha256": "abe886b9e34c0b9d286db1490c8f3bdaab6dc0b01da6a1ca4932bd4009c6bfb7"
+      "size": 1734269,
+      "sha256": "448f74d943a03e1e5ec7acaa29b29aa55aa6d3251dd19a1cef92f98159b92dce"
+    },
+    {
+      "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
+      "size": 2187,
+      "sha256": "3d1438891963774cd7549c99b1eeab541719f15f47f7a24b67a47c7b7e6db70f"
+    },
+    {
+      "path": "RC82_VALIDATION_REPORT.md",
+      "size": 5021,
+      "sha256": "2e832f3729ca8bdaf8eb06446d18a0f5777c158ce52a6077b7fe7467fcda7f9b"
+    },
+    {
+      "path": "RC83_FELDTEST_CHECKLISTE_DE.md",
+      "size": 2864,
+      "sha256": "dbba23d0d7112ddd9d7daef23b7c9738ca8d127e4313a95995fc3c88ae84befc"
+    },
+    {
+      "path": "RC83_VALIDATION_REPORT.md",
+      "size": 3735,
+      "sha256": "0de8728820aabff234e6810af6e73c311894be15600be8b56bb3dbcacbd67a99"
+    },
+    {
+      "path": "RC86_FELDTEST_CHECKLISTE_DE.md",
+      "size": 2315,
+      "sha256": "1df0aa9238d5db366dbdb1ba2db1d8923f24c6357365e0e30f8a537e4c1b8dd9"
+    },
+    {
+      "path": "RC86_VALIDATION_REPORT.md",
+      "size": 5304,
+      "sha256": "0131aefdd3d965bc4f27275648c180e2cbc9adca631713142775fe06508465ce"
+    },
+    {
+      "path": "README.md",
+      "size": 2428,
+      "sha256": "5506b7ab564fc77fcd4336774fd29edc6fb52baf172a8590a2695366af12f1f5"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
       "size": 7222,
-      "sha256": "6c0ce3a2976dff6d3d32582b25baff16580306cba038b704827a3a2cd8b6ad0a"
+      "sha256": "a07d1bf5d7c58cae31e6dad4727f44c3c912dd167cb69b982567853f81bb258e"
     },
     {
       "path": "scripts/verify-rc82-permanent-grid-protection.cjs",
       "size": 10585,
-      "sha256": "434c9a4cf9458c631daf878b1405bbdae76d133d8210fb4102a8ebcf7dc6f05d"
+      "sha256": "27a21b2ac9885c26183ccf177cf5b62d642e6186f82dbf4d71ed7650f4c5debb"
     },
     {
       "path": "scripts/verify-rc83-storage-cheap-only-log-object.cjs",
       "size": 13315,
-      "sha256": "30c1cc3c9fee48434317d9fa1e3ea3969aba965423e34ecaeb0ab1fa4b36d745"
+      "sha256": "98ecc621f6a51ffde1c07497e581ef6c9c6b3c0a71f79a7aeaefda3cd721db3b"
+    },
+    {
+      "path": "scripts/verify-rc86-gate-a-demand-binding.cjs",
+      "size": 7237,
+      "sha256": "a18aa094ba534b8b6e4ef6933a1851d5b99ae98c6a61136b250d715c776f6a98"
+    },
+    {
+      "path": "scripts/verify-rc87-monitoring-display-only.cjs",
+      "size": 10014,
+      "sha256": "e09b8543acbd45dc79e7848e779a9624af9eacb2ba367ff8f1d527092f30d135"
+    },
+    {
+      "path": "scripts/verify-rc88-memory-stability.cjs",
+      "size": 11410,
+      "sha256": "11ddde192465771834ec969420d570d9d1ec57f8612a67fb964c6b39e0d1bad3"
     },
     {
       "path": "www/admin-guard.js",
@@ -1296,7 +1341,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "08f164835f7965dda8a0573563af005c33f886c8805149f264e8dea1fe9b6108"
+      "sha256": "4e6c17b4d8e57ce68706d8e83a6553f69bb4bbbb98f9aecc3b424bdd40d7b016"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1497,36 +1542,6 @@
       "path": "www/year-report.js",
       "size": 44701,
       "sha256": "3fe55d569dc423055075ddb3d71ee8179d45f40761d03a96d0f8669343afaf96"
-    },
-    {
-      "path": "ems/rc85-runtime-hardening.js",
-      "size": 16609,
-      "sha256": "fc4e34a4932e5ecde2a70fbbb8f8e721d700d053e5c224d9f752520526555763"
-    },
-    {
-      "path": "RC86_FELDTEST_CHECKLISTE_DE.md",
-      "size": 2315,
-      "sha256": "1df0aa9238d5db366dbdb1ba2db1d8923f24c6357365e0e30f8a537e4c1b8dd9"
-    },
-    {
-      "path": "RC86_VALIDATION_REPORT.md",
-      "size": 5304,
-      "sha256": "0131aefdd3d965bc4f27275648c180e2cbc9adca631713142775fe06508465ce"
-    },
-    {
-      "path": "docs/RC86_GATE_A_HARD_LIMIT_DEMAND_BINDING_DE.md",
-      "size": 2013,
-      "sha256": "1d98ff3fdd4e479f6a54d863b2eacd57366b2813474d7407d00b116713e02416"
-    },
-    {
-      "path": "scripts/verify-rc86-gate-a-demand-binding.cjs",
-      "size": 7237,
-      "sha256": "5c784cbdd0fe2f88f614c426f0ce2b789e695162f8479c7df9761af8fe43a40f"
-    },
-    {
-      "path": "scripts/verify-rc87-monitoring-display-only.cjs",
-      "size": 10014,
-      "sha256": "af2c35ecd38237858fbedacfabbec3c5c1c405d395ea66f3739e7fee4ac5ef13"
     }
   ]
 }

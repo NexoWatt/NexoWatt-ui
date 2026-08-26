@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: abe886b9e34c0b9d286db1490c8f3bdaab6dc0b01da6a1ca4932bd4009c6bfb7
+ * Original-Hash: 448f74d943a03e1e5ec7acaa29b29aa55aa6d3251dd19a1cef92f98159b92dce
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 12de4307d8e11f5bebbd9f7147ff0fb97d18b9b2ad4637c5741c435488d95b52
+ * Original-Hash: 59121fb5457d1e2b035362db38b7fb0fcabc436ea9e8aa5aa5fa05991b922932
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:6fdd403e9928b02524cc414979491d4d524a6265c2bdc3f3b4444cbf48ca0a2e
+ * Quell-Hash: sha256:39e9a577a619aebd1cda1e43ddb58f9cc7d647d71b568b8e6a06e04f272c0543
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,10 +46,7 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 // @ts-nocheck
-const rc85_runtime_hardening_1 = require("./rc85-runtime-hardening"); // RC85_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/engine.js
  *
@@ -96,7 +93,6 @@ const { ModuleManager } = require('./module-manager');
 const { applyStorageMeasurementOverrides } = require('./services/storage-override-bridge');
 const { buildNvpSnapshotFromRegistry } = require('./services/measurement-freshness');
 const { installActuatorShadowArbiter } = require('./services/actuator-shadow-arbiter');
-(0, rc85_runtime_hardening_1.startRc85HeapMonitor)(console); // RC85_HEAP_MONITOR_START
 const { deriveChargingConnectorCapacityW, computeChargingInfrastructureCapacity, } = require('./charging-budget-helpers');
 /** Code-Teil: clampNumber – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
 function clampNumber(n, min, max, fallback) {

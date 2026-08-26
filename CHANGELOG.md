@@ -1,3 +1,12 @@
+## 0.8.213 - 2026-08-26
+
+- RC88 schließt die bei der Analyse des nach mehreren Stunden auftretenden V8-Heap-Out-of-Memory-Absturzes identifizierten unbegrenzten Speicherhaltepfade im LIVE- und Watchdog-Lifecycle. Server-Sent-Events berücksichtigen jetzt HTTP-Backpressure, begrenzen pro Verbindung den Schreibpuffer und schließen halb offene beziehungsweise nicht mehr lesende Browser-/VPN-Verbindungen nach einer festen Frist.
+- SSE-Updates werden während Backpressure nicht weiter in Node.js gepuffert. Nach `drain` erhält der Client genau einen aktuellen Vollsnapshot; veraltete Zwischenupdates werden verworfen. Clientanzahl, Listener, Heartbeat und Framegröße sind begrenzt und beim Adapter-Unload vollständig bereinigt.
+- Interne und öffentliche SSE-Payloads werden pro Batch nur einmal serialisiert. Ohne verbundenes Dashboard entsteht keine dauerhafte 120-ms-SSE-Timer-/Allokationskette.
+- Watchdog-Timeouts entfernen eine noch laufende Original-Promise nicht mehr nach einer festen Zeit. Solange ein Geräte- oder Modulaufruf wirklich offen ist, bleibt genau dieses Label quarantänisiert und es wird kein weiterer paralleler Altaufruf erzeugt. Ein optionales `AbortSignal` wird beim Timeout ausgelöst.
+- Heap-Telemetrie reagiert früh: Warnung und Druckentlastung beginnen deutlich vor der V8-Grenze. Zuerst werden gepufferte SSE-Verbindungen getrennt, ohne die EMS-Regelung zu verändern. Erst bei anhaltend kritischem Heap erfolgt als letzte Notbremse ein kontrollierter ioBroker-Neustart statt `SIGABRT`.
+- Speicherdiagnose zeigt begrenzte SSE-, Socket-, Cache- und Watchdog-Zähler, damit ein erneuter Anstieg eindeutig einer Quelle zugeordnet werden kann. Lade-, Speicher-, NVP-, Tarif-, §14a-, Forecast- und Safety-Regelungen aus RC87 bleiben fachlich unverändert.
+
 ## 0.8.212 - 2026-08-26
 
 - RC87: Read-only EMS/Lademanagement-Diagnose trennt dauerhaft aktive NVP-Überwachung von einer tatsächlich bindenden Leistungsbegrenzung.

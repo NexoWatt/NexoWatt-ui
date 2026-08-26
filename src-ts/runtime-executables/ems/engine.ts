@@ -1,6 +1,5 @@
 // @runtime-transpile
 // @ts-nocheck
-import { startRc85HeapMonitor } from './rc85-runtime-hardening'; // RC85_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/engine.js
  *
@@ -52,7 +51,6 @@ const { applyStorageMeasurementOverrides } = require('./services/storage-overrid
 const { buildNvpSnapshotFromRegistry } = require('./services/measurement-freshness');
 const { installActuatorShadowArbiter } = require('./services/actuator-shadow-arbiter');
 
-startRc85HeapMonitor(console); // RC85_HEAP_MONITOR_START
 const {
   deriveChargingConnectorCapacityW,
   computeChargingInfrastructureCapacity,

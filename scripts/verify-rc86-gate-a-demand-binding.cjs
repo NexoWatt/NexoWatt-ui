@@ -169,7 +169,7 @@ assert(diagnosticsUiSource.includes('Durch Netz-Gate reduziert'), 'charging audi
 
 const pkg = require(path.join(root, 'package.json'));
 const io = require(path.join(root, 'io-package.json'));
-assert.equal(pkg.version, '0.8.212');
-assert.equal(io.common.version, '0.8.212');
+assert.equal(pkg.version, '0.8.213');
+assert.equal(io.common.version, '0.8.213');
 
 console.log('[RC86] Gate A demand binding, signed hard headroom and partial-offline isolation passed');

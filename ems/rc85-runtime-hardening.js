@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/rc85-runtime-hardening.ts
- * Quell-Hash: sha256:2e7b14a6af1a70a51b7a82a741f96a5ea2440e68a770a10684afef2c690e8980
+ * Quell-Hash: sha256:2e5cbd3d062cfb1ab94e5e455028046a9d9c028046bf7c848303a05bf49479d0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -18,6 +18,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Rc85EvcsDecisionGuard = void 0;
+exports.rc88RuntimeHardeningSnapshot = rc88RuntimeHardeningSnapshot;
+exports.rc88ClearRuntimeHardening = rc88ClearRuntimeHardening;
 exports.rc85RunIsolatedResult = rc85RunIsolatedResult;
 exports.rc85RunIsolated = rc85RunIsolated;
 exports.rc85IsHardReason = rc85IsHardReason;
@@ -26,11 +28,24 @@ exports.rc85GridEnvelope = rc85GridEnvelope;
 exports.rc86GridBinding = rc86GridBinding;
 exports.rc85OfflineReserveW = rc85OfflineReserveW;
 exports.startRc85HeapMonitor = startRc85HeapMonitor;
+exports.stopRc85HeapMonitor = stopRc85HeapMonitor;
 /* RC85: shared stability and charging-control hardening. */
 const node_v8_1 = require("node:v8");
 const inFlight = new Map();
 const timeoutLogAt = new Map();
 const MAX_IN_FLIGHT = 256;
+const hardeningStats = {
+    started: 0,
+    completed: 0,
+    failed: 0,
+    timedOut: 0,
+    skippedInFlight: 0,
+    rejectedAtCapacity: 0,
+    activeMax: 0,
+    lateSettled: 0,
+    lastTimeoutLabel: '',
+    lastTimeoutAt: 0,
+};
 function boundedMapSet(map, key, value, max = 512) {
     map.set(key, value);
     while (map.size > max) {
@@ -40,33 +55,115 @@ function boundedMapSet(map, key, value, max = 512) {
         map.delete(oldest);
     }
 }
+function logWatchdogOnce(label, message, log, now = Date.now()) {
+    const last = timeoutLogAt.get(label) ?? 0;
+    if (now - last < 60000)
+        return;
+    boundedMapSet(timeoutLogAt, label, now, 512);
+    log.warn?.(`[RC88 watchdog] ${label}: ${message}`);
+}
+function rc88RuntimeHardeningSnapshot(now = Date.now()) {
+    let oldestStartedAt = now;
+    const labels = [];
+    for (const [label, entry] of inFlight) {
+        labels.push(label);
+        if (entry.startedAt < oldestStartedAt)
+            oldestStartedAt = entry.startedAt;
+    }
+    return {
+        active: inFlight.size,
+        oldestActiveAgeMs: inFlight.size ? Math.max(0, now - oldestStartedAt) : 0,
+        labels: labels.slice(0, 32),
+        ...hardeningStats,
+    };
+}
+function rc88ClearRuntimeHardening() {
+    for (const entry of inFlight.values()) {
+        try {
+            entry.controller.abort(new Error('RC88_ADAPTER_UNLOAD'));
+        }
+        catch (_error) { }
+    }
+    inFlight.clear();
+    timeoutLogAt.clear();
+}
 async function rc85RunIsolatedResult(label, timeoutMs, work, log = console) {
     const now = Date.now();
-    const active = inFlight.get(label);
+    const normalizedLabel = String(label || 'unknown').slice(0, 240);
+    const active = inFlight.get(normalizedLabel);
     if (active) {
-        // Do not create another unresolved device/module operation every scheduler tick.
-        if (now - active.startedAt < Math.max(timeoutMs * 8, 60000)) {
-            return {
-                ok: false,
-                timedOut: false,
-                skipped: true,
-                durationMs: Math.max(0, now - active.startedAt),
-                error: new Error(`RC85_IN_FLIGHT:${label}`),
-            };
-        }
-        inFlight.delete(label);
+        // RC88_NO_DUPLICATE_HUNG_WORK: A timed-out operation stays quarantined
+        // until the original Promise really settles. Deleting it merely because
+        // it is old would start another unresolved hardware/module call and is a
+        // direct route to a growing V8 heap.
+        hardeningStats.skippedInFlight += 1;
+        const ageMs = Math.max(0, now - active.startedAt);
+        logWatchdogOnce(normalizedLabel, `still in flight for ${ageMs} ms; duplicate suppressed`, log, now);
+        return {
+            ok: false,
+            timedOut: active.timedOutAt > 0,
+            skipped: true,
+            durationMs: ageMs,
+            error: new Error(`RC88_IN_FLIGHT:${normalizedLabel}`),
+        };
     }
+    if (inFlight.size >= MAX_IN_FLIGHT) {
+        hardeningStats.rejectedAtCapacity += 1;
+        logWatchdogOnce(normalizedLabel, `in-flight capacity ${MAX_IN_FLIGHT} reached; work rejected fail-closed`, log, now);
+        return {
+            ok: false,
+            timedOut: false,
+            skipped: true,
+            durationMs: 0,
+            error: new Error(`RC88_IN_FLIGHT_CAPACITY:${normalizedLabel}`),
+        };
+    }
+    const safeTimeoutMs = Math.max(100, Math.min(120000, Number(timeoutMs) || 10000));
+    const controller = new AbortController();
     let timer;
-    const task = Promise.resolve().then(work);
-    // Promise.race attaches rejection handlers to the losing promise as well.
-    task.catch(() => undefined);
-    boundedMapSet(inFlight, label, { startedAt: now, promise: task }, MAX_IN_FLIGHT);
+    let timedOut = false;
+    let entry;
+    const token = Symbol(normalizedLabel);
+    const task = Promise.resolve().then(() => work(controller.signal));
+    // RC88_LIGHTWEIGHT_QUARANTINE: The map keeps only a token/controller, not
+    // the complete unresolved Promise chain. This still suppresses duplicate
+    // hardware work until true settlement, without making the watchdog map an
+    // additional strong root for all captured module state.
+    entry = {
+        startedAt: now,
+        token,
+        controller,
+        timeoutAt: now + safeTimeoutMs,
+        timedOutAt: 0,
+    };
+    inFlight.set(normalizedLabel, entry);
+    void task.then(() => { if (entry.timedOutAt > 0)
+        hardeningStats.lateSettled += 1; }, () => { if (entry.timedOutAt > 0)
+        hardeningStats.lateSettled += 1; }).finally(() => {
+        const current = inFlight.get(normalizedLabel);
+        if (current?.token === token)
+            inFlight.delete(normalizedLabel);
+    }).catch(() => undefined);
+    hardeningStats.started += 1;
+    hardeningStats.activeMax = Math.max(hardeningStats.activeMax, inFlight.size);
     try {
         const timeout = new Promise((_, reject) => {
-            timer = setTimeout(() => reject(new Error(`RC85_TIMEOUT:${label}:${timeoutMs}ms`)), timeoutMs);
+            timer = setTimeout(() => {
+                timedOut = true;
+                entry.timedOutAt = Date.now();
+                hardeningStats.timedOut += 1;
+                hardeningStats.lastTimeoutLabel = normalizedLabel;
+                hardeningStats.lastTimeoutAt = entry.timedOutAt;
+                try {
+                    controller.abort(new Error(`RC88_TIMEOUT:${normalizedLabel}:${safeTimeoutMs}ms`));
+                }
+                catch (_error) { }
+                reject(new Error(`RC88_TIMEOUT:${normalizedLabel}:${safeTimeoutMs}ms`));
+            }, safeTimeoutMs);
             timer.unref?.();
         });
         const value = await Promise.race([task, timeout]);
+        hardeningStats.completed += 1;
         return {
             ok: true,
             value,
@@ -77,15 +174,13 @@ async function rc85RunIsolatedResult(label, timeoutMs, work, log = console) {
     }
     catch (error) {
         const normalizedError = error instanceof Error ? error : new Error(String(error));
-        const last = timeoutLogAt.get(label) ?? 0;
-        if (now - last >= 60000) {
-            boundedMapSet(timeoutLogAt, label, now, 512);
-            log.warn?.(`[RC85 watchdog] ${label}: ${normalizedError.message}`);
-        }
+        if (!timedOut)
+            hardeningStats.failed += 1;
+        logWatchdogOnce(normalizedLabel, normalizedError.message, log, now);
         return {
             ok: false,
             error: normalizedError,
-            timedOut: normalizedError.message.startsWith('RC85_TIMEOUT:'),
+            timedOut: timedOut || normalizedError.message.startsWith('RC88_TIMEOUT:'),
             skipped: false,
             durationMs: Math.max(0, Date.now() - now),
         };
@@ -93,11 +188,6 @@ async function rc85RunIsolatedResult(label, timeoutMs, work, log = console) {
     finally {
         if (timer)
             clearTimeout(timer);
-        task.finally(() => {
-            const current = inFlight.get(label);
-            if (current?.promise === task)
-                inFlight.delete(label);
-        }).catch(() => undefined);
     }
 }
 async function rc85RunIsolated(label, timeoutMs, work, log = console) {
@@ -330,25 +420,114 @@ function rc85OfflineReserveW(points) {
     return total;
 }
 let heapTimer;
+let heapRestartTimer;
+let heapMonitorLog = console;
+let heapMonitorOptions = {};
 let criticalHeapSamples = 0;
-function startRc85HeapMonitor(log = console) {
-    if (heapTimer)
-        return () => undefined;
-    heapTimer = setInterval(() => {
-        const used = process.memoryUsage().heapUsed;
-        const limit = (0, node_v8_1.getHeapStatistics)().heap_size_limit;
-        const ratio = limit > 0 ? used / limit : 0;
-        if (ratio >= 0.82)
-            log.warn?.(`[RC85 heap] ${(used / 1048576).toFixed(0)} MiB / ${(limit / 1048576).toFixed(0)} MiB (${(ratio * 100).toFixed(1)}%)`);
-        criticalHeapSamples = ratio >= 0.94 ? criticalHeapSamples + 1 : 0;
-        // Last-resort controlled exit only after five sustained critical samples.
-        if (criticalHeapSamples >= 5) {
-            log.error?.('[RC85 heap] sustained critical heap pressure; requesting controlled adapter restart before V8 SIGABRT');
-            setTimeout(() => process.exit(75), 250).unref?.();
-            criticalHeapSamples = 0;
+let heapRestartScheduled = false;
+let lastHeapWarnAt = 0;
+let lastPressureActionAt = 0;
+const heapSamples = [];
+function clampRatio(value, fallback, min, max) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+}
+function safeDiagnosticsJson() {
+    try {
+        const diagnostics = heapMonitorOptions.getDiagnostics?.();
+        const json = JSON.stringify(diagnostics ?? {});
+        return json.length > 4000 ? `${json.slice(0, 4000)}…` : json;
+    }
+    catch (error) {
+        return JSON.stringify({ diagnosticsError: error instanceof Error ? error.message : String(error) });
+    }
+}
+function scheduleControlledRestart(sample, reason) {
+    if (heapRestartScheduled)
+        return;
+    heapRestartScheduled = true;
+    try {
+        heapMonitorOptions.onBeforeRestart?.(sample);
+    }
+    catch (_error) { }
+    heapMonitorLog.error?.(`[RC88 heap] ${reason}; controlled adapter restart requested before V8 OOM. `
+        + `heap=${(sample.heapUsed / 1048576).toFixed(0)}/${(sample.heapLimit / 1048576).toFixed(0)} MiB `
+        + `rss=${(sample.rss / 1048576).toFixed(0)} MiB diagnostics=${safeDiagnosticsJson()}`);
+    heapRestartTimer = setTimeout(() => process.exit(11), 1500);
+    heapRestartTimer.unref?.();
+}
+function runHeapMonitorSample() {
+    const now = Date.now();
+    const memory = process.memoryUsage();
+    const heapLimit = (0, node_v8_1.getHeapStatistics)().heap_size_limit;
+    const ratio = heapLimit > 0 ? memory.heapUsed / heapLimit : 0;
+    const comparison = heapSamples.find((sample) => now - sample.ts <= 10 * 60000) ?? heapSamples[0];
+    const growthBytes = comparison ? memory.heapUsed - comparison.heapUsed : 0;
+    const sample = {
+        ts: now,
+        heapUsed: memory.heapUsed,
+        heapTotal: memory.heapTotal,
+        heapLimit,
+        rss: memory.rss,
+        external: memory.external,
+        arrayBuffers: memory.arrayBuffers ?? 0,
+        ratio,
+        growthBytes,
+    };
+    heapSamples.push(sample);
+    while (heapSamples.length > 24)
+        heapSamples.shift();
+    const warnRatio = clampRatio(heapMonitorOptions.warnRatio, 0.65, 0.4, 0.9);
+    const pressureRatio = clampRatio(heapMonitorOptions.pressureRatio, 0.75, warnRatio, 0.92);
+    const restartRatio = clampRatio(heapMonitorOptions.restartRatio, 0.86, pressureRatio, 0.95);
+    const emergencyRatio = clampRatio(heapMonitorOptions.emergencyRatio, 0.92, restartRatio, 0.98);
+    const sustainedSamples = Math.max(1, Math.min(5, Math.round(Number(heapMonitorOptions.sustainedSamples) || 2)));
+    const fastGrowth = growthBytes >= 128 * 1048576;
+    if ((ratio >= warnRatio || fastGrowth) && now - lastHeapWarnAt >= 5 * 60000) {
+        lastHeapWarnAt = now;
+        heapMonitorLog.warn?.(`[RC88 heap] ${(memory.heapUsed / 1048576).toFixed(0)} MiB / ${(heapLimit / 1048576).toFixed(0)} MiB `
+            + `(${(ratio * 100).toFixed(1)}%), rss ${(memory.rss / 1048576).toFixed(0)} MiB, `
+            + `10-min growth ${(growthBytes / 1048576).toFixed(0)} MiB; diagnostics=${safeDiagnosticsJson()}`);
+    }
+    if ((ratio >= pressureRatio || fastGrowth) && now - lastPressureActionAt >= 30000) {
+        lastPressureActionAt = now;
+        try {
+            heapMonitorOptions.onPressure?.(sample);
         }
-    }, 60000);
-    heapTimer.unref?.();
-    return () => { if (heapTimer)
-        clearInterval(heapTimer); heapTimer = undefined; criticalHeapSamples = 0; };
+        catch (error) {
+            heapMonitorLog.warn?.(`[RC88 heap] pressure mitigation failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    criticalHeapSamples = ratio >= restartRatio ? criticalHeapSamples + 1 : 0;
+    if (ratio >= emergencyRatio) {
+        scheduleControlledRestart(sample, `emergency heap pressure ${(ratio * 100).toFixed(1)}%`);
+    }
+    else if (criticalHeapSamples >= sustainedSamples) {
+        scheduleControlledRestart(sample, `sustained heap pressure ${(ratio * 100).toFixed(1)}% for ${criticalHeapSamples} samples`);
+    }
+}
+function startRc85HeapMonitor(log = console, options = {}) {
+    heapMonitorLog = log || console;
+    heapMonitorOptions = { ...heapMonitorOptions, ...options };
+    if (!heapTimer) {
+        const intervalMs = Math.max(10000, Math.min(120000, Number(heapMonitorOptions.intervalMs) || 30000));
+        heapTimer = setInterval(runHeapMonitorSample, intervalMs);
+        heapTimer.unref?.();
+    }
+    return stopRc85HeapMonitor;
+}
+function stopRc85HeapMonitor() {
+    if (heapTimer)
+        clearInterval(heapTimer);
+    if (heapRestartTimer)
+        clearTimeout(heapRestartTimer);
+    heapTimer = undefined;
+    heapRestartTimer = undefined;
+    criticalHeapSamples = 0;
+    heapRestartScheduled = false;
+    lastHeapWarnAt = 0;
+    lastPressureActionAt = 0;
+    heapSamples.length = 0;
+    heapMonitorOptions = {};
+    heapMonitorLog = console;
 }

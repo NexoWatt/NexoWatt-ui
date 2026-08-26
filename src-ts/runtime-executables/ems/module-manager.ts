@@ -1,6 +1,6 @@
 // @runtime-transpile
 // @ts-nocheck
-import { rc85RunIsolatedResult, startRc85HeapMonitor } from './rc85-runtime-hardening'; // RC85_IMPORT_HARDENING
+import { rc85RunIsolatedResult, rc88ClearRuntimeHardening, rc88RuntimeHardeningSnapshot, startRc85HeapMonitor } from './rc85-runtime-hardening'; // RC88_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/module-manager.js
  *
@@ -78,7 +78,6 @@ const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
 
-startRc85HeapMonitor(console); // RC85_HEAP_MONITOR_START
 const featureFlags = require('./services/feature-flags');
 const {
     beginSafetyCycle,
@@ -170,6 +169,7 @@ class ModuleManager {
     _moduleInitRetryMs: number;
     _moduleErrorLogAt: Map<string, number>;
     lastTickDiag: TickDiagnostic | null;
+    _stopHeapMonitor?: () => void;
     _gridConstraintsModule?: ModuleInstance;
     /**
      * @param {any} adapter
@@ -191,6 +191,25 @@ class ModuleManager {
         // wird deshalb pro Modulzeile nachgefuehrt und bei Bedarf lazy gestartet.
         this._moduleInitRetryMs = 30000;
         this._moduleErrorLogAt = new Map();
+
+        // RC88_MEMORY_GUARD: The heap monitor is bound to the real adapter
+        // instance so it can close slow SSE clients before buffered live data
+        // grows into an OOM. Runtime/watchdog counters are included in the
+        // diagnostics but remain bounded.
+        this._stopHeapMonitor = startRc85HeapMonitor(this.adapter?.log || console, {
+            intervalMs: 30_000,
+            warnRatio: 0.65,
+            pressureRatio: 0.75,
+            restartRatio: 0.86,
+            emergencyRatio: 0.92,
+            sustainedSamples: 2,
+            getDiagnostics: () => ({
+                runtime: rc88RuntimeHardeningSnapshot(),
+                adapter: this.adapter?._nwGetMemoryDiagnostics?.() || null,
+            }),
+            onPressure: (sample) => this.adapter?._nwHandleHeapPressure?.(sample),
+            onBeforeRestart: (sample) => this.adapter?._nwPrepareControlledRestart?.(sample),
+        });
 
         // Last tick diagnostics (always captured, even if diagnostics are disabled)
         /**
@@ -996,6 +1015,9 @@ class ModuleManager {
      * adapter.setTimeout-Aufrufe oder State-Publishes startet.
      */
     stop() {
+        try { this._stopHeapMonitor?.(); } catch (_error) {}
+        this._stopHeapMonitor = undefined;
+        try { rc88ClearRuntimeHardening(); } catch (_error) {}
         for (const m of this.modules || []) {
             try {
                 if (m && m.instance && typeof m.instance.stop === 'function') m.instance.stop();
