@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/charging-management-audit.ts
- * Quell-Hash: sha256:7c2ee548f55dc909112e09123c4beaab2a81538fef923c829ddd537b14fb18eb
+ * Quell-Hash: sha256:6ea8d3fbbd77e4dca2199ec18cccdfaa72893c8904a2a6e0ba8febc12b59c7b4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -216,6 +216,14 @@ function buildChargingAuditSnapshot(input = {}) {
             limitW: finiteChargingAuditNumber(input.gridImportLimitW, null),
             effectiveLimitW: finiteChargingAuditNumber(input.gridImportLimitEffW, null),
             evcsCapW: finiteChargingAuditNumber(input.gridCapEvcsW, null),
+            hardHeadroomRawW: finiteChargingAuditNumber(input.gridHardHeadroomRawW, null),
+            progressiveIncrementW: finiteChargingAuditNumber(input.gridIncrementHeadroomW, null),
+            softRampFactor: finiteChargingAuditNumber(input.gridSoftRampFactor, null),
+            offlineReserveW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridOfflineReserveW, 0))),
+            requestedW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridDemandRequestedW, 0))),
+            allowedW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridAllowedDemandW, 0))),
+            reductionW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridReductionW, 0))),
+            monitoring: finiteChargingAuditNumber(input.gridImportLimitEffW, 0) > 0,
             binding: input.gridCapBinding === true,
         },
         phase: {

@@ -1,9 +1,9 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.208",
+    "version": "0.8.211",
     "news": {
-      "0.8.208": {
+      "0.8.210": {
         "de": "RC83 erlaubt Speicher-Netzladen ausschließlich bei aktivem, frischem und günstigem dynamischen Tarif. Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht. Neutral, teuer, unbekannt, Tarif aus oder veraltete Preis-/Freigabedaten führen sofort zur Eigenverbrauchsoptimierung; auch gehaltene alte Tarif-/Reserve-Sollwerte werden unmittelbar vor dem Hardware-Write auf 0 W gestoppt. Das fehlende Objekt gridConstraints.exportLimit.sinkFieldProtocolJson wird vor dem ersten Write angelegt und beendet die wiederkehrende ioBroker-Warnflut.",
         "en": "RC83 permits storage charging from the grid only with an active, fresh and cheap dynamic tariff. If variable grid fees are enabled, the configured off-peak/quarter window is an additional requirement. Neutral, expensive, unknown, disabled or stale tariff data immediately falls back to self-consumption; held legacy tariff/reserve commands are stopped at 0 W before the hardware write. The missing gridConstraints.exportLimit.sinkFieldProtocolJson object is now created before its first write, eliminating the recurring ioBroker warning flood.",
         "nl": "RC83 staat netladen van de batterij alleen toe bij een actief, actueel en goedkoop dynamisch tarief. Bij geactiveerde variabele netkosten is bovendien het geconfigureerde dal-/kwartaalvenster verplicht. Neutraal, duur, onbekend, uitgeschakeld of verouderd tarief schakelt direct terug naar eigenverbruik; vastgehouden oude tarief-/reserveopdrachten worden vóór de hardware-write op 0 W gestopt. Het ontbrekende object gridConstraints.exportLimit.sinkFieldProtocolJson wordt vóór de eerste write aangemaakt, waardoor de terugkerende ioBroker-waarschuwingen stoppen."

@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 461ebee9fb552134e54bbb2d44f43ccf5ff40ccf465df9896d6e2a9b2cf961c7
+ * Original-Hash: abe886b9e34c0b9d286db1490c8f3bdaab6dc0b01da6a1ca4932bd4009c6bfb7
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.
@@ -7227,7 +7227,7 @@ class NexoWattVis extends utils.Adapter {
             if (Number.isFinite(v)) {
               socVal = v;
               socTs = (typeof stSoc.ts === 'number' && Number.isFinite(stSoc.ts)) ? stSoc.ts : now;
-              this._nwSfSocCache.set(socCacheKey, { val: socVal, ts: socTs });
+              this._nwSfSocCache.set(socCacheKey, { val: socVal, ts: socTs }); if (this._nwSfSocCache.size > 1000) { const __rc85Oldest = this._nwSfSocCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwSfSocCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
             }
           }
         }
@@ -7985,7 +7985,10 @@ class NexoWattVis extends utils.Adapter {
       const maxChargeW = (maxChargeFromStatus !== null) ? maxChargeFromStatus : maxChargeFromConfig;
       const maxDischargeW = (maxDischargeFromStatus !== null) ? maxDischargeFromStatus : maxDischargeFromConfig;
       const chargeDispatchAvailable = (st && typeof st.chargeDispatchAvailable === 'boolean') ? st.chargeDispatchAvailable : false;
-      const dischargeDispatchAvailable = (st && typeof st.dischargeDispatchAvailable === 'boolean') ? st.dischargeDispatchAvailable : false;
+      let dischargeDispatchAvailable = (st && typeof st.dischargeDispatchAvailable === 'boolean') ? st.dischargeDispatchAvailable : false;
+        const __rc85OfflineReserveW = rc85OfflineReserveW(storages);
+        dischargeDispatchAvailable = Math.max(0, Number(dischargeDispatchAvailable) - __rc85OfflineReserveW); // RC85_OFFLINE_RESERVE_APPLIED
+
 
       return {
         ...s,
@@ -9497,7 +9500,7 @@ class NexoWattVis extends utils.Adapter {
       .finally(() => {
         try { this._nwEvcsAliasRefreshPending.delete(sid); } catch (_e) {}
       });
-    this._nwEvcsAliasRefreshPending.set(sid, pending);
+    this._nwEvcsAliasRefreshPending.set(sid, pending); if (this._nwEvcsAliasRefreshPending.size > 1000) { const __rc85Oldest = this._nwEvcsAliasRefreshPending.keys().next().value; if (__rc85Oldest !== undefined) this._nwEvcsAliasRefreshPending.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
     return pending;
   }
   /**
@@ -17745,6 +17748,9 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
           gridImportLimitW: await getOwn('chargingManagement.control.gridImportLimitW'),
           gridImportLimitEffW: await getOwn('chargingManagement.control.gridImportLimitW_effective'),
+          gridImportPlanningW: await getOwn('chargingManagement.control.gridImportLimitW_planning'),
+          gridImportStage: await getOwn('chargingManagement.control.gridImportStage'),
+          gridMeasurementSource: await getOwn('chargingManagement.control.gridMeasurementSource'),
           gridImportW,
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
           gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
@@ -17753,6 +17759,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           gridEvcsReserveIgnoredForCapW: await getOwn('chargingManagement.control.gridEvcsReserveIgnoredForCapW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
+          gridHardHeadroomRawW: await getOwn('chargingManagement.control.gridHardHeadroomRawW'),
+          gridIncrementHeadroomW: await getOwn('chargingManagement.control.gridProgressiveIncrementW'),
+          gridSoftRampFactor: await getOwn('chargingManagement.control.gridSoftRampFactor'),
+          gridOfflineReserveW: await getOwn('chargingManagement.control.offlineReserveW'),
+          gridDemandRequestedW: await getOwn('chargingManagement.control.gridDemandRequestedW'),
+          gridAllowedDemandW: await getOwn('chargingManagement.control.gridAllowedDemandW'),
+          gridReductionW: await getOwn('chargingManagement.control.gridReductionW'),
 
           gridMaxPhaseA: await getOwn('chargingManagement.control.gridMaxPhaseA'),
           gridWorstPhaseA: await getOwn('chargingManagement.control.gridWorstPhaseA'),
@@ -19075,7 +19088,7 @@ try { await buildEnergyExact(); } catch (_e) {}
     })();
 
       if (!(this._nwHistoryApiInflight instanceof Map)) this._nwHistoryApiInflight = new Map();
-      this._nwHistoryApiInflight.set(cacheKey, computeHistoryPayload);
+      this._nwHistoryApiInflight.set(cacheKey, computeHistoryPayload); if (this._nwHistoryApiInflight.size > 1000) { const __rc85Oldest = this._nwHistoryApiInflight.keys().next().value; if (__rc85Oldest !== undefined) this._nwHistoryApiInflight.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
       let payload = null;
       try {
         payload = await computeHistoryPayload;
@@ -26547,12 +26560,12 @@ return res.json(out);
       const obj = await this.getForeignObjectAsync(objectId);
       const unit = obj && obj.common ? obj.common.unit : undefined;
       const norm = this._nwNormalizeUnit(unit);
-      this._nwForeignUnitCache.set(objectId, norm);
-      this._nwForeignPowerScaleCache.set(objectId, this._nwPowerScaleToWFromUnit(norm));
+      this._nwForeignUnitCache.set(objectId, norm); if (this._nwForeignUnitCache.size > 1000) { const __rc85Oldest = this._nwForeignUnitCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwForeignUnitCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
+      this._nwForeignPowerScaleCache.set(objectId, this._nwPowerScaleToWFromUnit(norm)); if (this._nwForeignPowerScaleCache.size > 1000) { const __rc85Oldest = this._nwForeignPowerScaleCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwForeignPowerScaleCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
     } catch (e) {
       // Ignore; keep default factor=1
-      this._nwForeignUnitCache.set(objectId, '');
-      this._nwForeignPowerScaleCache.set(objectId, 1);
+      this._nwForeignUnitCache.set(objectId, ''); if (this._nwForeignUnitCache.size > 1000) { const __rc85Oldest = this._nwForeignUnitCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwForeignUnitCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
+      this._nwForeignPowerScaleCache.set(objectId, 1); if (this._nwForeignPowerScaleCache.size > 1000) { const __rc85Oldest = this._nwForeignPowerScaleCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwForeignPowerScaleCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
     }
   }
   /**
@@ -32131,7 +32144,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     try {
       if (!(this._nwHistoryApiCache instanceof Map)) this._nwHistoryApiCache = new Map();
       if (!key || !payload) return;
-      this._nwHistoryApiCache.set(key, { ts: Date.now(), payload });
+      this._nwHistoryApiCache.set(key, { ts: Date.now(), payload }); if (this._nwHistoryApiCache.size > 1000) { const __rc85Oldest = this._nwHistoryApiCache.keys().next().value; if (__rc85Oldest !== undefined) this._nwHistoryApiCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
       if (this._nwHistoryApiCache.size > 24) {
         const oldestKey = this._nwHistoryApiCache.keys().next().value;
         if (oldestKey) this._nwHistoryApiCache.delete(oldestKey);

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:471c7b5c080a55d99fc662b45a939bd9ce25f26a11d19dc4d776a4ebde7b9b5e
+ * Quell-Hash: sha256:ca370ce36238a3d441ac8a88356c0593bfee2f0f5f8e22eefbb7331c2b7abefb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -228,7 +228,7 @@ class MultiUseModule extends BaseModule {
   async _setStateIfChanged(id, value) {
     const normalized = typeof value === 'number' && !Number.isFinite(value) ? null : value;
     if (this._stateCache.get(id) === normalized) return;
-    this._stateCache.set(id, normalized);
+    this._stateCache.set(id, normalized); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
     await this.adapter.setStateAsync(id, normalized, true);
   }
 

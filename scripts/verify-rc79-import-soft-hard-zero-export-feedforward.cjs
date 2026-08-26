@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC79/RC80 regression / 0.8.208
+ * RC79/RC80 regression / 0.8.211
  * - zweistufiges Import Soft-/Hard-Limit mit signiertem NVP
  * - 0-Einspeise-PV-Feed-forward nach realer lokaler Aufnahme + Speicherladung
  * - keine PV-Abregelung bei gleichzeitiger Speicherentladung
@@ -62,8 +62,8 @@ function makeGridRuntime({ pvActualW = 20000, initialLimitW = null } = {}) {
 (async () => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.208');
-  assert.strictEqual(io.common.version, '0.8.208');
+  assert.strictEqual(pkg.version, '0.8.211');
+  assert.strictEqual(io.common.version, '0.8.211');
 
   // 1) RC80-Korrektur: immer exakt 10 %, ohne Mindest-/Maximalwert.
   assert.strictEqual(resolveAutoReserveW(5000, 0), 500);
@@ -254,7 +254,7 @@ function makeGridRuntime({ pvActualW = 20000, initialLimitW = null } = {}) {
     assert(!safety.includes('gridImportLimitW_planning'));
   }
 
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v489'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v490'"));
   console.log('[RC79] OK: Import Soft-/Hard-Limit, signierter NVP, 0-Einspeise-PV-Feed-forward, Speicher-Konfliktschutz, AppCenter-Platzierung und Cold-Start-Objektinitialisierung geprueft.');
 })().catch((error) => {
   console.error('[RC79] ERROR:', error && error.stack ? error.stack : error);

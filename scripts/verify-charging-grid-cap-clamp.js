@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const src = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/main.ts'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');
+const { rc85GridEnvelope } = require(path.join(root, 'ems/rc85-runtime-hardening.js'));
 
 function must(text, needle, label) {
   if (!text.includes(needle)) {
@@ -14,16 +15,22 @@ function must(text, needle, label) {
     process.exit(1);
   }
 }
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 function calc(gridW, evcsActualW, gridLimitW, derivedBaseLoadW = null) {
   const rawBaseLoadW = gridW - evcsActualW;
   const baseLoadW = Number.isFinite(derivedBaseLoadW) ? Math.max(0, derivedBaseLoadW) : Math.max(0, rawBaseLoadW);
   const localSupportW = Math.max(0, baseLoadW - rawBaseLoadW);
-  const incrementHeadroomW = gridLimitW - gridW;
-  const capW = clamp(evcsActualW + incrementHeadroomW, 0, 1e12);
-  return { rawBaseLoadW, baseLoadW, localSupportW, incrementHeadroomW, capW };
+  const envelope = rc85GridEnvelope({
+    hardLimitW: gridLimitW,
+    signedNvpW: gridW,
+    currentControlledLoadW: evcsActualW,
+  });
+  return {
+    rawBaseLoadW,
+    baseLoadW,
+    localSupportW,
+    incrementHeadroomW: envelope.hardHeadroomRawW,
+    capW: envelope.maxControlledLoadW,
+  };
 }
 
 const exportCase = calc(-10100, 0, 30000, 700);
@@ -51,14 +58,15 @@ if (overImportCase.incrementHeadroomW !== -2000 || overImportCase.capW !== 3000)
 must(src, 'gridBaseLoadRawW = gridW -', 'raw base load');
 must(src, 'derived.core.building.loadRestW', 'energy-flow loadRestW preference');
 must(src, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)', 'local support diagnostic');
-must(src, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW', 'signed incremental headroom');
-must(src, 'clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)', 'import-only EVCS target cap');
+must(src, 'hardLimitW: gridImportLimitEffW', 'effective hard import limit');
+must(src, 'gridIncrementHeadroomW = gridEnvelope.progressiveIncrementW', 'progressive signed increment');
+must(src, 'gridCapEvcsW = clamp(gridEnvelope.maxControlledLoadW, 0, 1e12)', 'import-only EVCS target cap');
 must(src, 'chargingManagement.control.gridBaseLoadRawW', 'raw base state');
 must(src, 'chargingManagement.control.gridLocalSupportW', 'local support state');
 must(main, 'gridBaseLoadRawW', 'api raw base');
 must(main, 'gridLocalSupportW', 'api local support');
-must(ui, 'Grundlast (wirksam)', 'ui effective base');
-must(ui, 'Lokale Deckung', 'ui local support');
+must(ui, 'Hard-Headroom signed', 'ui signed hard headroom');
+must(ui, 'Tatsächlich reduziert', 'ui actual reduction');
 must(ui, 'EVCS Cap (NVP / Importgrenze)', 'ui import-only cap label');
 
 console.log('[charging-grid-cap-clamp] OK: signed NVP import-only cap covers export, import and active shedding.');

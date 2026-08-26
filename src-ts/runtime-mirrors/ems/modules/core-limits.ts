@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4dc1db7d1c39e51b5d7661df8a9c3cbd5a5acd435cec5e1166077c30f05f88aa
+ * Original-Hash: 9cd83d3d18dc1f6c9ddd0cfa41b02cde66205424b3dec982b7fae0b0fefd3d9f
  */
 
 /**
@@ -154,6 +154,7 @@ type CoreBudgetGrantRuntime = {
 
 const { BaseModule } = require('./base');
 const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 
 /**
  * Code-Teil: resolveCoreStorageOperatingPolicy
@@ -1102,6 +1103,7 @@ class CoreLimitsModule extends BaseModule {
     dp: any;
     _inited: boolean;
     _coreTsShadowWarnedSignatures?: Set<string>;
+    _coreRuntimeTsLast?: any;
     /**
      * Code-Teil: constructor
      * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
@@ -1116,6 +1118,7 @@ class CoreLimitsModule extends BaseModule {
         // aktive PV-Senke und ohne plausiblen NVP keinen neuen Überschuss.
         this._lastTrustedPvPhysicalCapW = 0;
         this._lastTrustedPvPhysicalCapTs = 0;
+        this._coreRuntimeTsLast = null;
     }
     /**
      * Code-Teil: init
@@ -1823,14 +1826,29 @@ class CoreLimitsModule extends BaseModule {
          * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
          * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
          */
-        const gridW = (() => {
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMs, 10000));
+        let gridW = centralNvp.usable ? centralNvp.netW : null;
+        let gridMeasurementUsable = centralNvp.usable;
+        let gridMeasurementStatus = centralNvp.current ? centralNvp.status : 'legacy-fallback';
+        let gridMeasurementSource = centralNvp.current ? centralNvp.source : 'legacy-fallback';
+        let gridMeasurementReason = centralNvp.current ? centralNvp.reason : '';
+        if (!centralNvp.current) {
             const dpVal = this._readDpNumberFresh(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'ps.gridPowerW'], staleMs, null);
-            if (isFiniteNumber(dpVal)) return dpVal;
-            return this._readCacheNumber(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'gridPower', 'gridPowerW'], 0) || 0;
-        })();
+            const cacheVal = isFiniteNumber(dpVal) ? dpVal : this._readCacheNumberFresh(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'gridPower', 'gridPowerW'], staleMs, null);
+            if (isFiniteNumber(cacheVal)) {
+                gridW = Number(cacheVal);
+                gridMeasurementUsable = true;
+                gridMeasurementStatus = 'legacy-fresh';
+                gridMeasurementSource = 'legacy-fresh';
+            } else {
+                gridMeasurementStatus = 'stale';
+                gridMeasurementReason = 'no-fresh-canonical-nvp';
+            }
+        }
+        const gridControlW = gridMeasurementUsable && isFiniteNumber(gridW) ? Number(gridW) : 0;
 
-        const gridImportW = Math.max(0, gridW || 0);
-        const gridExportW = Math.max(0, -(gridW || 0));
+        const gridImportW = Math.max(0, gridControlW);
+        const gridExportW = Math.max(0, -gridControlW);
 
         /**
          * Code-Teil: Arrow-Funktion `pvPowerW`
@@ -1853,7 +1871,8 @@ class CoreLimitsModule extends BaseModule {
 
         // Eine einzige Speichertopologie ist fuer Messung, Budget und Hardwareausgang
         // autoritativ. Auch der Kompatibilitaets-Fallback darf Farm- und Einzelwerte
-        // niemals mischen.
+        // niemals mischen, weil sonst eine alte Messung der nicht ausgewaehlten
+        // Topologie ein fiktives PV-/Leistungsbudget erzeugen kann.
         const fallbackFarmInfo = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
             ? this.adapter._nwGetStorageFarmRuntimeInfo()
             : null;
@@ -1871,7 +1890,10 @@ class CoreLimitsModule extends BaseModule {
         const storageTopology = String(storageAuthority.selectedTopology || 'none');
         const storageControlEnabled = !!storageAuthority.writerActive;
 
-        // Speicherleistung wird zentral wie im Energiefluss aufgelöst.
+        // Speicherleistung wird zentral wie im Energiefluss aufgelöst:
+        // - getrennte Lade-/Entlade-DPs bleiben vollständig gültig
+        // - signed Batterie-DP bleibt gültig (- = Laden, + = Entladen; invertierbar)
+        // - die nicht ausgewaehlte Topologie ist in jedem Fall ausgeschlossen
         let storageChargeW = 0;
         let storageDischargeW = 0;
         let usedCentralStorageFlow = false;
@@ -1887,9 +1909,12 @@ class CoreLimitsModule extends BaseModule {
         } catch (_eFlow) {}
 
         if (!usedCentralStorageFlow && storageTopology === 'farm') {
+            // Kompatibilitaets-Fallback fuer Laufzeiten ohne zentralen Resolver:
+            // bei ausgewaehlter Farm sind ausschliesslich Farmaggregate zulaessig.
             storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW'], 0) || 0);
             storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW'], 0) || 0);
         } else if (!usedCentralStorageFlow && storageTopology === 'single') {
+            // Beim Einzelpfad duerfen keine alten Farmwerte in das Budget einfließen.
             storageChargeW = Math.max(0, this._readCacheNumberMax(['storageChargePower'], 0) || 0);
             storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageDischargePower'], 0) || 0);
             const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
@@ -1911,26 +1936,12 @@ class CoreLimitsModule extends BaseModule {
         const thermalEnabled = cfg.enableThermalControl === true;
         const heatingRodEnabled = cfg.enableHeatingRodControl === true;
 
-        // Der Core läuft vor den Verbrauchermodulen und verwendet deshalb deren
-        // zuletzt veröffentlichten Ist-/Intentstand aus dem vorherigen EMS-Tick.
-        // Diese Werte dürfen aber nicht unbegrenzt weiterleben: Ein alter EVCS-
-        // oder Thermikwert könnte sonst nachts bzw. nach einer Deaktivierung ein
-        // künstliches PV-Potential rekonstruieren. Das Fenster ist bewusst länger
-        // als ein normaler Modultick, bleibt aber klar endlich.
+        // Der Core nutzt den letzten Ist-/Intentstand der später laufenden Verbraucher.
+        // Das begrenzte Frischefenster verhindert Ghost-Lasten nach Deaktivierung.
         const flexibleFlowMaxAgeMs = Math.max(staleMs * 3, 45000);
-        const evcsUsedRawW = Math.max(0, this._readCacheNumberFresh([
-            'chargingManagement.control.usedW',
-            'evcs.totalPowerW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
-        const evcsActualRawW = Math.max(0, this._readCacheNumberFresh([
-            'chargingManagement.control.actualW',
-            'chargingManagement.summary.totalPowerW',
-            'evcs.totalPowerW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
-        const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh([
-            'chargingManagement.control.pvEvcsPhysicalPvManagedW',
-            'chargingManagement.control.pvEvcsUsedW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsUsedRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.usedW', 'evcs.totalPowerW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsActualRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.actualW', 'chargingManagement.summary.totalPowerW', 'evcs.totalPowerW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh(['chargingManagement.control.pvEvcsPhysicalPvManagedW', 'chargingManagement.control.pvEvcsUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
         const thermalRuntimeW = this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null);
         const heatingRodRuntimeW = this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null);
         const thermalUsedRawW = Math.max(0, Number.isFinite(Number(thermalRuntimeW))
@@ -1939,46 +1950,31 @@ class CoreLimitsModule extends BaseModule {
         const heatingRodUsedRawW = Math.max(0, Number.isFinite(Number(heatingRodRuntimeW))
             ? Number(heatingRodRuntimeW)
             : (this._readCacheNumberFresh(['heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0));
-        const thermalActualRawW = Math.max(0, this._readCacheNumberFresh([
-            'thermal.summary.appliedTotalW',
-            'thermal.summary.budgetUsedW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
-        const heatingRodActualRawW = Math.max(0, this._readCacheNumberFresh([
-            'heatingRod.summary.currentHeatingRodW',
-            'heatingRod.summary.appliedTotalW',
-            'heatingRod.summary.budgetUsedW',
-        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const thermalActualRawW = Math.max(0, this._readCacheNumberFresh(['thermal.summary.appliedTotalW', 'thermal.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
+        const heatingRodActualRawW = Math.max(0, this._readCacheNumberFresh(['heatingRod.summary.currentHeatingRodW', 'heatingRod.summary.appliedTotalW', 'heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0);
 
-        // Only active EMS-controlled apps may reserve central budget. Disabled apps can
-        // still have old summary states from before a restart/update; those must not
-        // create ghost reservations or reduce remainingPvW.
+        // Nur aktive EMS-Apps dürfen alte Runtimewerte in Budget/Diagnose übernehmen.
         const evcsUsedW = evcsEnabled ? evcsUsedRawW : 0;
         const evcsActualW = evcsEnabled ? evcsActualRawW : 0;
         const evcsPvUsedW = evcsEnabled ? evcsPvUsedRawW : 0;
-        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0;
-        const thermalActualW = thermalEnabled ? thermalActualRawW : 0;
-        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
-        const heatingRodActualW = heatingRodEnabled ? heatingRodActualRawW : 0;
+        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0, thermalActualW = thermalEnabled ? thermalActualRawW : 0;
+        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0, heatingRodActualW = heatingRodEnabled ? heatingRodActualRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
-        const flexActualW = Math.max(0, evcsActualW + thermalActualW + heatingRodActualW);
-        const storageControlledChargeW = storageControlEnabled ? storageChargeW : 0;
+        const flexActualW = Math.max(0, evcsActualW + thermalActualW + heatingRodActualW), storageControlledChargeW = storageControlEnabled ? storageChargeW : 0;
         const currentControlledLoadW = Math.max(0, flexActualW + storageControlledChargeW);
 
-        // Das physikalische PV-Budget wird aus dem signierten NVP rekonstruiert.
-        // Ein positiver NVP-Wert ist Netzbezug und muss abgezogen werden; sonst
-        // koennen EVCS- oder Speicherlasten das vermeintliche PV-Budget selbst
-        // aufblaehen und die Kunden-Priorisierung aushebeln.
-        // Fuer die Rekonstruktion darf nicht die reine Budgetreservierung einer
-        // noch wartenden Wallbox verwendet werden. Nur physisch gemessene bzw.
-        // durch Setpoints plausibilisierte flexible PV-Lasten werden zurueckgerechnet.
+        // Physikalisches PV-Budget: frische PV begrenzt die NVP-Rekonstruktion.
+        // Reservierungen erzeugen kein PV-Potential; nur realer/plausibilisierter
+        // EVCS-PV-Fluss zählt. Netzbezug wird über den signierten NVP abgezogen.
         const pvFlexUsedW = Math.max(0, evcsPvUsedW + thermalUsedW + heatingRodUsedW);
         const pvBudgetFlowRawW = computePvBudgetFlowRawW({
-            gridW,
+            gridW: gridControlW,
             flexUsedW: pvFlexUsedW,
             storageChargeW,
             storageDischargeW,
         });
         const activePvSinkW = Math.max(0, pvFlexUsedW + storageChargeW);
+        const previousTrustedPvPhysicalCapW = this._lastTrustedPvPhysicalCapW;
         const lastTrustedAgeMs = this._lastTrustedPvPhysicalCapTs > 0
             ? Math.max(0, now - this._lastTrustedPvPhysicalCapTs)
             : null;
@@ -1989,7 +1985,7 @@ class CoreLimitsModule extends BaseModule {
             gridExportW,
             gridImportW,
             activePvSinkW,
-            lastTrustedW: this._lastTrustedPvPhysicalCapW,
+            lastTrustedW: previousTrustedPvPhysicalCapW,
             lastTrustedAgeMs,
             holdMs: Math.max(30000, pvSourceMaxAgeMs),
         });
@@ -1998,33 +1994,140 @@ class CoreLimitsModule extends BaseModule {
             this._lastTrustedPvPhysicalCapW = pvPhysicalCapW;
             this._lastTrustedPvPhysicalCapTs = now;
         }
-        const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
+        const pvBudgetRawW = gridMeasurementUsable ? Math.min(pvBudgetFlowRawW, pvPhysicalCapW) : 0;
         const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
         const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
         const pvBudgetEffectiveW = Math.max(0, pvBudgetRawW - pvReserveW);
         const pvAvailable = pvBudgetEffectiveW > 0;
 
+        // Kundenseitige PV-Ueberschuss-Prioritaet. Die Verteilung bleibt Teil der
+        // zentralen Budgetlogik: EVCS laeuft zuerst und wird auf seinen Anteil
+        // begrenzt, der Speicher reserviert danach den tatsaechlich verbleibenden
+        // Rest. Dynamische Tarife sind hiervon bewusst getrennt.
+        const readCacheValue = (key, fallback = null) => {
+            try {
+                const cache = this.adapter && this.adapter.stateCache ? this.adapter.stateCache : null;
+                const rec = cache ? cache[String(key)] : null;
+                if (rec === null || rec === undefined) return fallback;
+                if (typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value')) {
+                    return rec.value === null || rec.value === undefined ? fallback : rec.value;
+                }
+                return rec;
+            } catch (_e) {
+                return fallback;
+            }
+        };
+        const storageCfg = (cfg.storage && typeof cfg.storage === 'object') ? cfg.storage : {};
+        const storageSocPct = storageTopology === 'farm'
+            ? this._readCacheNumber([
+                'storageFarm.totalSocOnline',
+                'storageFarm.totalSoc',
+            ], null)
+            : (storageTopology === 'single'
+                ? this._readCacheNumber([
+                    'speicher.regelung.socPct',
+                    'storageSoc',
+                ], null)
+                : null);
+        const installerCfg = (cfg.installerConfig && typeof cfg.installerConfig === 'object') ? cfg.installerConfig : {};
+        const storageMultiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
+            ? installerCfg.storageMultiUse
+            : null;
+        const storageMultiUseActive = !!(cfg.enableMultiUse === true && storageMultiUseCfg && storageMultiUseCfg.enabled === true);
+        const storageOperatingPolicy = resolveStorageOperatingPolicy({
+            storageConfig: storageCfg,
+            multiUseConfig: storageMultiUseCfg,
+            multiUseActive: storageMultiUseActive,
+            storageFarmConfig: (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {},
+            selectedTopology: storageTopology,
+            standaloneDefaultEnabled: true,
+            standaloneDefaultMinSocPct: 10,
+            standaloneDefaultMaxSocPct: 100,
+            standaloneDefaultTargetGridImportW: 50,
+            standaloneDefaultImportThresholdW: 20,
+        });
+        const storageMaxSocPct = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), 0, 100, 100);
+        const storageEligible = !!(
+            storageControlEnabled
+            && storageCfg.pvEnabled !== false
+            && (!isFiniteNumber(storageSocPct) || storageSocPct < (storageMaxSocPct - 0.1))
+        );
+        const configuredStorageMaxChargeW = Math.max(
+            0,
+            num(storageCfg.selfMaxChargeW, 0) || 0,
+            num(storageCfg.maxChargeW, 0) || 0,
+        );
+        const farmAvailableChargeW = storageTopology === 'farm'
+            ? Math.max(0, this._readCacheNumber(['storageFarm.availableChargePowerW'], 0) || 0)
+            : 0;
+        const storageMaxChargeForAllocationW = configuredStorageMaxChargeW > 0
+            ? configuredStorageMaxChargeW
+            : (storageTopology === 'farm' && farmAvailableChargeW > 0 ? farmAvailableChargeW : 0);
+        const allocationEnabledRaw = readCacheValue('settings.pvSurplusAllocationEnabled', true);
+        const allocationEnabled = !(allocationEnabledRaw === false || allocationEnabledRaw === 0 || String(allocationEnabledRaw).trim().toLowerCase() === 'false');
+        const pvAllocationGate: any = buildPvSurplusAllocation(
+            pvBudgetEffectiveW,
+            readCacheValue('settings.pvSurplusPriority', 'both'),
+            readCacheValue('settings.pvSurplusEvcsSharePct', 50),
+            {
+                allocationEnabled,
+                storageEligible,
+                storageMaxChargeW: storageMaxChargeForAllocationW,
+            },
+        );
+        pvAllocationGate.storageSocPct = isFiniteNumber(storageSocPct) ? Number(storageSocPct) : null;
+        pvAllocationGate.storageMaxSocPct = storageMaxSocPct;
+
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
-        const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
-        // RC78 / 0.8.203: Die Anschlussgrenze ist eine reine Bezugsgrenze.
-        // Der signierte NVP bleibt deshalb erhalten: Import positiv, Einspeisung
-        // negativ. Das Gesamtziel-Budget addiert nur real laufende, EMS-gesteuerte
-        // Lasten; Reservierungen duerfen den Headroom nicht selbst erzeugen.
-        const gridIncrementHeadroomW = gridLimitW > 0
-            ? gridLimitW - gridW
-            : Number.POSITIVE_INFINITY;
-        const gridHeadroomRawW = gridLimitW > 0
-            ? Math.max(0, currentControlledLoadW + gridIncrementHeadroomW)
-            : Number.POSITIVE_INFINITY;
+        const gridHardLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
+        const gridPlanningLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_planning || 0) : 0;
+        // RC86: Die 90-%-Schwelle ist keine absolute Lastobergrenze. Das
+        // zentrale Budget bildet deshalb den vollen signierten Headroom bis zur
+        // Hard-Importgrenze ab. `gridPlanningLimitW` bleibt als Soft-Schwelle fuer
+        // progressive Rampen und Diagnose erhalten.
+        const gridLimitW = gridHardLimitW > 0 ? gridHardLimitW : gridPlanningLimitW;
+        const gridImportStage = coreSnapshot && coreSnapshot.grid ? String(coreSnapshot.grid.gridImportStage || '') : '';
+        const gridImportRequiredReductionW = coreSnapshot && coreSnapshot.grid
+            ? Math.max(0, Number(coreSnapshot.grid.gridImportRequiredReductionW || 0))
+            : 0;
+        // RC78: reine Bezugsgrenze bei signiertem NVP (Import +, Export -).
+        // Gesamtziel = reale geregelte Istlast + Limit - NVP; Reservierungen werden
+        // erst danach abgezogen. Überbezug erzwingt dadurch weiterhin Lastabwurf.
+        const gridIncrementHeadroomW = gridMeasurementUsable
+            ? (gridLimitW > 0 ? gridLimitW - gridControlW : Number.POSITIVE_INFINITY)
+            : 0;
+        const gridHeadroomRawW = gridMeasurementUsable
+            ? (gridLimitW > 0 ? Math.max(0, currentControlledLoadW + gridIncrementHeadroomW) : Number.POSITIVE_INFINITY)
+            : 0;
         const gridHeadroomW = gridHeadroomRawW;
-        const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
-            ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
+        const peakHighLevelCapW = coreSnapshot && coreSnapshot.peak && isFiniteNumber(coreSnapshot.peak.budgetW)
+            ? Math.max(0, Number(coreSnapshot.peak.budgetW))
             : Number.POSITIVE_INFINITY;
-        const totalBudgetW = Math.max(0, Math.min(gridHeadroomW, highLevelCapW));
+        const para14aNetCapW = coreSnapshot && coreSnapshot.para14a && coreSnapshot.para14a.active === true && isFiniteNumber(coreSnapshot.para14a.totalCapW)
+            ? Math.max(0, Number(coreSnapshot.para14a.totalCapW))
+            : Number.POSITIVE_INFINITY;
+        const para14aTotalAllowanceW = Number.isFinite(para14aNetCapW)
+            ? para14aNetCapW + pvBudgetEffectiveW
+            : Number.POSITIVE_INFINITY;
+        const highLevelCapW = Math.min(peakHighLevelCapW, para14aTotalAllowanceW);
+        const highLevelBindingParts = [];
+        if (Number.isFinite(peakHighLevelCapW) && Math.abs(highLevelCapW - peakHighLevelCapW) <= 1) highLevelBindingParts.push('peak');
+        if (Number.isFinite(para14aTotalAllowanceW) && Math.abs(highLevelCapW - para14aTotalAllowanceW) <= 1) highLevelBindingParts.push('14a+local-pv');
+        const highLevelBinding = highLevelBindingParts.join('+') || 'highLevel';
+        const totalBudgetW = gridMeasurementUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
 
         const bindings = [];
-        if (gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
-        if (Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.evcsHighLevel.binding || 'highLevel');
+        if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
+        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) {
+            bindings.push(highLevelBinding);
+        } else if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
+            // `grid-monitor` means the import guard defines the available headroom
+            // but is not currently reducing a consumer. Only the live soft/hard
+            // stages are actual interventions.
+            bindings.push(gridImportRequiredReductionW > 0
+                ? (gridImportStage === 'hard' ? 'grid-hard' : 'grid-soft')
+                : 'grid-monitor');
+        }
         if (!bindings.length) bindings.push('unlimited');
 
         // Gate D: PV forecast is an advisory gate. It is published centrally so apps
@@ -2051,12 +2154,17 @@ class CoreLimitsModule extends BaseModule {
             status: String(tSrc.status || (tSrc.gridImportPreferred ? 'grid_import_preferred' : (tSrc.active ? 'active' : 'inactive'))),
         };
 
-        return {
+        const legacySnapshot = {
             ts: now,
             active: true,
             mode: 'central-background',
             raw: {
-                gridW: roundW(gridW),
+                gridW: roundW(gridControlW),
+                gridMeasurementUsable,
+                gridMeasurementStatus,
+                gridMeasurementSource,
+                gridMeasurementReason,
+                gridMeasurementAgeMs: centralNvp.current && isFiniteNumber(Number(centralNvp.measurementAgeMs)) ? roundW(Number(centralNvp.measurementAgeMs)) : null,
                 gridImportW: roundW(gridImportW),
                 gridExportW: roundW(gridExportW),
                 pvPowerW: roundW(pvPowerW),
@@ -2086,8 +2194,15 @@ class CoreLimitsModule extends BaseModule {
             gates: {
                 grid: {
                     importLimitW: roundW(gridLimitW),
+                    planningImportLimitW: roundW(gridPlanningLimitW > 0 ? gridPlanningLimitW : gridLimitW),
+                    hardImportLimitW: roundW(gridHardLimitW),
+                    limitStage: gridImportStage,
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
+                    measurementUsable: gridMeasurementUsable,
+                    measurementStatus: gridMeasurementStatus,
+                    measurementSource: gridMeasurementSource,
+                    measurementReason: gridMeasurementReason,
                     incrementHeadroomW: Number.isFinite(gridIncrementHeadroomW) ? roundW(gridIncrementHeadroomW) : null,
                     currentControlledLoadW: roundW(currentControlledLoadW),
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
@@ -2114,8 +2229,16 @@ class CoreLimitsModule extends BaseModule {
                     writerActive: storageControlEnabled,
                     authorityReason: String(storageAuthority.reason || ''),
                 },
+                pvAllocation: pvAllocationGate,
                 forecast: forecastGate,
                 tariff: tariffGate,
+                para14a: coreSnapshot && coreSnapshot.para14a && typeof coreSnapshot.para14a === 'object'
+                    ? {
+                        ...coreSnapshot.para14a,
+                        localPvGrantW: roundW(pvBudgetEffectiveW),
+                        totalAllowanceW: Number.isFinite(para14aNetCapW) ? roundW(para14aTotalAllowanceW) : null,
+                    }
+                    : { active: false, appCapsW: {}, localPvGrantW: 0, totalAllowanceW: null },
                 total: {
                     effectiveW: Number.isFinite(totalBudgetW) ? roundW(totalBudgetW) : null,
                     binding: bindings.join('+'),
@@ -2135,6 +2258,140 @@ class CoreLimitsModule extends BaseModule {
                 return out;
             })(),
         };
+
+        const typedInput = {
+            ts: now,
+            grid: {
+                netW: gridControlW,
+                usable: gridMeasurementUsable,
+                status: gridMeasurementStatus,
+                source: gridMeasurementSource,
+                reason: gridMeasurementReason,
+                measurementAgeMs: centralNvp.current && isFiniteNumber(Number(centralNvp.measurementAgeMs))
+                    ? Number(centralNvp.measurementAgeMs)
+                    : null,
+                importLimitW: gridLimitW,
+                planningImportLimitW: gridPlanningLimitW > 0 ? gridPlanningLimitW : gridLimitW,
+                hardImportLimitW: gridHardLimitW,
+                limitStage: gridImportStage,
+                requiredReductionW: gridImportRequiredReductionW,
+                highLevelCapW,
+                highLevelBinding,
+            },
+            pv: {
+                measuredW: pvPowerW,
+                measuredFresh: pvPowerInfo.fresh === true,
+                measuredSource: String(pvPowerInfo.source || ''),
+                reserveW: pvReserveW,
+                lastTrustedW: previousTrustedPvPhysicalCapW,
+                lastTrustedAgeMs,
+                holdMs: Math.max(30000, pvSourceMaxAgeMs),
+                exportEvidenceThresholdW: 250,
+                importToleranceW: 250,
+            },
+            storage: {
+                chargeW: storageChargeW,
+                dischargeW: storageDischargeW,
+                eligible: storageEligible,
+                maxChargeW: storageMaxChargeForAllocationW,
+                socPct: storageSocPct,
+                maxSocPct: storageMaxSocPct,
+                topology: storageTopology,
+                writerActive: storageControlEnabled,
+                authorityReason: String(storageAuthority.reason || ''),
+            },
+            consumers: {
+                evcsUsedW,
+                evcsActualW,
+                evcsPvUsedW,
+                thermalUsedW,
+                thermalActualW,
+                heatingRodUsedW,
+                heatingRodActualW,
+            },
+            allocation: {
+                enabled: allocationEnabled,
+                mode: readCacheValue('settings.pvSurplusPriority', 'both'),
+                evcsSharePct: readCacheValue('settings.pvSurplusEvcsSharePct', 50),
+            },
+            forecast: forecastGate,
+            tariff: tariffGate,
+            para14a: coreSnapshot && coreSnapshot.para14a && typeof coreSnapshot.para14a === 'object'
+                ? { ...coreSnapshot.para14a }
+                : { active: false, appCapsW: {} },
+        };
+
+        return this._applyCoreRuntimeTsSnapshot(legacySnapshot, typedInput);
+    }
+
+    /**
+     * Code-Teil: _applyCoreRuntimeTsSnapshot
+     * Zweck: Übernimmt den vollständig typisierten zentralen Budget-Snapshot,
+     * wenn er mit der bewährten Legacy-Rechnung übereinstimmt. Bei fehlendem
+     * Spiegel, Runtimefehler oder Abweichung bleibt die Legacy-Hülle aktiv.
+     */
+    _applyCoreRuntimeTsSnapshot(legacySnapshot, typedInput) {
+        const fallback = (reason: string, extra: any = {}) => {
+            const status = {
+                ts: Date.now(),
+                active: false,
+                productive: false,
+                fallback: true,
+                mode: 'legacy-js-fallback',
+                reason,
+                mismatchCount: Array.isArray(extra.mismatches) ? extra.mismatches.length : 0,
+                ...extra,
+            };
+            this._coreRuntimeTsLast = status;
+            try { legacySnapshot.tsCoreRuntime = status; } catch (_e) {}
+            return legacySnapshot;
+        };
+
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const build = mirror && typeof mirror.buildCoreRuntimeBudgetSnapshot === 'function'
+                ? mirror.buildCoreRuntimeBudgetSnapshot
+                : null;
+            const prepare = mirror && typeof mirror.prepareCoreRuntimeSnapshotInput === 'function'
+                ? mirror.prepareCoreRuntimeSnapshotInput
+                : null;
+            const compare = mirror && typeof mirror.compareCoreRuntimeBudgetSnapshots === 'function'
+                ? mirror.compareCoreRuntimeBudgetSnapshots
+                : null;
+            if (!build || !prepare || !compare) return fallback('typed-core-runtime-unavailable');
+
+            const prepared = prepare(typedInput || {});
+            if (!prepared || prepared.ok !== true || !prepared.input) return fallback('typed-core-input-invalid');
+            const typedSnapshot = build(prepared.input);
+            if (!typedSnapshot || typeof typedSnapshot !== 'object') return fallback('typed-core-runtime-empty');
+            const mismatches = compare(legacySnapshot, typedSnapshot, 1);
+            if (Array.isArray(mismatches) && mismatches.length) {
+                return fallback('typed-core-runtime-mismatch', { mismatches: mismatches.slice(0, 20) });
+            }
+
+            const status = {
+                ts: Date.now(),
+                active: true,
+                productive: true,
+                fallback: false,
+                mode: 'typed-core-runtime',
+                reason: 'parity-ok',
+                mismatchCount: 0,
+                contractVersion: typedSnapshot.typedRuntime && typedSnapshot.typedRuntime.contractVersion
+                    ? String(typedSnapshot.typedRuntime.contractVersion)
+                    : 'core-runtime-v2',
+                inputContractVersion: prepared.contractVersion || 'core-runtime-input-v2',
+                inputSource: prepared.source || 'ts-core-runtime-input-v2',
+                inputDiagnostics: prepared.diagnostics || {},
+            };
+            typedSnapshot.tsCoreRuntime = status;
+            this._coreRuntimeTsLast = status;
+            return typedSnapshot;
+        } catch (e) {
+            return fallback('typed-core-runtime-error', {
+                error: e && e.message ? e.message : String(e),
+            });
+        }
     }
 
     /**

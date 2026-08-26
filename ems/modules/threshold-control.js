@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:029a0cc659eff0a74b16f78160195de81f00073427609481e9598424279fa266
+ * Quell-Hash: sha256:94ba4ab395142cd5a18972d0284fc9ab660c93cdf0462cc98c09debe23771159
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -150,6 +150,11 @@ class ThresholdControlModule extends BaseModule {
         if (prev === v)
             return;
         this._stateCache.set(id, v);
+        if (this._stateCache.size > 1000) {
+            const __rc85Oldest = this._stateCache.keys().next().value;
+            if (__rc85Oldest !== undefined)
+                this._stateCache.delete(__rc85Oldest);
+        } // RC85_BOUNDED_COLLECTION
         try {
             await this.adapter.setStateAsync(id, v, true);
         }

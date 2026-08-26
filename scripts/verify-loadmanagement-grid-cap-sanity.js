@@ -39,8 +39,10 @@ const typedCoreSource = 'src-ts/ems/core-limits/core-runtime.ts';
 must(cm, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW;', 'rohe Grundlastdiagnose');
 must(cm, 'derived.core.building.loadRestW', 'Energiefluss-Grundlastdiagnose');
 must(cm, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW);', 'lokale Deckung inkl. Export');
-must(cm, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW;', 'signierter NVP-Inkrement-Headroom');
-must(cm, 'gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12);', 'EVCS-Gesamtzielcap');
+must(cm, 'hardLimitW: gridImportLimitEffW', 'wirksame Hard-Importgrenze');
+must(cm, 'gridIncrementHeadroomW = gridEnvelope.progressiveIncrementW;', 'progressiver NVP-Inkrement-Headroom');
+must(cm, 'gridCapEvcsW = clamp(gridEnvelope.maxControlledLoadW, 0, 1e12);', 'EVCS-Gesamtzielcap');
+must(cm, 'resolveCurrentNvpSnapshot(', 'kanonischer NVP-Snapshot');
 must(core, "'chargingManagement.control.actualW'", 'frische EVCS-Istleistung');
 must(core, "'thermal.summary.appliedTotalW'", 'Thermik-Istleistung');
 must(core, "'heatingRod.summary.currentHeatingRodW'", 'Heizstab-Istleistung');
@@ -114,7 +116,7 @@ assert.strictEqual(fieldSnapshot.raw.currentControlledLoadW, 0);
 assert.strictEqual(fieldSnapshot.gates.grid.incrementHeadroomW, 40100);
 assert.strictEqual(fieldSnapshot.gates.grid.headroomW, 40100);
 assert.strictEqual(fieldSnapshot.gates.total.effectiveW, 40100);
-assert.strictEqual(fieldSnapshot.gates.total.binding, 'grid-hard');
+assert.strictEqual(fieldSnapshot.gates.total.binding, 'grid-monitor');
 
 const reservationState = typedCore.createCoreRuntimeReservationState(fieldSnapshot);
 const reservationSequence = typedCore.applyCoreRuntimeReservationSequence(reservationState, [

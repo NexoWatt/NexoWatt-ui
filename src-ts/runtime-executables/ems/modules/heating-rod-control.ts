@@ -408,7 +408,7 @@ class HeatingRodControlModule extends BaseModule {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
         if (prev === v) return;
-        this._stateCache.set(id, v);
+        this._stateCache.set(id, v); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, v, true);
         // Own adapter states must also reach the live /api/state cache immediately.
         // Otherwise the VIS can briefly see stale/0 values (e.g. Heizstab in Energiefluss).

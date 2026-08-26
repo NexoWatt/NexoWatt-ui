@@ -201,7 +201,7 @@ class Para14aModule extends BaseModule {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
         if (!force && prev === v) return false;
-        this._stateCache.set(id, v);
+        this._stateCache.set(id, v); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, { val: v, ack: true, ts });
         try {
             if (this.adapter && typeof this.adapter.updateValue === 'function') {

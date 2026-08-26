@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC83 / 0.8.208
+ * RC83 / 0.8.211
  * - Speicher-Netzladen ausschließlich bei aktivem, frischem, günstigem Tarif.
  * - Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht.
  * - Neutral, teuer, unbekannt, Tarif aus, stale Snapshot oder stale Preis wirken sofort fail-closed.
@@ -63,8 +63,8 @@ function snapshotDecision(overrides = {}) {
 (async () => {
   const pkg = readJson('package.json');
   const io = readJson('io-package.json');
-  assert.strictEqual(pkg.version, '0.8.208');
-  assert.strictEqual(io.common.version, '0.8.208');
+  assert.strictEqual(pkg.version, '0.8.211');
+  assert.strictEqual(io.common.version, '0.8.211');
 
   // 1) TarifVis-Freigabematrix: nur ein frischer günstiger Dynamiktarif darf laden.
   assert.strictEqual(tariffDecision().allowed, true);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3db41c3dfd7e5404f6d69a816ede3373ef12b27ffe7ed1f26ef2be3dd0e222e8
+ * Original-Hash: 009bda4ae7d3b6ffa592edc0503f25dcd82cebb744b0b8722f6b6d5eb2d06842
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/operating-strategies.ts
- * Quell-Hash: sha256:e8584ccd4854590f9828b6cc6e94a95f087a6b0c28b871d64c7bdcf9c6c5a877
+ * Quell-Hash: sha256:2af6e128603e4f161efba0f80233c1790baa0a43309edd10e3e7e20a04bf32c2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -422,7 +422,7 @@ class OperatingStrategiesModule extends BaseModule {
     async _setStateIfChanged(id, value) {
         const normalized = typeof value === 'number' && !Number.isFinite(value) ? null : value;
         if (this._stateCache.get(id) === normalized) return;
-        this._stateCache.set(id, normalized);
+        this._stateCache.set(id, normalized); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, normalized, true);
         try { this.adapter.updateValue?.(id, normalized, Date.now()); } catch (_error) {}
     }

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1e28eb00828ed3e4405c1f8ceb4c7ccd753e27fcabb992ac80f70114ee321198
+ * Original-Hash: cb13945b19c8e620f7c55877400b3281af8b3b9a1246853590b2aebffb5d57ce
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:12327c0b674eea6b491b625859d256692348ee03afbac6bc31f103b19a742d4b
+ * Quell-Hash: sha256:a2621849d84a8adc2f26e3f4dd4eb7705943d072f662fc3d398e75a0e8b28460
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -59,6 +59,7 @@ const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 const { ChargingManagementAuditStore, finiteChargingAuditNumber, deriveChargingAuditLimiter, deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature, buildChargingAuditEvents } = require('../services/charging-management-audit');
+const { Rc85EvcsDecisionGuard, rc85GridEnvelope, rc85OfflineReserveW, rc85IsHardReason, rc85RunIsolatedResult, rc86GridBinding } = require('../rc85-runtime-hardening');
 const {
     evaluateFlexibleLoadRequest,
     commitFlexibleLoadDecision,
@@ -71,6 +72,57 @@ const {
     resolveChargingStrategyOverlay,
 } = require('../services/operating-strategy-runtime');
 const { buildRuntimeGoalPlanMap, goalPlanStateRows, resolvePlanEffectiveMode, applyGoalPlan, applyStrategyOverlay, resolveGoalCommandStatus } = require('../services/forecast-target-runtime-bridge');
+
+/**
+ * Estimates the power the currently eligible EVCS fleet would request before
+ * the NVP grid envelope is applied. This is deliberately demand based: an
+ * online but unplugged connector contributes 0 W and therefore cannot make the
+ * grid gate appear as an active limiter.
+ */
+function estimateGridRelevantEvcsDemandW(points, lastCommandMap, activityThresholdW = 100) {
+    let totalW = 0;
+    let activePoints = 0;
+    for (const point of Array.isArray(points) ? points : []) {
+        if (!point || point.online !== true || point.controlAvailable !== true || point.enabled === false) continue;
+        if (point.faultActive === true || point.unavailableActive === true || point.operationalBlocked === true) continue;
+        const mode = String(point.effectiveMode || point.userMode || 'auto').trim().toLowerCase();
+        if (mode === 'off') continue;
+        const actualW = Math.max(0, Number(point.actualPowerW) || 0);
+        const lastCommandW = lastCommandMap && typeof lastCommandMap.get === 'function'
+            ? Math.max(0, Number(lastCommandMap.get(point.safe)) || 0)
+            : 0;
+        const vehicleConnected = point.vehiclePlugged === true || point.connected === true;
+        // A historical command must not turn an unplugged connector into demand.
+        // Only an actually measured load is allowed to override a stale/incorrect
+        // plug state for fail-safe accounting.
+        if (!vehicleConnected && point.charging !== true && actualW < activityThresholdW) continue;
+        const demandConfirmed = point.vehicleDemandConfirmed === true
+            || point.charging === true
+            || actualW >= activityThresholdW
+            || (vehicleConnected && lastCommandW >= activityThresholdW)
+            || (mode === 'boost' && vehicleConnected && point.vehicleStartEligible === true);
+        if (!demandConfirmed) continue;
+
+        const maxPowerW = Math.max(0, Number(point.maxPW) || 0);
+        const minimumW = Math.max(0, Number(point.minPW) || 0);
+        const goalW = point.goalActive === true ? Math.max(0, Number(point.goalDesiredW) || 0) : 0;
+        const strategyW = point.strategyOverlay && point.strategyOverlay.active === true
+            ? Math.max(0, Number(point.strategyOverlay.targetPowerW) || 0)
+            : 0;
+        let desiredW;
+        if (goalW > 0) desiredW = goalW;
+        else if (strategyW > 0) desiredW = strategyW;
+        else if (mode === 'pv') desiredW = Math.max(actualW, lastCommandW, minimumW);
+        else if (mode === 'minpv') desiredW = Math.max(actualW, lastCommandW, minimumW);
+        else desiredW = Math.max(actualW, lastCommandW, maxPowerW);
+        if (maxPowerW > 0) desiredW = Math.min(desiredW, maxPowerW);
+        desiredW = Math.max(0, desiredW);
+        if (desiredW <= 0) continue;
+        totalW += desiredW;
+        activePoints += 1;
+    }
+    return { totalW, activePoints };
+}
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -2698,6 +2750,7 @@ class ChargingManagementModule extends BaseModule {
         this._restoredRuntime = new Set(); // safeKey -> restored persisted session/boost state
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
+        this._rc85EvcsDecisionGuard = new Rc85EvcsDecisionGuard(); // soft auto/tariff smoothing; hard safety bypasses immediately
         this._lastDiagLogMs = 0; // MU6.2: rate limit diagnostics log
         // TS-Migration 0.7.122: letzte EVCS-/Charging-Management-TS-Vorbereitungsdiagnose.
         this._chargingManagementTsRuntimePrepLast = null;
@@ -4002,10 +4055,70 @@ class ChargingManagementModule extends BaseModule {
             const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
             const phaseCount = Math.max(1, Math.min(3, Math.round(Number(entry.targetPhaseCount || w.phases || 3) || 3)));
             const voltageV = Math.max(200, Math.min(260, Number(this.adapter?.config?.chargingManagement?.nominalVoltageV || 230) || 230));
-            const requestedFlexibleW = Math.max(
+            let requestedFlexibleW = Math.max(
                 requestedTargetW,
                 requestedTargetA > 0 ? Math.round(requestedTargetA * voltageV * phaseCount) : 0,
             );
+            let rc85Decision = null;
+            const diagnosticRow = debugBySafe.get(safe) || {};
+            const decisionReason = String(entry.reason || diagnosticRow.reason || fallbackReason || 'normal');
+            const userMode = String(w.userMode || diagnosticRow.userMode || '').trim().toLowerCase();
+            // RC86_AUTO_ONLY_SOFT_GUARD: Economic debounce and soft ramps are
+            // deliberately limited to Auto. Explicit Boost/PV/Min+PV/manual modes
+            // must never be silently ramped down; final hard safety still applies.
+            const softAutoGuardEligible = userMode === 'auto';
+            if (!isPhaseSwitchEntry && this._rc85EvcsDecisionGuard && softAutoGuardEligible) {
+                const immediateStopRequired = !!(
+                    positiveCommandBlocked
+                    || w.online !== true
+                    || w.faultActive === true
+                    || w.unavailableActive === true
+                    || w.operationalBlocked === true
+                    || w.userStationEnabled === false
+                    || w.userEnabled === false
+                    || w.rfidLockActive === true
+                    || (w.vehiclePlugged === false && userMode !== 'boost')
+                    || rc85IsHardReason(decisionReason)
+                );
+                const priceUpdatePending = /(?:tarif|tariff|price|preis|strompreis).*(?:pending|update|refresh|loading|recalc|aktual|wechsel)|(?:pending|update|refresh|loading|recalc|aktual|wechsel).*(?:tarif|tariff|price|preis|strompreis)/i.test(decisionReason);
+                const minActiveW = Math.max(
+                    0,
+                    Number(w.minPW) || 0,
+                    Number(w.minA) > 0 ? Number(w.minA) * voltageV * phaseCount : 0,
+                );
+                rc85Decision = this._rc85EvcsDecisionGuard.evaluate({
+                    key: safe,
+                    requested: requestedFlexibleW,
+                    reason: decisionReason,
+                    unit: 'W',
+                    hardSafety: immediateStopRequired,
+                    priceUpdatePending,
+                    minActive: minActiveW,
+                    minRunMs: Math.max(0, Number(this.adapter?.config?.chargingManagement?.minimumRunSec ?? 120) * 1000),
+                    minPauseMs: Math.max(0, Number(this.adapter?.config?.chargingManagement?.minimumPauseSec ?? 30) * 1000),
+                    economicDebounceMs: Math.max(0, Number(this.adapter?.config?.chargingManagement?.economicDebounceSec ?? 25) * 1000),
+                    rampUpPerStep: Math.max(minActiveW, Number(this.adapter?.config?.chargingManagement?.maxDeltaWPerTick) || 4600),
+                    rampDownPerStep: Math.max(minActiveW, Number(this.adapter?.config?.chargingManagement?.maxDeltaDownWPerTick) || 6900),
+                });
+                requestedFlexibleW = Math.max(0, Number(rc85Decision.approved) || 0);
+                if (plannedBasis === 'currentA') {
+                    const stepA = Number.isFinite(Number(w.stepA)) && Number(w.stepA) > 0 ? Number(w.stepA) : 0.1;
+                    const minA = Number.isFinite(Number(w.minA)) && Number(w.minA) > 0 ? Number(w.minA) : 0;
+                    const maxA = Number.isFinite(Number(w.maxA)) && Number(w.maxA) > 0 ? Number(w.maxA) : Number.POSITIVE_INFINITY;
+                    targetA = Math.max(0, Math.min(maxA, Math.floor(((requestedFlexibleW / Math.max(1, voltageV * phaseCount)) + 1e-9) / stepA) * stepA));
+                    if (targetA > 0 && targetA + 1e-9 < minA) targetA = 0;
+                    targetW = targetA > 0 ? Math.floor(targetA * voltageV * phaseCount) : 0;
+                    requestedFlexibleW = targetW;
+                } else {
+                    const stepW = Number.isFinite(Number(w.stepW)) && Number(w.stepW) > 0 ? Number(w.stepW) : 1;
+                    const minPW = Number.isFinite(Number(w.minPW)) && Number(w.minPW) > 0 ? Number(w.minPW) : 0;
+                    const maxPW = Number.isFinite(Number(w.maxPW)) && Number(w.maxPW) > 0 ? Number(w.maxPW) : Number.POSITIVE_INFINITY;
+                    targetW = Math.max(0, Math.min(maxPW, Math.floor((requestedFlexibleW + 1e-9) / stepW) * stepW));
+                    if (targetW > 0 && targetW + 1e-9 < minPW) targetW = 0;
+                    targetA = targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0;
+                    requestedFlexibleW = targetW;
+                }
+            }
             let liveEnvelope = null;
             try {
                 if (this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle)) {
@@ -4174,23 +4287,32 @@ class ChargingManagementModule extends BaseModule {
                     result.ok = false;
                 } else {
                     try {
-                        let writeResult = false;
-                        if (typeof phaseValue === 'boolean' && this.dp.writeBoolean) {
-                            writeResult = await this.dp.writeBoolean(plannedSetpointKey, phaseValue, false);
-                        } else {
-                            const n = Number(phaseValue);
-                            if (Number.isFinite(n) && this.dp.writeNumber) {
-                                writeResult = await this.dp.writeNumber(plannedSetpointKey, n, false);
-                            } else {
-                                const dpEntry = this.dp.getEntry(plannedSetpointKey);
-                                const directResult = await this.adapter.setForeignStateAsync(dpEntry.objectId, phaseValue, false);
-                                writeResult = !(directResult && directResult.__nexowattActuatorAuthorityBlocked === true);
-                                if (writeResult && this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
-                                    this.dp.lastWriteByObjectId.set(dpEntry.objectId, { val: phaseValue, ts: Date.now() });
+                        const writeOutcome = await rc85RunIsolatedResult(
+                            `evcs-write:${safe}:phase`,
+                            5000,
+                            async () => {
+                                let writeResult = false;
+                                if (typeof phaseValue === 'boolean' && this.dp.writeBoolean) {
+                                    writeResult = await this.dp.writeBoolean(plannedSetpointKey, phaseValue, false);
+                                } else {
+                                    const n = Number(phaseValue);
+                                    if (Number.isFinite(n) && this.dp.writeNumber) {
+                                        writeResult = await this.dp.writeNumber(plannedSetpointKey, n, false);
+                                    } else {
+                                        const dpEntry = this.dp.getEntry(plannedSetpointKey);
+                                        const directResult = await this.adapter.setForeignStateAsync(dpEntry.objectId, phaseValue, false);
+                                        writeResult = !(directResult && directResult.__nexowattActuatorAuthorityBlocked === true);
+                                        if (writeResult && this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
+                                            this.dp.lastWriteByObjectId.set(dpEntry.objectId, { val: phaseValue, ts: Date.now() });
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                        applied = writeResult !== false;
+                                return writeResult;
+                            },
+                            this.adapter?.log || console,
+                        );
+                        if (!writeOutcome.ok) throw writeOutcome.error || new Error('phase-switch-write-timeout');
+                        applied = writeOutcome.value !== false;
                         applyStatus = applied ? 'phase-switch-applied' : 'phase-switch-write-skipped';
                         applyWrites = [{ key: plannedSetpointKey, value: phaseValue, basis: 'phase' }];
                         if (applied) {
@@ -4253,11 +4375,18 @@ class ChargingManagementModule extends BaseModule {
                         // Steckerziehen, PV-/Tarifpause und Safety-Stopp Operative.
                         setpointTarget.enable = availability.requested === true;
                     }
-                    const res = await applySetpoint(
-                        { adapter: this.adapter, dp: this.dp },
-                        consumer,
-                        setpointTarget,
+                    const writeOutcome = await rc85RunIsolatedResult(
+                        `evcs-write:${safe}:setpoint`,
+                        5000,
+                        () => applySetpoint(
+                            { adapter: this.adapter, dp: this.dp },
+                            consumer,
+                            setpointTarget,
+                        ),
+                        this.adapter?.log || console,
                     );
+                    if (!writeOutcome.ok) throw writeOutcome.error || new Error('setpoint-write-timeout');
+                    const res = writeOutcome.value;
                     applied = !!res?.applied;
                     applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
                     applyWrites = res?.writes || null;
@@ -4656,7 +4785,7 @@ class ChargingManagementModule extends BaseModule {
         }
 
         // optimistic cache update (we previously ignored setState errors anyway)
-        this._pubCache.set(sid, { val: v, ts: now });
+        this._pubCache.set(sid, { val: v, ts: now }); if (this._pubCache.size > 1000) { const __rc85Oldest = this._pubCache.keys().next().value; if (__rc85Oldest !== undefined) this._pubCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         this._pubQueue.set(sid, { val: v, ack: !!ack });
         this._schedulePubFlush();
         return true;
@@ -5107,7 +5236,16 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.gridBaseLoadRawW', 'Raw base load before clamp (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridLocalSupportW', 'Local PV/storage support for EVCS (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridCapEvcsW', 'Grid-based EVCS cap (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.gridCapBinding', 'Grid cap binding', 'boolean', 'indicator');
+        await mk('chargingManagement.control.gridCapBinding', 'Grid cap actively limiting EVCS demand', 'boolean', 'indicator');
+        await mk('chargingManagement.control.gridCapMonitoring', 'Grid import protection monitoring active', 'boolean', 'indicator');
+        await mk('chargingManagement.control.gridMeasurementSource', 'Canonical NVP source used by Gate A', 'string', 'text');
+        await mk('chargingManagement.control.gridHardHeadroomRawW', 'Signed hard-limit headroom before progressive ramp (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridProgressiveIncrementW', 'Progressively allowed EVCS increment (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridSoftRampFactor', 'Soft-limit ramp factor', 'number', 'value');
+        await mk('chargingManagement.control.offlineReserveW', 'Conservative reserve for unavailable EVCS (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridDemandRequestedW', 'EVCS demand before Gate A (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridAllowedDemandW', 'EVCS demand allowed by Gate A (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridReductionW', 'EVCS demand actually reduced by the grid gate (W)', 'number', 'value.power');
         await mk('chargingManagement.control.infrastructureRawCapacityW', 'Installed EVCS port capacity before station caps (W)', 'number', 'value.power');
         await mk('chargingManagement.control.infrastructureCapacityW', 'Effective EVCS infrastructure capacity (W)', 'number', 'value.power');
         await mk('chargingManagement.control.infrastructureWallboxCount', 'Controllable EVCS connector count', 'number', 'value');
@@ -6930,7 +7068,7 @@ class ChargingManagementModule extends BaseModule {
             const isChargingRaw = online && enabled && pWAbs >= activityThresholdW;
             
             // Session tracking / stickiness
-            this._chargingLastSeenMs.set(safe, now);
+            this._chargingLastSeenMs.set(safe, now); if (this._chargingLastSeenMs.size > 1000) { const __rc85Oldest = this._chargingLastSeenMs.keys().next().value; if (__rc85Oldest !== undefined) this._chargingLastSeenMs.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
             
             let chargingSince = 0;
             let lastActive = 0;
@@ -9047,47 +9185,89 @@ if (components.length) {
         const gridImportLimitEffW = (Number.isFinite(coreGridEffW) && coreGridEffW > 0)
             ? coreGridEffW
             : (gridImportLimitW > 0 ? Math.max(0, gridImportLimitW - gridMarginW) : 0);
-        // RC79: Das Lademanagement plant gegen das Soft-Limit. Die finale
-        // SafetyEnvelope prueft jeden Write weiterhin gegen `gridImportLimitEffW`.
+        // RC86: Das 90-%-Soft-Limit ist nur der Beginn einer progressiven
+        // Rampenbegrenzung. Die absolute EVCS-Freigabe bleibt an der wirksamen
+        // Hard-Grenze des NVP ausgerichtet. Der finale Safety-Writer prueft jeden
+        // Write weiterhin nochmals gegen dieselbe Hard-Grenze.
         const gridImportLimitPlanningW = (Number.isFinite(coreGridPlanningW) && coreGridPlanningW > 0)
             ? Math.min(coreGridPlanningW, gridImportLimitEffW > 0 ? gridImportLimitEffW : coreGridPlanningW)
-            : gridImportLimitEffW;
-        const gridImportStage = coreGridStage || (gridImportLimitPlanningW > 0 && gridImportLimitPlanningW < gridImportLimitEffW - 1 ? 'normal' : 'hard-only');
+            : (gridImportLimitEffW > 0 ? gridImportLimitEffW * 0.9 : 0);
+        const gridImportStage = coreGridStage || (gridImportLimitEffW > 0 ? 'normal' : 'disabled');
 
         // Optional phase limit (A): prefer core snapshot.
         const gridMaxPhaseA = (Number.isFinite(coreMaxPhaseA) && coreMaxPhaseA > 0)
             ? coreMaxPhaseA
             : clamp(num(this.adapter?.config?.peakShaving?.maxPhaseA, 0), 0, 20000);
 
-        // Read grid power (import + / export -) if needed for caps
-        const needGridSafetyCaps = gridImportLimitPlanningW > 0 || gridMaxPhaseA > 0;
-        if (needGridSafetyCaps) {
-            // Ensure we have a gridW reading even if PV logic is not active
-            if (typeof gridW !== 'number' || !Number.isFinite(gridW)) {
-                gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
-            }
+        // Gate A must use exactly the same canonical signed NVP snapshot as the
+        // central EMS budget. A second local fallback value caused the two cards
+        // to show different NVP values and different caps on the same tick.
+        const needGridSafetyCaps = gridImportLimitEffW > 0 || gridMaxPhaseA > 0;
+        const canonicalGridNvp = resolveCurrentNvpSnapshot(
+            this.adapter && this.adapter._nvpFreshnessSnapshot,
+            now,
+            Math.max(1000, staleTimeoutMs),
+        );
+        let gridMeasurementSourceForGate = '';
+        if (canonicalGridNvp.current) {
+            gridMeasurementSourceForGate = String(canonicalGridNvp.source || 'canonical-nvp');
+            gridW = canonicalGridNvp.usable && Number.isFinite(Number(canonicalGridNvp.netW))
+                ? Number(canonicalGridNvp.netW)
+                : null;
+        } else if (needGridSafetyCaps && (typeof gridW !== 'number' || !Number.isFinite(gridW))) {
+            // Compatibility fallback is only allowed when the central snapshot is
+            // not known yet. A known-but-stale central NVP stays fail-closed and is
+            // never replaced by a second, potentially contradictory measurement.
+            gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
+            gridMeasurementSourceForGate = typeof gridW === 'number' && Number.isFinite(gridW)
+                ? 'legacy-local-fallback'
+                : 'missing';
+        } else if (typeof gridW === 'number' && Number.isFinite(gridW)) {
+            gridMeasurementSourceForGate = 'preloaded-local-value';
         }
 
-        // Derive base load and EVCS cap from import limit
+        // Derive base load and EVCS cap from the signed NVP import limit.
         let gridBaseLoadW = null;
         let gridBaseLoadRawW = null;
         let gridLocalSupportW = null;
         let gridIncrementHeadroomW = null;
+        let gridHardHeadroomRawW = null;
+        let gridSoftRampFactor = 1;
         let gridCapEvcsW = null;
-        let gridCapBinding = false;
+        let gridCapBinding = false; // true only after real EVCS demand was reduced
+        let gridCapBudgetApplied = false; // internal finite allocation envelope
+        let gridCapDemandCandidate = false;
+        let gridReductionW = 0;
+        let gridDemandRequestedW = 0;
+        let gridDemandActivePoints = 0;
+        let gridAllowedDemandW = 0;
         const budgetBeforeGridCaps = budgetW;
         const budgetModeBeforeGridCaps = String(effectiveBudgetMode || budgetMode || 'unlimited');
 
-        if (gridImportLimitPlanningW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
-            // RC78: reine Bezugsgrenze bei signiertem NVP. Das EVCS-Gesamtcap
-            // addiert nur frische EVCS-Istleistung zu `Importlimit - NVP`;
-            // Reservierungen bleiben außen vor, Überbezug reduziert aktive Last.
+        // RC85_OFFLINE_RESERVE_APPLIED: an unavailable point cannot stop all other
+        // points. Only its uncertain last/technical power is withheld. An offline
+        // point with no vehicle and confirmed 0 W reserves exactly 0 W.
+        const offlineReserveW = rc85OfflineReserveW((wbList || []).map((point) => ({
+            status: point && point.online === false
+                ? 'offline'
+                : (point && point.faultActive === true
+                    ? 'fault'
+                    : (point && point.unavailableActive === true ? 'unavailable' : 'online')),
+            actualW: point && Number.isFinite(Number(point.actualPowerW)) ? Math.max(0, Number(point.actualPowerW)) : 0,
+            vehicleConnected: point && point.vehiclePlugged === true,
+            minPowerW: point && Number.isFinite(Number(point.minPW)) ? Math.max(0, Number(point.minPW)) : 0,
+        })));
+        const estimatedGridDemand = estimateGridRelevantEvcsDemandW(
+            wbList,
+            this._lastCmdTargetW,
+            Math.max(50, Number(cfg.activityThresholdW) || 100),
+        );
+        gridDemandRequestedW = Math.max(0, Number(estimatedGridDemand.totalW) || 0);
+        gridDemandActivePoints = Math.max(0, Math.round(Number(estimatedGridDemand.activePoints) || 0));
+
+        if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
             const gridEvcsActualForCapW = Number.isFinite(totalFreshActualPowerW) ? Math.max(0, Number(totalFreshActualPowerW)) : 0;
             const gridEvcsReserveIgnoredForCapW = Math.max(0, (Number.isFinite(totalPowerW) ? Number(totalPowerW) : 0) - gridEvcsActualForCapW);
-            // Wichtig: Für das Netzanschluss-Gate zählt nur frisch gemessene EVCS-Leistung.
-            // Alte Setpoints/Reservierungen dürfen nicht vom Netzbezug abgezogen werden,
-            // sonst sieht Gate A ein fiktives freies Budget und der Status bleibt bei
-            // alten Ladeleistungen stehen, obwohl der Energiefluss EVCS = 0 W zeigt.
             gridBaseLoadRawW = gridW - gridEvcsActualForCapW;
             let derivedBaseLoadW = null;
             let derivedBaseLoadSource = '';
@@ -9113,26 +9293,46 @@ if (components.length) {
             } catch (_eBaseLoad) {}
             gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW)) ? Math.max(0, Number(derivedBaseLoadW)) : Math.max(0, gridBaseLoadRawW);
             gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW);
-            gridIncrementHeadroomW = gridImportLimitPlanningW - gridW;
-            // Gesamtziel-Cap = aktuell gemessene EVCS-Leistung + zulässige
-            // zusätzliche Laständerung bis zur reinen Importgrenze.
-            gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12);
+
+            const gridEnvelope = rc85GridEnvelope({
+                hardLimitW: gridImportLimitEffW,
+                signedNvpW: gridW,
+                currentControlledLoadW: gridEvcsActualForCapW,
+                offlineReserveW,
+                pendingIncreaseW: 0,
+            });
+            gridIncrementHeadroomW = gridEnvelope.progressiveIncrementW;
+            gridHardHeadroomRawW = gridEnvelope.hardHeadroomRawW;
+            gridSoftRampFactor = gridEnvelope.softRampFactor;
+            gridCapEvcsW = clamp(gridEnvelope.maxControlledLoadW, 0, 1e12);
+            // `budgetBeforeGridCaps` can already originate from the same central
+            // NVP gate. Using it here would hide a real reduction (demand 44 kW,
+            // central hard headroom 41 kW). Demand candidacy is therefore based
+            // on the EVCS request itself; independent phase/§14a/station limits
+            // are resolved after the final allocation below.
+            const preGridDemandW = gridDemandRequestedW;
+            gridAllowedDemandW = Math.min(preGridDemandW, gridCapEvcsW);
+            gridCapDemandCandidate = preGridDemandW > gridAllowedDemandW + 50;
+
             try {
                 budgetDebug = budgetDebug || {};
                 budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-fresh-evcs';
+                budgetDebug.gridMeasurementSource = gridMeasurementSourceForGate;
                 budgetDebug.gridEvcsActualForCapW = gridEvcsActualForCapW;
                 budgetDebug.gridEvcsReserveIgnoredForCapW = gridEvcsReserveIgnoredForCapW;
+                budgetDebug.gridOfflineReserveW = offlineReserveW;
+                budgetDebug.gridHardHeadroomRawW = gridHardHeadroomRawW;
                 budgetDebug.gridIncrementHeadroomW = gridIncrementHeadroomW;
+                budgetDebug.gridSoftRampFactor = gridSoftRampFactor;
+                budgetDebug.gridPredictedNvpAtMaximumW = gridEnvelope.predictedNvpAtMaximumW;
+                budgetDebug.gridDemandRequestedW = gridDemandRequestedW;
+                budgetDebug.gridAllowedDemandW = gridAllowedDemandW;
+                budgetDebug.gridCapDemandCandidate = gridCapDemandCandidate;
             } catch (_eBaseLoadDebug) {}
 
-            // Apply cap (always)
             const before = budgetW;
-            if (!Number.isFinite(budgetW)) {
-                budgetW = gridCapEvcsW;
-            } else {
-                budgetW = Math.min(budgetW, gridCapEvcsW);
-            }
-            gridCapBinding = (Number.isFinite(gridCapEvcsW) && (before !== budgetW));
+            budgetW = !Number.isFinite(budgetW) ? gridCapEvcsW : Math.min(budgetW, gridCapEvcsW);
+            gridCapBudgetApplied = Number.isFinite(gridCapEvcsW) && before !== budgetW;
 
             if (!String(effectiveBudgetMode || '').includes('gridImport')) {
                 effectiveBudgetMode = `${effectiveBudgetMode}+gridImport`;
@@ -9232,7 +9432,7 @@ if (components.length) {
         }, {
             budgetAfterW: Number.isFinite(budgetW) ? Math.round(budgetW) : null,
             effectiveBudgetMode: String(effectiveBudgetMode || ''),
-            gridCapApplied: !!gridCapBinding,
+            gridCapApplied: !!gridCapBudgetApplied,
             phaseCapApplied: !!phaseCapBinding,
             para14aApplied: !!para14aBinding,
         });
@@ -9240,7 +9440,7 @@ if (components.length) {
             const tsApply = chargingBudgetTsProductive.apply;
             budgetW = (typeof tsApply.budgetW === 'number' && Number.isFinite(tsApply.budgetW)) ? tsApply.budgetW : Number.POSITIVE_INFINITY;
             effectiveBudgetMode = String(tsApply.effectiveBudgetMode || effectiveBudgetMode || 'unlimited');
-            gridCapBinding = !!tsApply.gridCapBinding;
+            gridCapBudgetApplied = !!tsApply.gridCapBinding;
             phaseCapBinding = !!tsApply.phaseCapBinding;
             para14aBinding = !!tsApply.para14aBinding;
             if (typeof tsApply.gridCapEvcsW === 'number' && Number.isFinite(tsApply.gridCapEvcsW)) gridCapEvcsW = tsApply.gridCapEvcsW;
@@ -9271,7 +9471,16 @@ if (components.length) {
             await this._queueState('chargingManagement.control.gridEvcsActualForCapW', (typeof totalFreshActualPowerW === 'number' && Number.isFinite(totalFreshActualPowerW)) ? totalFreshActualPowerW : 0, true);
             await this._queueState('chargingManagement.control.gridEvcsReserveIgnoredForCapW', Math.max(0, (Number.isFinite(totalPowerW) ? totalPowerW : 0) - (Number.isFinite(totalFreshActualPowerW) ? totalFreshActualPowerW : 0)), true);
             await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
-            await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
+            await this._queueState('chargingManagement.control.gridCapBinding', false, true);
+            await this._queueState('chargingManagement.control.gridCapMonitoring', gridImportLimitEffW > 0, true);
+            await this._queueState('chargingManagement.control.gridMeasurementSource', String(gridMeasurementSourceForGate || ''), true);
+            await this._queueState('chargingManagement.control.gridHardHeadroomRawW', (typeof gridHardHeadroomRawW === 'number' && Number.isFinite(gridHardHeadroomRawW)) ? gridHardHeadroomRawW : 0, true);
+            await this._queueState('chargingManagement.control.gridProgressiveIncrementW', (typeof gridIncrementHeadroomW === 'number' && Number.isFinite(gridIncrementHeadroomW)) ? gridIncrementHeadroomW : 0, true);
+            await this._queueState('chargingManagement.control.gridSoftRampFactor', Number.isFinite(Number(gridSoftRampFactor)) ? Number(gridSoftRampFactor) : 1, true);
+            await this._queueState('chargingManagement.control.offlineReserveW', Math.max(0, Number(offlineReserveW) || 0), true);
+            await this._queueState('chargingManagement.control.gridDemandRequestedW', Math.round(gridDemandRequestedW), true);
+            await this._queueState('chargingManagement.control.gridAllowedDemandW', Math.round(gridAllowedDemandW), true);
+            await this._queueState('chargingManagement.control.gridReductionW', 0, true);
             await this._queueState('chargingManagement.control.infrastructureRawCapacityW', Math.round(Math.max(0, Number(cfg.infrastructureRawCapacityW) || 0)), true);
             await this._queueState('chargingManagement.control.infrastructureCapacityW', Math.round(Math.max(0, Number(cfg.infrastructureCapacityW ?? staticBudgetW) || 0)), true);
             await this._queueState('chargingManagement.control.infrastructureWallboxCount', Math.round(Math.max(0, Number(cfg.infrastructureWallboxCount) || 0)), true);
@@ -9308,7 +9517,8 @@ if (components.length) {
             budgetDebug.gridLocalSupportW = (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null;
             budgetDebug.gridIncrementHeadroomW = (typeof gridIncrementHeadroomW === 'number' && Number.isFinite(gridIncrementHeadroomW)) ? gridIncrementHeadroomW : null;
             budgetDebug.gridCapEvcsW = (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null;
-            budgetDebug.gridCapBinding = !!gridCapBinding;
+            budgetDebug.gridCapBudgetApplied = !!gridCapBudgetApplied;
+            budgetDebug.gridCapBinding = false;
             budgetDebug.infrastructureRawCapacityW = Math.round(Math.max(0, Number(cfg.infrastructureRawCapacityW) || 0));
             budgetDebug.infrastructureCapacityW = Math.round(Math.max(0, Number(cfg.infrastructureCapacityW ?? staticBudgetW) || 0));
             budgetDebug.infrastructureWallboxCount = Math.round(Math.max(0, Number(cfg.infrastructureWallboxCount) || 0));
@@ -9475,11 +9685,11 @@ if (components.length) {
 
             // Request nur bilden, wenn Netz-/Phasenlimit tatsaechlich bindet. Er
             // wird im folgenden Speicher-Tick durch Policy, SoC und Gates geprueft.
-            if (storageAssistActive && (gridCapBinding || phaseCapBinding) && maxW > 0) {
+            if (storageAssistActive && (gridCapBudgetApplied || phaseCapBinding) && maxW > 0) {
                 const desiredExtra = Number.isFinite(budgetBeforeGridCaps) ? Math.max(0, budgetBeforeGridCaps - budgetW) : maxW;
                 storageAssistW = clamp(Math.min(maxW, desiredExtra), 0, maxW);
                 if (!(storageAssistW > 0) && !storagePolicyGlobalBlocker) storagePolicyGlobalBlocker = 'no-storage-budget-needed';
-            } else if (storageAssistActive && !(gridCapBinding || phaseCapBinding) && !storagePolicyGlobalBlocker) {
+            } else if (storageAssistActive && !(gridCapBudgetApplied || phaseCapBinding) && !storagePolicyGlobalBlocker) {
                 storagePolicyGlobalBlocker = 'no-grid-or-phase-cap';
             }
 
@@ -10391,7 +10601,11 @@ if (components.length) {
                 idxByStation.set(rrGroupKey, arr);
             }
 
-            const rrIntervalMs = 10 * 1000; // rotate at most every 10s (serienreif, weniger UI-Flattern)
+            // Stable session fairness: a constrained station must not swap the
+            // active connector every few seconds. Rotation is intentionally slow
+            // and configurable; already charging connectors therefore keep their
+            // allocation through short PV/tariff/budget fluctuations.
+            const rrIntervalMs = clamp(num(cfg.stationRoundRobinIntervalSec, 300), 60, 3600) * 1000;
             for (const [rrGroupKey, positions] of idxByStation.entries()) {
                 const n = positions.length;
                 if (n <= 1) continue;
@@ -10566,8 +10780,8 @@ if (components.length) {
         /** Code-Teil: pickBudgetReason – Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History. */
         const pickBudgetReason = () => {
             if (para14aActive && para14aBinding) return ReasonCodes.LIMITED_BY_14A;
-            if (gridCapBinding && phaseCapBinding) return ReasonCodes.LIMIT_POWER_AND_PHASE;
-            if (gridCapBinding) return ReasonCodes.LIMITED_BY_GRID_IMPORT;
+            if (gridCapDemandCandidate && phaseCapBinding) return ReasonCodes.LIMIT_POWER_AND_PHASE;
+            if (gridCapDemandCandidate) return ReasonCodes.LIMITED_BY_GRID_IMPORT;
             if (phaseCapBinding) return ReasonCodes.LIMITED_BY_PHASE_CAP;
             return ReasonCodes.LIMITED_BY_BUDGET;
         };
@@ -12031,6 +12245,47 @@ if (components.length) {
             }
         }
 
+        // Gate A is an active limiter only when real EVCS demand was actually
+        // reduced by the NVP envelope. Merely converting an unlimited budget to
+        // a finite safe headroom is monitoring, not a restriction. Independent
+        // phase/§14a caps are removed first so Gate A cannot claim a reduction
+        // that another harder gate caused.
+        const gridBindingDecision = rc86GridBinding({
+            requestedW: gridDemandRequestedW,
+            gridCapW: gridCapEvcsW,
+            finalTargetW: totalTargetPowerW,
+            activePoints: gridDemandActivePoints,
+            phaseCapW: phaseCapEvcsW,
+            para14aCapW: para14aActive ? para14aTotalCapW : null,
+        });
+        gridCapBinding = gridBindingDecision.binding;
+        gridReductionW = gridBindingDecision.reductionW;
+        gridAllowedDemandW = gridBindingDecision.allowedW;
+
+        try {
+            await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
+            await this._queueState('chargingManagement.control.gridDemandRequestedW', Math.round(gridDemandRequestedW), true);
+            await this._queueState('chargingManagement.control.gridAllowedDemandW', Math.round(gridAllowedDemandW), true);
+            await this._queueState('chargingManagement.control.gridReductionW', Math.round(gridReductionW), true);
+            if (budgetDebug && typeof budgetDebug === 'object') {
+                budgetDebug.gridDemandRequestedW = Math.round(gridDemandRequestedW);
+                budgetDebug.gridAllowedDemandW = Math.round(gridAllowedDemandW);
+                budgetDebug.gridReductionW = Math.round(gridReductionW);
+                budgetDebug.gridCapBinding = !!gridCapBinding;
+                budgetDebug.gridCapMonitoring = gridImportLimitEffW > 0;
+            }
+            const budgetEntry = debugAlloc.find(a => a && a.type === 'budget');
+            if (budgetEntry && budgetEntry.details && typeof budgetEntry.details === 'object') {
+                budgetEntry.details.gridDemandRequestedW = Math.round(gridDemandRequestedW);
+                budgetEntry.details.gridAllowedDemandW = Math.round(gridAllowedDemandW);
+                budgetEntry.details.gridReductionW = Math.round(gridReductionW);
+                budgetEntry.details.gridCapBinding = !!gridCapBinding;
+                budgetEntry.details.gridCapMonitoring = gridImportLimitEffW > 0;
+            }
+        } catch (_eGridBindingDiagnostics) {
+            // diagnostics only
+        }
+
         const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
         const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(
             tsWritePlanProductive,
@@ -12273,7 +12528,10 @@ if (components.length) {
         await this._recordChargingAudit({
             ts: now, context: 'normal-allocation-write-plan', mode, budgetMode: effectiveBudgetMode, status: finalStatus, controlActive, pausedByPeakShaving, safetyStop: false, safetyReason: '',
             budgetW, actualPowerW: totalFreshActualPowerW, reservedPowerW: evcsControlReserveW, targetPowerW: totalTargetPowerW, remainingPowerW: evcsControlRemainingW,
-            gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
+            gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding,
+            gridHardHeadroomRawW, gridIncrementHeadroomW, gridSoftRampFactor, gridOfflineReserveW: offlineReserveW,
+            gridDemandRequestedW, gridAllowedDemandW, gridReductionW,
+            phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
             storageAssistActive, storageAssistRequestedW: storageAssistW, storageAssistAcceptedW, wallboxes: wbList, allocations: debugAlloc,
         });
     }
@@ -12281,6 +12539,7 @@ if (components.length) {
 
 module.exports = {
     ChargingManagementModule,
+    estimateGridRelevantEvcsDemandW,
     resolveConfirmedEvcsVehicleDemand,
     resolveUniversalEvcsVehicleDemand,
     classifyUniversalEvcsVehicleStatus,

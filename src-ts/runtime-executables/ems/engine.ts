@@ -1,4 +1,6 @@
+// @runtime-transpile
 // @ts-nocheck
+import { startRc85HeapMonitor } from './rc85-runtime-hardening'; // RC85_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/engine.js
  *
@@ -49,6 +51,8 @@ const { ModuleManager } = require('./module-manager');
 const { applyStorageMeasurementOverrides } = require('./services/storage-override-bridge');
 const { buildNvpSnapshotFromRegistry } = require('./services/measurement-freshness');
 const { installActuatorShadowArbiter } = require('./services/actuator-shadow-arbiter');
+
+startRc85HeapMonitor(console); // RC85_HEAP_MONITOR_START
 const {
   deriveChargingConnectorCapacityW,
   computeChargingInfrastructureCapacity,
@@ -120,6 +124,11 @@ class EmsEngine {
     // Tick mutex (Phase 4.0): prevent overlapping async ticks.
     this._tickRunning = false;
     this._tickSkipCount = 0;
+    this._tickSequence = 0;
+    this._activeTickId = 0;
+    this._staleTickRecoveryCount = 0;
+    this._lastStaleTickRecoveryMs = 0;
+    this._tickStaleAfterMs = 30000;
 
     // derived/internal state ids
     this._gridPowerId = '';
@@ -212,6 +221,9 @@ class EmsEngine {
       this._immediateTickPending = false;
       this._immediateTickReason = '';
       try {
+        // Individual modules and hardware writes own their watchdogs. Wrapping
+        // the complete EMS tick in another Promise.race could otherwise let a
+        // second cycle mutate the same budgets while the first one still runs.
         await this.tick();
       } catch (err) {
         try { this.adapter.log.warn(`[EMS] immediate tick failed (${reason}): ${err?.message || err}`); } catch (_e) {}
@@ -360,6 +372,64 @@ class EmsEngine {
       },
       native: {},
     });
+
+    await a.setObjectNotExistsAsync('ems.core.lastTickEnd', {
+      type: 'state',
+      common: {
+        name: 'Last completed tick (ts)',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.staleTickRecoveryCount', {
+      type: 'state',
+      common: {
+        name: 'Recovered stale EMS tick locks',
+        type: 'number',
+        role: 'value',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.lastStaleTickRecovery', {
+      type: 'state',
+      common: {
+        name: 'Last stale EMS tick recovery (ts)',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    for (const [id, name] of [
+      ['ems.core.lastModuleStarted', 'Last EMS module started'],
+      ['ems.core.lastModuleCompleted', 'Last EMS module completed'],
+      ['ems.core.lastModuleTimeout', 'Last EMS module timeout/error'],
+    ]) {
+      await a.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: {
+          name,
+          type: 'string',
+          role: 'text',
+          read: true,
+          write: false,
+          def: '',
+        },
+        native: {},
+      });
+    }
 
     await a.setObjectNotExistsAsync('ems.core.lastTickDurationMs', {
       type: 'state',
@@ -1155,16 +1225,43 @@ class EmsEngine {
 
     // Prevent overlapping async ticks (deterministic scheduler).
     if (this._tickRunning) {
-      this._tickSkipCount = (Number.isFinite(Number(this._tickSkipCount)) ? Number(this._tickSkipCount) : 0) + 1;
-      try {
-        await this.adapter.setStateAsync('ems.core.tickSkipCount', { val: Math.round(this._tickSkipCount), ack: true });
-      } catch (_e) {
-        // ignore
+      const now = Date.now();
+      const configuredStaleMs = clampNumber(
+        this.adapter?.config?.diagnostics?.emsTickStaleAfterMs,
+        15000,
+        300000,
+        this._tickStaleAfterMs,
+      );
+      const runningAgeMs = this._lastTickStartMs > 0 ? now - this._lastTickStartMs : 0;
+      // RC85_STALE_TICK_RECOVERY: Module-level watchdogs normally guarantee a
+      // bounded cycle. This final recovery prevents a stale mutex left by an
+      // unforeseen runtime edge case from suppressing every future EMS tick.
+      if (runningAgeMs >= configuredStaleMs) {
+        this._staleTickRecoveryCount += 1;
+        this._lastStaleTickRecoveryMs = now;
+        this._tickRunning = false;
+        this._activeTickId = 0;
+        try {
+          this.adapter.log.warn(`[EMS watchdog] stale tick lock recovered after ${Math.round(runningAgeMs)} ms`);
+          await this.adapter.setStateAsync('ems.core.tickRunning', { val: false, ack: true });
+          await this.adapter.setStateAsync('ems.core.staleTickRecoveryCount', { val: Math.round(this._staleTickRecoveryCount), ack: true });
+          await this.adapter.setStateAsync('ems.core.lastStaleTickRecovery', { val: now, ack: true });
+          await this.adapter.setStateAsync('ems.core.lastTickError', { val: `stale-tick-lock-recovered:${Math.round(runningAgeMs)}ms`, ack: true });
+        } catch (_eRecovery) {}
+      } else {
+        this._tickSkipCount = (Number.isFinite(Number(this._tickSkipCount)) ? Number(this._tickSkipCount) : 0) + 1;
+        try {
+          await this.adapter.setStateAsync('ems.core.tickSkipCount', { val: Math.round(this._tickSkipCount), ack: true });
+        } catch (_e) {
+          // ignore
+        }
+        return;
       }
-      return;
     }
 
     this._tickRunning = true;
+    const tickId = ++this._tickSequence;
+    this._activeTickId = tickId;
     const tickStart = Date.now();
     this._lastTickStartMs = tickStart;
     try {
@@ -1282,11 +1379,17 @@ class EmsEngine {
       }
       throw err;
     } finally {
-      this._tickRunning = false;
+      // An older timed-out cycle must never clear the mutex of a newer cycle.
+      const ownsTickLock = this._activeTickId === tickId;
+      if (ownsTickLock) {
+        this._tickRunning = false;
+        this._activeTickId = 0;
+      }
       const dur = Date.now() - tickStart;
       this._lastTickEndMs = Date.now();
       try {
-        await this.adapter.setStateAsync('ems.core.tickRunning', { val: false, ack: true });
+        if (ownsTickLock) await this.adapter.setStateAsync('ems.core.tickRunning', { val: false, ack: true });
+        await this.adapter.setStateAsync('ems.core.lastTickEnd', { val: this._lastTickEndMs, ack: true });
         await this.adapter.setStateAsync('ems.core.lastTickDurationMs', { val: Math.round(dur), ack: true });
       } catch (_e2) {
         // ignore

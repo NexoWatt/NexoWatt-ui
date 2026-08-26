@@ -33,15 +33,18 @@ for (const file of [ts, js]) {
   must(file, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
   must(file, 'derived.core.building.loadRestW');
   must(file, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - gridBaseLoadRawW)');
-  must(file, 'gridIncrementHeadroomW = gridImportLimitPlanningW - gridW');
-  must(file, 'gridCapEvcsW = clamp(gridEvcsActualForCapW + gridIncrementHeadroomW, 0, 1e12)');
+  must(file, 'hardLimitW: gridImportLimitEffW');
+  must(file, 'currentControlledLoadW: gridEvcsActualForCapW');
+  must(file, 'gridIncrementHeadroomW = gridEnvelope.progressiveIncrementW');
+  must(file, 'gridCapEvcsW = clamp(gridEnvelope.maxControlledLoadW, 0, 1e12)');
+  must(file, 'resolveCurrentNvpSnapshot(');
   mustNot(file, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW)');
 }
 
 must(ts, 'chargingManagement.control.gridLocalSupportW');
 must('src-ts/runtime-executables/main.ts', 'gridLocalSupportW: await getOwn');
 must(uiTs, 'EVCS Cap (NVP / Importgrenze)');
-must(uiTs, 'Lokale Deckung');
+must(uiTs, 'Hard-Headroom signed');
 must(uiJs, 'EVCS Cap (NVP / Importgrenze)');
 
 console.log('OK: EVCS grid cap uses signed NVP plus fresh EVCS actual power; export increases import-only headroom and reservations stay excluded.');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 285e0f9b72ddeef0d9ce4e8adb1319bdd5be9e460c4aa0928ba37d3a324021c9
+ * Original-Hash: 5e173ca594628dea61dbbec1e40dfd47bf1a5b81882cb14a5d8773d6384e78ae
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/charging-management-audit.ts
- * Quell-Hash: sha256:7c2ee548f55dc909112e09123c4beaab2a81538fef923c829ddd537b14fb18eb
+ * Quell-Hash: sha256:6ea8d3fbbd77e4dca2199ec18cccdfaa72893c8904a2a6e0ba8febc12b59c7b4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -302,6 +302,14 @@ function buildChargingAuditSnapshot(input = {}) {
             limitW: finiteChargingAuditNumber(input.gridImportLimitW, null),
             effectiveLimitW: finiteChargingAuditNumber(input.gridImportLimitEffW, null),
             evcsCapW: finiteChargingAuditNumber(input.gridCapEvcsW, null),
+            hardHeadroomRawW: finiteChargingAuditNumber(input.gridHardHeadroomRawW, null),
+            progressiveIncrementW: finiteChargingAuditNumber(input.gridIncrementHeadroomW, null),
+            softRampFactor: finiteChargingAuditNumber(input.gridSoftRampFactor, null),
+            offlineReserveW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridOfflineReserveW, 0))),
+            requestedW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridDemandRequestedW, 0))),
+            allowedW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridAllowedDemandW, 0))),
+            reductionW: Math.max(0, Math.round(finiteChargingAuditNumber(input.gridReductionW, 0))),
+            monitoring: finiteChargingAuditNumber(input.gridImportLimitEffW, 0) > 0,
             binding: input.gridCapBinding === true,
         },
         phase: {

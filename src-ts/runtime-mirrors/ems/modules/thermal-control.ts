@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9805004109762539679f5519d47ea0b5cbb1d67eae2a183b92df47f301c62091
+ * Original-Hash: 4fdc4af039dfb7b6e98379930e8baa13a45bf5712e9a647637145b4829ef3b57
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:86e0666873ea2fb9c4119e02425dcbe302b8891608960c7219e8f17cc45a0dea
+ * Quell-Hash: sha256:980e9dac406c24cbc8fc20f5b66f44fa0e59dfc0ee9edd7ab589f29e40ccb072
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -337,7 +337,7 @@ class ThermalControlModule extends BaseModule {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
         if (prev === v) return;
-        this._stateCache.set(id, v);
+        this._stateCache.set(id, v); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, v, true);
     }
 

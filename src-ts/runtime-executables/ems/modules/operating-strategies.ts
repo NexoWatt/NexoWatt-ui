@@ -166,7 +166,7 @@ class OperatingStrategiesModule extends BaseModule {
     async _setStateIfChanged(id, value) {
         const normalized = typeof value === 'number' && !Number.isFinite(value) ? null : value;
         if (this._stateCache.get(id) === normalized) return;
-        this._stateCache.set(id, normalized);
+        this._stateCache.set(id, normalized); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, normalized, true);
         try { this.adapter.updateValue?.(id, normalized, Date.now()); } catch (_error) {}
     }

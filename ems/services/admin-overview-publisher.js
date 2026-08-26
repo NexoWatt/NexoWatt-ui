@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/admin-overview-publisher.ts
- * Quell-Hash: sha256:8fce1f5fb747ad4bee2c2b9b110fb2d56146088c7c87c26ec3ecf484675eed7b
+ * Quell-Hash: sha256:6d5e1c9a6852d65dba0183e3e75fd6fd7f86f70bbcbf4c9104b671e83e860d97
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -303,7 +303,7 @@ function buildOverviewContract(adapter, now = Date.now()) {
     else if (!emsOnline)
         headline = 'NexoWatt EMS ist nicht aktuell';
     else if (status === 'error')
-        headline = (!safetyValid || safetyEmergencyStop || safetyStop) ? 'EOS Safety aktiv – Regelung sicher eingeschränkt' : 'EMS-Störung erkannt';
+        headline = (!safetyValid || safetyEmergencyStop || safetyStop) ? 'EOS Safety überwacht – Regelung sicher eingeschränkt' : 'EMS-Teilstörung erkannt';
     else if (paraFallback)
         headline = '§14a-Kommunikationsfallback aktiv';
     else if (auditLimiter !== 'none')

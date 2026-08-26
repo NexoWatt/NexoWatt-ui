@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:c31674f3221de2d8d60da68e2d1e072a70eded05e03e4da8c960a4eef47b00e8
+ * Quell-Hash: sha256:e91e268ff57fbdeaee30775108d63fda695f7a97efd4cc4da68f47c5fd2ca636
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -199,7 +199,7 @@ class Para14aModule extends BaseModule {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
         if (!force && prev === v) return false;
-        this._stateCache.set(id, v);
+        this._stateCache.set(id, v); if (this._stateCache.size > 1000) { const __rc85Oldest = this._stateCache.keys().next().value; if (__rc85Oldest !== undefined) this._stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
         await this.adapter.setStateAsync(id, { val: v, ack: true, ts });
         try {
             if (this.adapter && typeof this.adapter.updateValue === 'function') {

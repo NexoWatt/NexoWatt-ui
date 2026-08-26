@@ -1,4 +1,6 @@
 // @runtime-transpile
+// @ts-nocheck
+import { rc85RunIsolatedResult, startRc85HeapMonitor } from './rc85-runtime-hardening'; // RC85_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/module-manager.js
  *
@@ -75,6 +77,8 @@ const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
+
+startRc85HeapMonitor(console); // RC85_HEAP_MONITOR_START
 const featureFlags = require('./services/feature-flags');
 const {
     beginSafetyCycle,
@@ -164,6 +168,7 @@ class ModuleManager {
     _lastDiagWriteMs: number;
     _tickCount: number;
     _moduleInitRetryMs: number;
+    _moduleErrorLogAt: Map<string, number>;
     lastTickDiag: TickDiagnostic | null;
     _gridConstraintsModule?: ModuleInstance;
     /**
@@ -185,6 +190,7 @@ class ModuleManager {
         // dessen States und Datenpunkt-Mappings initialisiert wurden. Der Lifecycle
         // wird deshalb pro Modulzeile nachgefuehrt und bei Bedarf lazy gestartet.
         this._moduleInitRetryMs = 30000;
+        this._moduleErrorLogAt = new Map();
 
         // Last tick diagnostics (always captured, even if diagnostics are disabled)
         /**
@@ -849,8 +855,35 @@ class ModuleManager {
             let ok = true;
             let errMsg = '';
             markSafetyModuleStarted(this.adapter, key, this._tickCount, t1);
+            this.adapter._nwLastEmsModuleStarted = { key, ts: t1, cycleId: this._tickCount };
+            try { await this.adapter.setStateAsync('ems.core.lastModuleStarted', { val: key, ack: true }); } catch (_stateError) {}
             try {
-                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick!());
+                const configuredTimeoutMs = Number(this.adapter?.config?.diagnostics?.emsModuleTimeoutMs);
+                const timeoutMs = Number.isFinite(configuredTimeoutMs)
+                    ? Math.max(2000, Math.min(60000, configuredTimeoutMs))
+                    : (key === 'chargingManagement' ? 15000 : 10000);
+                // RC85_MODULE_WATCHDOG: a single non-returning module/device call
+                // must not freeze the complete EMS scheduler. The helper also
+                // deduplicates unresolved work so no Promise pile-up can grow the
+                // V8 heap on every one-second cycle.
+                const isolated = await rc85RunIsolatedResult(
+                    `ems-module:${key}`,
+                    timeoutMs,
+                    () => withActuatorShadowContext(
+                        this.adapter,
+                        { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 },
+                        () => m.instance.tick!(),
+                    ),
+                    this.adapter?.log || console,
+                );
+                if (!isolated.ok) {
+                    const prefix = isolated.timedOut
+                        ? 'module-timeout'
+                        : (isolated.skipped ? 'module-still-in-flight' : 'module-error');
+                    throw new Error(`${prefix}:${key}:${isolated.error?.message || 'unknown'}`);
+                }
+                this.adapter._nwLastEmsModuleCompleted = { key, ts: Date.now(), cycleId: this._tickCount };
+                try { await this.adapter.setStateAsync('ems.core.lastModuleCompleted', { val: key, ack: true }); } catch (_stateError) {}
             } catch (e: any) {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);
@@ -862,7 +895,19 @@ class ModuleManager {
                     criticalFaultRaised = true;
                     invalidateSafetyEnvelope(this.adapter, `critical-module-tick-failed:${key}`, { generation: this._tickCount, emergencyStop: true });
                 }
-                this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
+                const errorSignature = `${key}:${errMsg}`.slice(0, 240);
+                const lastErrorLogAt = this._moduleErrorLogAt.get(errorSignature) || 0;
+                const nowError = Date.now();
+                if (nowError - lastErrorLogAt >= 60000) {
+                    this._moduleErrorLogAt.set(errorSignature, nowError);
+                    while (this._moduleErrorLogAt.size > 128) {
+                        const oldest = this._moduleErrorLogAt.keys().next().value;
+                        if (!oldest) break;
+                        this._moduleErrorLogAt.delete(oldest);
+                    }
+                    this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
+                }
+                try { await this.adapter.setStateAsync('ems.core.lastModuleTimeout', { val: `${key}: ${errMsg}`.slice(0, 500), ack: true }); } catch (_stateError) {}
             }
             markSafetyModuleResult(this.adapter, key, ok, errMsg, this._tickCount, Date.now());
             if (ok && SAFETY_CRITICAL_MODULES.has(key) && this.adapter._nwSafetyCriticalFaults[key]) {

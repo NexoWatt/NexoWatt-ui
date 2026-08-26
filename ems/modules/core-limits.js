@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:e9c9831a20a1d2448ad38bb5a38059f31ed9c6d41fa2ef06a53b76cc43452e37
+ * Quell-Hash: sha256:9d0362b3ad79f5f7b91505956e8735e9039bfa9a4e93517bbcbc1f3febc6320e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2073,11 +2073,15 @@ class CoreLimitsModule extends BaseModule {
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
         const gridHardLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
         const gridPlanningLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_planning || 0) : 0;
-        // RC79: flexible Lasten planen vorausschauend gegen das Soft-Limit. Die
-        // finale Safety-Envelope und jeder Hardware-Write schuetzen weiterhin das
-        // separate Hard-Limit. Ohne Soft-Konfiguration bleibt beides identisch.
-        const gridLimitW = gridPlanningLimitW > 0 ? gridPlanningLimitW : gridHardLimitW;
+        // RC86: Die 90-%-Schwelle ist keine absolute Lastobergrenze. Das
+        // zentrale Budget bildet deshalb den vollen signierten Headroom bis zur
+        // Hard-Importgrenze ab. `gridPlanningLimitW` bleibt als Soft-Schwelle fuer
+        // progressive Rampen und Diagnose erhalten.
+        const gridLimitW = gridHardLimitW > 0 ? gridHardLimitW : gridPlanningLimitW;
         const gridImportStage = coreSnapshot && coreSnapshot.grid ? String(coreSnapshot.grid.gridImportStage || '') : '';
+        const gridImportRequiredReductionW = coreSnapshot && coreSnapshot.grid
+            ? Math.max(0, Number(coreSnapshot.grid.gridImportRequiredReductionW || 0))
+            : 0;
         // RC78: reine Bezugsgrenze bei signiertem NVP (Import +, Export -).
         // Gesamtziel = reale geregelte Istlast + Limit - NVP; Reservierungen werden
         // erst danach abgezogen. Überbezug erzwingt dadurch weiterhin Lastabwurf.
@@ -2106,10 +2110,16 @@ class CoreLimitsModule extends BaseModule {
 
         const bindings = [];
         if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
-        if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
-            bindings.push(gridHardLimitW > 0 && gridLimitW < gridHardLimitW - 1 ? 'grid-soft' : 'grid-hard');
+        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) {
+            bindings.push(highLevelBinding);
+        } else if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
+            // `grid-monitor` means the import guard defines the available headroom
+            // but is not currently reducing a consumer. Only the live soft/hard
+            // stages are actual interventions.
+            bindings.push(gridImportRequiredReductionW > 0
+                ? (gridImportStage === 'hard' ? 'grid-hard' : 'grid-soft')
+                : 'grid-monitor');
         }
-        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(highLevelBinding);
         if (!bindings.length) bindings.push('unlimited');
 
         // Gate D: PV forecast is an advisory gate. It is published centrally so apps
@@ -2176,7 +2186,7 @@ class CoreLimitsModule extends BaseModule {
             gates: {
                 grid: {
                     importLimitW: roundW(gridLimitW),
-                    planningImportLimitW: roundW(gridLimitW),
+                    planningImportLimitW: roundW(gridPlanningLimitW > 0 ? gridPlanningLimitW : gridLimitW),
                     hardImportLimitW: roundW(gridHardLimitW),
                     limitStage: gridImportStage,
                     importW: roundW(gridImportW),
@@ -2253,8 +2263,10 @@ class CoreLimitsModule extends BaseModule {
                     ? Number(centralNvp.measurementAgeMs)
                     : null,
                 importLimitW: gridLimitW,
+                planningImportLimitW: gridPlanningLimitW > 0 ? gridPlanningLimitW : gridLimitW,
                 hardImportLimitW: gridHardLimitW,
                 limitStage: gridImportStage,
+                requiredReductionW: gridImportRequiredReductionW,
                 highLevelCapW,
                 highLevelBinding,
             },

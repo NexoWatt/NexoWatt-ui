@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/prime-mover-control.ts
- * Quell-Hash: sha256:b635511d23a31ea60636b68b5b1edffaa3de24df7171a53a430082a7e45ada42
+ * Quell-Hash: sha256:a3df1d30d9a44df9117b5af3fccb2cde6dd9cd268e87674af70f2a8861ef7386
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -237,6 +237,11 @@ class PrimeMoverControlModule extends BaseModule {
         if (this.stateCache.get(id) === normalized)
             return;
         this.stateCache.set(id, normalized);
+        if (this.stateCache.size > 1000) {
+            const __rc85Oldest = this.stateCache.keys().next().value;
+            if (__rc85Oldest !== undefined)
+                this.stateCache.delete(__rc85Oldest);
+        } // RC85_BOUNDED_COLLECTION
         const previous = await this.adapter.getStateAsync(id).catch(() => null);
         if (previous && previous.val === normalized)
             return;

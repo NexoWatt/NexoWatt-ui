@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.208",
+  "version": "0.8.211",
   "files": [
     {
       "path": "LICENSE",
@@ -350,8 +350,8 @@
     },
     {
       "path": "ems/engine.js",
-      "size": 65363,
-      "sha256": "f1641319d95cd540be69e34719596b52528bda5fbaba3dc5bc61e21fbf553ffa"
+      "size": 78494,
+      "sha256": "12de4307d8e11f5bebbd9f7147ff0fb97d18b9b2ad4637c5741c435488d95b52"
     },
     {
       "path": "ems/evcs-control-mapping.js",
@@ -360,8 +360,8 @@
     },
     {
       "path": "ems/module-manager.js",
-      "size": 48058,
-      "sha256": "22f506f25e8dd113c1174fda3f061d3885ca3ffb5a215a92cc1bc8bb9b7b4c86"
+      "size": 50923,
+      "sha256": "6f982b83746a7942fb9e79cd60e0c5c1a5ce2f8ea2706b374855d0de4a3e773d"
     },
     {
       "path": "ems/modules/ai-advisor.js",
@@ -385,13 +385,13 @@
     },
     {
       "path": "ems/modules/charging-management.js",
-      "size": 707546,
-      "sha256": "1e28eb00828ed3e4405c1f8ceb4c7ccd753e27fcabb992ac80f70114ee321198"
+      "size": 726030,
+      "sha256": "cb13945b19c8e620f7c55877400b3281af8b3b9a1246853590b2aebffb5d57ce"
     },
     {
       "path": "ems/modules/core-limits.js",
-      "size": 199777,
-      "sha256": "4dc1db7d1c39e51b5d7661df8a9c3cbd5a5acd435cec5e1166077c30f05f88aa"
+      "size": 200504,
+      "sha256": "9cd83d3d18dc1f6c9ddd0cfa41b02cde66205424b3dec982b7fae0b0fefd3d9f"
     },
     {
       "path": "ems/modules/country-profile.js",
@@ -420,8 +420,8 @@
     },
     {
       "path": "ems/modules/heating-rod-control.js",
-      "size": 349504,
-      "sha256": "932d72bb3e6cf6a48176efcc65578941a0c03a375334c5878cc912807036939f"
+      "size": 349699,
+      "sha256": "45f84e3e18b541fd3d6d9aee0262ac2b8a35064df68b833d73c0675d9fde3ae8"
     },
     {
       "path": "ems/modules/mesh-microgrid.js",
@@ -430,8 +430,8 @@
     },
     {
       "path": "ems/modules/multi-use.js",
-      "size": 52817,
-      "sha256": "63345b624460c89ef2c4912636dc18fd02e9d48fb5dbe3cbce7f01d605f147fc"
+      "size": 53012,
+      "sha256": "8b7332d7ec9956db413f87c96e73bbb1406c2c624f9d8245af19935e05c8ee12"
     },
     {
       "path": "ems/modules/netoperator-interface.js",
@@ -455,13 +455,13 @@
     },
     {
       "path": "ems/modules/operating-strategies.js",
-      "size": 71300,
-      "sha256": "3db41c3dfd7e5404f6d69a816ede3373ef12b27ffe7ed1f26ef2be3dd0e222e8"
+      "size": 71495,
+      "sha256": "009bda4ae7d3b6ffa592edc0503f25dcd82cebb744b0b8722f6b6d5eb2d06842"
     },
     {
       "path": "ems/modules/para14a.js",
-      "size": 96849,
-      "sha256": "f8f0f6dcb944bbfb7da49a95b1ef22fa85aaba2154196882521d97a4d3aa1adf"
+      "size": 97044,
+      "sha256": "7bed97f4af54930e4bc5b9c35e22e9ea7012048228df22265d2959927c8d204a"
     },
     {
       "path": "ems/modules/peak-shaving.js",
@@ -470,8 +470,8 @@
     },
     {
       "path": "ems/modules/prime-mover-control.js",
-      "size": 39353,
-      "sha256": "41c0310650a994384c6e6f4f1438d859740b9fb1740788ccd354cbb0b77635fe"
+      "size": 39601,
+      "sha256": "6dba099cec4a0ed6e7946c1a9a3c08e3242f4b241843e4789c5a46f5213b2b3a"
     },
     {
       "path": "ems/modules/pv-forecast.js",
@@ -510,13 +510,13 @@
     },
     {
       "path": "ems/modules/thermal-control.js",
-      "size": 109454,
-      "sha256": "9805004109762539679f5519d47ea0b5cbb1d67eae2a183b92df47f301c62091"
+      "size": 109649,
+      "sha256": "4fdc4af039dfb7b6e98379930e8baa13a45bf5712e9a647637145b4829ef3b57"
     },
     {
       "path": "ems/modules/threshold-control.js",
-      "size": 48308,
-      "sha256": "f4f04a68546f0c0d918aa805c8b5a84660885a9bea8a2400402a1de6ec54bc30"
+      "size": 48559,
+      "sha256": "b27d78b820b53794522f372095b67888bb669743f1eb916eb5ddaf13c6308f68"
     },
     {
       "path": "ems/netoperator/README.md",
@@ -600,13 +600,13 @@
     },
     {
       "path": "ems/services/admin-overview-publisher.js",
-      "size": 39875,
-      "sha256": "313ba54a790960723ed90c5a4702a95e5bff07dc510291651ce7faa0981daabb"
+      "size": 39884,
+      "sha256": "453062595b1031f4d745335787447cea03e6534db82169fba5a2674674b17aa7"
     },
     {
       "path": "ems/services/charging-management-audit.js",
-      "size": 29273,
-      "sha256": "285e0f9b72ddeef0d9ce4e8adb1319bdd5be9e460c4aa0928ba37d3a324021c9"
+      "size": 30056,
+      "sha256": "5e173ca594628dea61dbbec1e40dfd47bf1a5b81882cb14a5d8773d6384e78ae"
     },
     {
       "path": "ems/services/country-profile-service.js",
@@ -756,7 +756,7 @@
     {
       "path": "io-package.json",
       "size": 24405,
-      "sha256": "697ca05133bf10384c86ce647d858a488256caa089044f52b01b6a40fbbffdc4"
+      "sha256": "81b4f7a1f70bb4d9252c5c088d4b8c3bd539552aeed3e7cc84a0dc581131d14b"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -930,8 +930,8 @@
     },
     {
       "path": "lib/ts-mirrors/ems/core-limits/core-runtime.js",
-      "size": 54104,
-      "sha256": "a4eeb7f00f956918ee4c1ac0cfde79746e7cdeb877f246199b3f0af9a6c86ac1"
+      "size": 54452,
+      "sha256": "d815bae7d1328a28bff9c6f1b68e6a4b1c418d75bcf0ee79dce8626d45ad92ec"
     },
     {
       "path": "lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js",
@@ -1000,23 +1000,23 @@
     },
     {
       "path": "main.js",
-      "size": 1727599,
-      "sha256": "461ebee9fb552134e54bbb2d44f43ccf5ff40ccf465df9896d6e2a9b2cf961c7"
+      "size": 1730340,
+      "sha256": "abe886b9e34c0b9d286db1490c8f3bdaab6dc0b01da6a1ca4932bd4009c6bfb7"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
       "size": 7222,
-      "sha256": "64cafcbb9ef62adc994ca32111132b8084599527d1b173ac912c42b8cd624718"
+      "sha256": "87810087e475aba38abe01d981217bf0306f3e871d47c86d3e9e7baf669855b8"
     },
     {
       "path": "scripts/verify-rc82-permanent-grid-protection.cjs",
       "size": 10585,
-      "sha256": "fca7ea9c767234bbc1aa034c8525e3bd86d10c36fc0f3c2c34e21c1b7d39c07c"
+      "sha256": "97820074d5f983f795a28804c2da91d37a903f203202a9993ea1c30999502179"
     },
     {
       "path": "scripts/verify-rc83-storage-cheap-only-log-object.cjs",
       "size": 13315,
-      "sha256": "8d916c28ebeb03213b30079c0fe318d1bace8fabfbef76d35b2f4d284abaf7e8"
+      "sha256": "58338aa131e1c83edfe7eb393b852ea5ba2fa6566dc5dc5d22d3a4fb4c0721bc"
     },
     {
       "path": "www/admin-guard.js",
@@ -1125,8 +1125,8 @@
     },
     {
       "path": "www/charging-diagnostics-appcenter.js",
-      "size": 20400,
-      "sha256": "9ad0fdfba19441a808e88f5d302258be2b014ad27fc71873d20d3ac518e0d3db"
+      "size": 20896,
+      "sha256": "542fca4a939717241e5067d021e0e1bd698a961f27fe6941dff0930b73aae7bd"
     },
     {
       "path": "www/cockpit-shell.js",
@@ -1135,8 +1135,8 @@
     },
     {
       "path": "www/dashboard-lp-status.js",
-      "size": 34204,
-      "sha256": "ee04d77d07549fe05146983e6202b65a3f4adcb6efeafbca3eb19e2bcab0b710"
+      "size": 34214,
+      "sha256": "ac2ca9880c723301885647ee8802efde62d5623aacf2ef68219528971cb4b08d"
     },
     {
       "path": "www/dc-station-display.css",
@@ -1165,8 +1165,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 934020,
-      "sha256": "7db9c9e3946b3fcbc963ef8c9d9ce574b837549e0835b51ab40436d63139ef88"
+      "size": 934741,
+      "sha256": "c58a9ed7e52ad180715ab811a29081167b54ec63f6704d685a09f16d2021d539"
     },
     {
       "path": "www/energy-ledger.html",
@@ -1296,7 +1296,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "0602a77eaecaaebae1bf1d781494962467aad8601b2c6009229a4ac736800a26"
+      "sha256": "6a4e2096538d93995f0f53d5614f1e2c4bb4a69d6cd5f3969811bc2d41cd22b7"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1471,7 +1471,7 @@
     {
       "path": "www/sw.js",
       "size": 4927,
-      "sha256": "3afd6efc6f9eb52e7965082d3c3b441401cf58a17414c71c12db2ef420d60942"
+      "sha256": "18a6987f3794bb432a7eaaedda63bba662c231b4bdec10348dfc24a243c220de"
     },
     {
       "path": "www/tariff-report.html",
@@ -1497,6 +1497,31 @@
       "path": "www/year-report.js",
       "size": 44701,
       "sha256": "3fe55d569dc423055075ddb3d71ee8179d45f40761d03a96d0f8669343afaf96"
+    },
+    {
+      "path": "ems/rc85-runtime-hardening.js",
+      "size": 16609,
+      "sha256": "fc4e34a4932e5ecde2a70fbbb8f8e721d700d053e5c224d9f752520526555763"
+    },
+    {
+      "path": "RC86_FELDTEST_CHECKLISTE_DE.md",
+      "size": 2315,
+      "sha256": "1df0aa9238d5db366dbdb1ba2db1d8923f24c6357365e0e30f8a537e4c1b8dd9"
+    },
+    {
+      "path": "RC86_VALIDATION_REPORT.md",
+      "size": 5304,
+      "sha256": "0131aefdd3d965bc4f27275648c180e2cbc9adca631713142775fe06508465ce"
+    },
+    {
+      "path": "docs/RC86_GATE_A_HARD_LIMIT_DEMAND_BINDING_DE.md",
+      "size": 2013,
+      "sha256": "1d98ff3fdd4e479f6a54d863b2eacd57366b2813474d7407d00b116713e02416"
+    },
+    {
+      "path": "scripts/verify-rc86-gate-a-demand-binding.cjs",
+      "size": 7237,
+      "sha256": "c219bf7122d27a5b5059a28aba51cffd6565381426219e1ed29bdfc5c18696e1"
     }
   ]
 }

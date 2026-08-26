@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 41c0310650a994384c6e6f4f1438d859740b9fb1740788ccd354cbb0b77635fe
+ * Original-Hash: 6dba099cec4a0ed6e7946c1a9a3c08e3242f4b241843e4789c5a46f5213b2b3a
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/prime-mover-control.ts
- * Quell-Hash: sha256:b635511d23a31ea60636b68b5b1edffaa3de24df7171a53a430082a7e45ada42
+ * Quell-Hash: sha256:a3df1d30d9a44df9117b5af3fccb2cde6dd9cd268e87674af70f2a8861ef7386
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -389,6 +389,11 @@ class PrimeMoverControlModule extends BaseModule {
         if (this.stateCache.get(id) === normalized)
             return;
         this.stateCache.set(id, normalized);
+        if (this.stateCache.size > 1000) {
+            const __rc85Oldest = this.stateCache.keys().next().value;
+            if (__rc85Oldest !== undefined)
+                this.stateCache.delete(__rc85Oldest);
+        } // RC85_BOUNDED_COLLECTION
         const previous = await this.adapter.getStateAsync(id).catch(() => null);
         if (previous && previous.val === normalized)
             return;

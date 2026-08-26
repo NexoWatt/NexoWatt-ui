@@ -348,7 +348,7 @@ export class PrimeMoverControlModule extends BaseModule {
   private async setIfChanged(id: string, value: unknown): Promise<void> {
     const normalized = typeof value === 'number' && !Number.isFinite(value) ? null : value;
     if (this.stateCache.get(id) === normalized) return;
-    this.stateCache.set(id, normalized);
+    this.stateCache.set(id, normalized); if (this.stateCache.size > 1000) { const __rc85Oldest = this.stateCache.keys().next().value; if (__rc85Oldest !== undefined) this.stateCache.delete(__rc85Oldest); } // RC85_BOUNDED_COLLECTION
     const previous = await this.adapter.getStateAsync(id).catch(() => null);
     if (previous && previous.val === normalized) return;
     await this.adapter.setStateAsync(id, normalized, true).catch(() => undefined);

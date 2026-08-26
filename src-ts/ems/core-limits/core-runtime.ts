@@ -139,8 +139,10 @@ export interface CoreRuntimeGridInput {
   reason?: unknown;
   measurementAgeMs?: unknown;
   importLimitW?: unknown;
+  planningImportLimitW?: unknown;
   hardImportLimitW?: unknown;
   limitStage?: unknown;
+  requiredReductionW?: unknown;
   highLevelCapW?: unknown;
   highLevelBinding?: unknown;
 }
@@ -876,9 +878,12 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
     storageMaxSocPct: storage.maxSocPct,
   });
 
-  const gridLimitW = positive(grid.importLimitW);
+  const gridConfiguredLimitW = positive(grid.importLimitW);
   const gridHardLimitW = positive(grid.hardImportLimitW);
+  const gridLimitW = gridHardLimitW > 0 ? gridHardLimitW : gridConfiguredLimitW;
+  const gridPlanningLimitW = positive(grid.planningImportLimitW) || gridConfiguredLimitW || gridLimitW;
   const gridLimitStage = text(grid.limitStage);
+  const gridRequiredReductionW = Math.max(0, finiteOrNull(grid.requiredReductionW) ?? 0);
   // RC78 / 0.8.203: Die Anschlussgrenze gilt ausschließlich für Bezug.
   // `gridW` bleibt deshalb signiert. Das Gesamtziel-Budget besteht aus der
   // bereits real laufenden, EMS-gesteuerten Last plus der noch möglichen
@@ -897,11 +902,12 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
   const totalBudgetW = gridUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
   const bindings: string[] = [];
   if (!gridUsable) bindings.push(`nvp_${text(grid.status, 'stale')}`);
-  if (gridUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
-    bindings.push(gridHardLimitW > 0 && gridLimitW < gridHardLimitW - 1 ? 'grid-soft' : 'grid-hard');
-  }
   if (gridUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) {
     bindings.push(text(grid.highLevelBinding, 'highLevel'));
+  } else if (gridUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) {
+    bindings.push(gridRequiredReductionW > 0
+      ? (gridLimitStage === 'hard' ? 'grid-hard' : 'grid-soft')
+      : 'grid-monitor');
   }
   if (!bindings.length) bindings.push('unlimited');
 
@@ -957,7 +963,7 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
     gates: {
       grid: {
         importLimitW: round(gridLimitW),
-        planningImportLimitW: round(gridLimitW),
+        planningImportLimitW: round(gridPlanningLimitW),
         hardImportLimitW: round(gridHardLimitW),
         limitStage: gridLimitStage,
         importW: round(gridImportW),

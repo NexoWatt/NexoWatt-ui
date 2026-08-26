@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/charging-diagnostics-appcenter.ts
- * Quell-Hash: sha256:e227b31004523bddab349b27f813b43ba44692d96eb02c64e49189d4a9c5e7b0
+ * Quell-Hash: sha256:72baea674cb093806c5e1e090959406495750f82dc672798c7a290bf676319a3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -178,7 +178,11 @@
             ['Verfügbares Budget', fmtW(snapshot.budgetW), ''], ['Istleistung EVCS', fmtW(snapshot.actualPowerW), ''],
             ['NexoWatt Soll gesamt', fmtW(snapshot.targetPowerW), ''], ['Reserviert', fmtW(snapshot.reservedPowerW), ''],
             ['Restbudget', fmtW(snapshot.remainingPowerW), ''],
-            ['Netzanschluss-Gate', snapshot.grid?.binding ? `AKTIV · ${fmtW(snapshot.grid.evcsCapW)}` : `frei · ${fmtW(snapshot.grid?.evcsCapW)}`, snapshot.grid?.binding ? 'warn' : 'ok'],
+            ['Netzanschluss-Gate', snapshot.grid?.binding ? `BEGRENZT · ${fmtW(snapshot.grid.evcsCapW)}` : `überwacht · ${fmtW(snapshot.grid?.evcsCapW)}`, snapshot.grid?.binding ? 'warn' : 'ok'],
+            ['NVP-Hard-Headroom', fmtW(snapshot.grid?.hardHeadroomRawW), ''],
+            ['EVCS Anforderung / zulässig', `${fmtW(snapshot.grid?.requestedW)} / ${fmtW(snapshot.grid?.allowedW)}`, snapshot.grid?.binding ? 'warn' : ''],
+            ['Durch Netz-Gate reduziert', fmtW(snapshot.grid?.reductionW), snapshot.grid?.binding ? 'warn' : 'ok'],
+            ['Offline-Reserve', fmtW(snapshot.grid?.offlineReserveW), Number(snapshot.grid?.offlineReserveW || 0) > 0 ? 'warn' : 'ok'],
             ['Phasen-Gate', snapshot.phase?.binding ? `AKTIV · ${fmtW(snapshot.phase.evcsCapW)}` : `frei · ${fmtW(snapshot.phase?.evcsCapW)}`, snapshot.phase?.binding ? 'warn' : 'ok'],
             ['§14a-Gate', snapshot.para14a?.active ? `${snapshot.para14a.binding ? 'bindend' : 'aktiv'} · ${fmtW(snapshot.para14a.capW)}` : 'nicht aktiv', snapshot.para14a?.binding ? 'warn' : 'ok'],
             ['Stage A / Sicherungsstufe', stageAStatus, stageAKind], ['Letzte Aktualisierung', fmtTs(snapshot.ts), ''],

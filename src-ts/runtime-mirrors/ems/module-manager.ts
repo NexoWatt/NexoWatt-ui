@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 22f506f25e8dd113c1174fda3f061d3885ca3ffb5a215a92cc1bc8bb9b7b4c86
+ * Original-Hash: 6f982b83746a7942fb9e79cd60e0c5c1a5ce2f8ea2706b374855d0de4a3e773d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:fb27ccbbd599e520da17d5fd32ddde4b021dba276e2b93bbd18e1c5f6732414f
+ * Quell-Hash: sha256:b027e5e9a7fd83019ddf4188829cda2ffb8307ef4bcca2d3f65de64b44218471
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,6 +46,10 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+// @ts-nocheck
+const rc85_runtime_hardening_1 = require("./rc85-runtime-hardening"); // RC85_IMPORT_HARDENING
 /**
  * Executable TypeScript source: ems/module-manager.js
  *
@@ -118,6 +122,7 @@ const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
+(0, rc85_runtime_hardening_1.startRc85HeapMonitor)(console); // RC85_HEAP_MONITOR_START
 const featureFlags = require('./services/feature-flags');
 const { beginSafetyCycle, markSafetyModuleStarted, markSafetyModuleResult, invalidateSafetyEnvelope, } = require('./services/safety-envelope');
 const SAFETY_CRITICAL_MODULES = new Set([
@@ -188,6 +193,7 @@ class ModuleManager {
         // dessen States und Datenpunkt-Mappings initialisiert wurden. Der Lifecycle
         // wird deshalb pro Modulzeile nachgefuehrt und bei Bedarf lazy gestartet.
         this._moduleInitRetryMs = 30000;
+        this._moduleErrorLogAt = new Map();
         // Last tick diagnostics (always captured, even if diagnostics are disabled)
         /**
          * @type {{
@@ -806,8 +812,32 @@ class ModuleManager {
             let ok = true;
             let errMsg = '';
             markSafetyModuleStarted(this.adapter, key, this._tickCount, t1);
+            this.adapter._nwLastEmsModuleStarted = { key, ts: t1, cycleId: this._tickCount };
             try {
-                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick());
+                await this.adapter.setStateAsync('ems.core.lastModuleStarted', { val: key, ack: true });
+            }
+            catch (_stateError) { }
+            try {
+                const configuredTimeoutMs = Number(this.adapter?.config?.diagnostics?.emsModuleTimeoutMs);
+                const timeoutMs = Number.isFinite(configuredTimeoutMs)
+                    ? Math.max(2000, Math.min(60000, configuredTimeoutMs))
+                    : (key === 'chargingManagement' ? 15000 : 10000);
+                // RC85_MODULE_WATCHDOG: a single non-returning module/device call
+                // must not freeze the complete EMS scheduler. The helper also
+                // deduplicates unresolved work so no Promise pile-up can grow the
+                // V8 heap on every one-second cycle.
+                const isolated = await (0, rc85_runtime_hardening_1.rc85RunIsolatedResult)(`ems-module:${key}`, timeoutMs, () => withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick()), this.adapter?.log || console);
+                if (!isolated.ok) {
+                    const prefix = isolated.timedOut
+                        ? 'module-timeout'
+                        : (isolated.skipped ? 'module-still-in-flight' : 'module-error');
+                    throw new Error(`${prefix}:${key}:${isolated.error?.message || 'unknown'}`);
+                }
+                this.adapter._nwLastEmsModuleCompleted = { key, ts: Date.now(), cycleId: this._tickCount };
+                try {
+                    await this.adapter.setStateAsync('ems.core.lastModuleCompleted', { val: key, ack: true });
+                }
+                catch (_stateError) { }
             }
             catch (e) {
                 ok = false;
@@ -820,7 +850,23 @@ class ModuleManager {
                     criticalFaultRaised = true;
                     invalidateSafetyEnvelope(this.adapter, `critical-module-tick-failed:${key}`, { generation: this._tickCount, emergencyStop: true });
                 }
-                this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
+                const errorSignature = `${key}:${errMsg}`.slice(0, 240);
+                const lastErrorLogAt = this._moduleErrorLogAt.get(errorSignature) || 0;
+                const nowError = Date.now();
+                if (nowError - lastErrorLogAt >= 60000) {
+                    this._moduleErrorLogAt.set(errorSignature, nowError);
+                    while (this._moduleErrorLogAt.size > 128) {
+                        const oldest = this._moduleErrorLogAt.keys().next().value;
+                        if (!oldest)
+                            break;
+                        this._moduleErrorLogAt.delete(oldest);
+                    }
+                    this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
+                }
+                try {
+                    await this.adapter.setStateAsync('ems.core.lastModuleTimeout', { val: `${key}: ${errMsg}`.slice(0, 500), ack: true });
+                }
+                catch (_stateError) { }
             }
             markSafetyModuleResult(this.adapter, key, ok, errMsg, this._tickCount, Date.now());
             if (ok && SAFETY_CRITICAL_MODULES.has(key) && this.adapter._nwSafetyCriticalFaults[key]) {

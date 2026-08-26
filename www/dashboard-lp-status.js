@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dashboard-lp-status.ts
- * Quell-Hash: sha256:4188efa4d8ebccb3e05385b1e8e5b51a92033911192f2812a1b685ffa291d307
+ * Quell-Hash: sha256:db076bc5ba5b080cb4dce02a0b6a6fd85c5ca94cd8b9885804eeb25b4d5148be
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -20,14 +20,14 @@
     const TEXT = Object.freeze({
         de: Object.freeze({
             noPoints: 'Keine aktiven Ladepunkte', ready: 'Ladepunkte bereit', systemsNormal: 'Alle Systeme normal',
-            safetySummary: 'EOS Safety aktiv – Ladepunkte prüfen', errorSummary: '{count} Ladepunkt{suffix} mit Fehler',
+            safetySummary: 'EOS Safety überwacht – Ladepunkte prüfen', errorSummary: '{count} Ladepunkt{suffix} mit Fehler',
             warningSummary: '{count} Ladepunkt{suffix} begrenzt oder wartend', chargingSummary: '{charging}/{total} Ladepunkte laden',
             waitingSummary: '{count} Ladepunkt{suffix} wartet', lpReadySummary: 'Ladepunkte bereit',
             charging: 'Lädt · {power}', chargingLimited: 'Lädt begrenzt · {power}', noVehicle: 'Kein Fahrzeug verbunden',
             offline: 'Ladepunkt offline', fault: 'Störung am Ladepunkt', unavailable: 'Ladepunkt nicht verfügbar',
             manualLock: 'Ladestation manuell gesperrt', rfidLock: 'RFID-Freigabe fehlt', controlOff: 'Regelung ausgeschaltet',
             mapping: 'Datenpunktzuordnung unvollständig', noControl: 'Keine schreibbare Leistungsvorgabe',
-            safety: 'EOS Safety aktiv – Laden gestoppt', safetyPower: 'Aktuelle Leistung {power} · Stoppanforderung aktiv',
+            safety: 'EOS Safety überwacht – Laden gestoppt', safetyPower: 'Aktuelle Leistung {power} · Stoppanforderung aktiv',
             starting: 'Ladefreigabe aktiv – Start wird erwartet', paraFallback: '§14a-Verbindung fehlt – lokaler Fallback aktiv',
             pvWait: 'Wartet auf PV-Überschuss', minPvWait: 'Min+PV wartet auf verfügbare Mindestleistung',
             goalWait: 'Zeit-Ziel aktiv – wartet auf Ladefenster', strategyWait: 'Betriebsstrategie wartet',

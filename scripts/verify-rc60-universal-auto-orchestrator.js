@@ -308,7 +308,7 @@ function assertTechnicalStart(result, name, basis = 'currentA') {
 
   const alfenDemand = await tickScenario({ status: 'C1', userMode: 'auto' });
   assert.strictEqual(alfenDemand.demandConfirmed, true);
-  assert(alfenDemand.targetPowerW > 10000, `Alfen C1 full/fair Auto allocation expected, got ${alfenDemand.targetPowerW} W`);
+  assert(alfenDemand.targetPowerW >= 4100 && alfenDemand.targetPowerW <= 4700, `Alfen C1 must enter Auto through the soft first ramp, got ${alfenDemand.targetPowerW} W`);
   assert.strictEqual(alfenDemand.startProbeActive, false);
 
   // NexoWatt OCPP21 event semantics.
@@ -320,7 +320,7 @@ function assertTechnicalStart(result, name, basis = 'currentA') {
   assert.strictEqual(suspendedEv.startEligible, false);
   const suspendedEvse = await tickScenario({ status: 'SuspendedEVSE', telemetryProfile: 'ocpp-1.6-event-driven', userMode: 'auto' });
   assert.strictEqual(suspendedEvse.demandConfirmed, true);
-  assert(suspendedEvse.targetPowerW > 10000, 'SuspendedEVSE must remain a confirmed EMS demand.');
+  assert(suspendedEvse.targetPowerW >= 4100 && suspendedEvse.targetPowerW <= 4700, 'SuspendedEVSE must remain confirmed and enter through the soft Auto ramp.');
 
   // Generic/manual mapping: explicit vehicle contact starts; explicit no-demand blocks.
   assertTechnicalStart(await tickScenario({ status: 'Ready', explicitConnected: true, userMode: 'auto' }), 'Generic explicit vehicle contact');

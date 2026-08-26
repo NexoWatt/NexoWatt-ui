@@ -342,7 +342,7 @@ function buildOverviewContract(adapter: AnyRecord, now = Date.now()): OverviewCo
   let headline = 'EMS arbeitet normal';
   if (!tickKnown) headline = 'EMS-Diagnose bereit – noch kein aktiver Regeltick';
   else if (!emsOnline) headline = 'NexoWatt EMS ist nicht aktuell';
-  else if (status === 'error') headline = (!safetyValid || safetyEmergencyStop || safetyStop) ? 'EOS Safety aktiv – Regelung sicher eingeschränkt' : 'EMS-Störung erkannt';
+  else if (status === 'error') headline = (!safetyValid || safetyEmergencyStop || safetyStop) ? 'EOS Safety überwacht – Regelung sicher eingeschränkt' : 'EMS-Teilstörung erkannt';
   else if (paraFallback) headline = '§14a-Kommunikationsfallback aktiv';
   else if (auditLimiter !== 'none') headline = `${humanizeLimiter(auditLimiter)} begrenzt aktuell die Regelung`;
   else if (chargingActiveCount > 0) headline = `${chargingActiveCount} Ladepunkt${chargingActiveCount === 1 ? '' : 'e'} aktiv`;

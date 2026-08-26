@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f4f04a68546f0c0d918aa805c8b5a84660885a9bea8a2400402a1de6ec54bc30
+ * Original-Hash: b27d78b820b53794522f372095b67888bb669743f1eb916eb5ddaf13c6308f68
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:029a0cc659eff0a74b16f78160195de81f00073427609481e9598424279fa266
+ * Quell-Hash: sha256:94ba4ab395142cd5a18972d0284fc9ab660c93cdf0462cc98c09debe23771159
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -214,6 +214,11 @@ class ThresholdControlModule extends BaseModule {
         if (prev === v)
             return;
         this._stateCache.set(id, v);
+        if (this._stateCache.size > 1000) {
+            const __rc85Oldest = this._stateCache.keys().next().value;
+            if (__rc85Oldest !== undefined)
+                this._stateCache.delete(__rc85Oldest);
+        } // RC85_BOUNDED_COLLECTION
         try {
             await this.adapter.setStateAsync(id, v, true);
         }

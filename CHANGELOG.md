@@ -1,3 +1,18 @@
+## 0.8.211 - 2026-08-25
+
+- RC86 korrigiert Gate A des Lademanagements: Die zugeordnete Netzanschlussleistung bleibt die absolute, reine NVP-Bezugsgrenze. Das 90-%-Soft-Limit ist nur noch der Beginn einer progressiven Rampenbegrenzung und keine starre EVCS-Leistungsobergrenze.
+- Die EVCS-Freigabe verwendet den signierten kanonischen NVP-Snapshot des zentralen EMS. Netzbezug ist positiv, Einspeisung negativ; PV-Erzeugung und bestätigte Speicherentladung erhöhen damit automatisch die lokal mögliche Ladeleistung, ohne die zulässige NVP-Bezugsleistung zu erhöhen oder doppelt gezählt zu werden.
+- Gate A meldet `GRID-IMPORT-LIMIT` nur noch, wenn eine reale Ladeanforderung tatsächlich durch das Netz-Gate reduziert wurde. Bei 0 W Anforderung bleibt der Netzschutz im Zustand „überwacht – kein Eingriff“, Binding = NEIN und die globale Safety-Stufe NORMAL.
+- Ein offline gegangener Ladepunkt wird lokal isoliert. Ohne Fahrzeug und bei bestätigten 0 W beträgt seine Reserve 0 W; bei Ausfall während einer Ladung wird die letzte plausible Leistung beziehungsweise eine konservative Mindestleistung reserviert. Andere Ladepunkte dürfen mit dem verbleibenden sicheren NVP-Budget weiterladen.
+- Gate A, zentrales EMS-Budget, Diagnose und finaler Safety-Writer verwenden denselben NVP- und Hard-Limit-Vertrag. Zusätzliche Diagnosewerte zeigen NVP-Quelle, Hard-Headroom, Soft-Rampenfaktor, Offline-Reserve, EVCS-Anforderung, zulässige Leistung und tatsächlich reduzierte Leistung.
+- Der Auto-Modus ist gegen Preis-/Tarifwechsel, kurze PV-/Budgetschwankungen und Neuverteilungen entprellt. Wirtschaftliche Änderungen werden gehalten und gerampt; nur echte Safety-Gründe wie NVP-Hard-Limit, §14a, Not-Aus, Phasen-/Leitungsschutz oder ein ungültiger zentraler NVP greifen sofort hart ein.
+- EMS-Module und Ladepunkt-Schreibzugriffe sind durch zeitlich begrenzte, deduplizierte Watchdogs isoliert. Ein hängender Gerätezugriff kann nicht mehr unbegrenzt den gesamten Regeltick blockieren; ein veralteter Tick-Lock wird automatisch wiederhergestellt.
+- Langfristig gehaltene Diagnose-, Fehler-, Timeout- und Entscheidungsstrukturen sind begrenzt. Eine gedrosselte Heap-Überwachung dient nur als letzte Notbremse vor einem erneuten V8-Heap-Out-of-Memory-Absturz.
+- Speicher-Netzladen bleibt ausschließlich bei aktivem, frischem und günstigem dynamischen Tarif erlaubt. Die RC83-Objektinitialisierung für `gridConstraints.exportLimit.sinkFieldProtocolJson` und alle Prognose-, 0-Einspeise- und Netzschutzkorrekturen bleiben erhalten.
+- Neuer RC86-Regressionsverbund prüft den 40/36/4-kW-Vertrag, signierten NVP-Headroom, progressive Soft-Zone, demand-basiertes Binding, Offline-Isolation, kanonische NVP-Nutzung, Watchdog-/Auto-Härtung und die unveränderte finale Hard-Safety.
+- Optionale Phasen- und §14a-Caps werden nur ausgewertet, wenn wirklich ein Wert vorhanden ist. Ein nicht gesetztes `null` kann daher nicht mehr über `Number(null) = 0` eine gültige EVCS-Freigabe fälschlich auf 0 W reduzieren.
+- Die weiche Entprellung und Rampenführung gilt ausschließlich für den Auto-/Wirtschaftspfad. Explizites Boost, PV, Min+PV und manuelle Vorgaben werden nicht unbemerkt weich gekappt; die finale Hard-Safety bleibt für alle Modi unverändert wirksam. Eine technische Startprobe erhält nach ihrem eigenen Retry-Cooldown keine zusätzliche versteckte Wirtschaftspause.
+
 ## 0.8.208 - 2026-08-25
 
 - RC83 erlaubt Speicher-Netzladen ausschließlich bei **aktivem, frischem und günstigem** dynamischem Tarif. `neutral`, `teuer`, `unbekannt`, deaktivierter Tarif oder veraltete Preis-/Freigabedaten sperren Netzladen sofort; die normale Eigenverbrauchsoptimierung übernimmt.

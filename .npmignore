@@ -10,3 +10,5 @@ npm-debug.log
 *.zip
 .DS_Store
 .cache/
+RC85_VALIDATION_REPORT.md
+scripts/verify-rc85-stability-contract.cjs

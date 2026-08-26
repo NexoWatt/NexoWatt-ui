@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:3bafd451b4fd989d797ec09fedbc51d7ecd51dfb82093e2919ab36d49000ab28
+ * Quell-Hash: sha256:7d4c718b08535718e1e48a0ed04273afa1f43816076c74f8346707db12e83993
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15124,15 +15124,22 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Gate A – Netz
     const gridBind = b(ctrl.gridCapBinding);
+    const gridSoftFactor = n(ctrl.gridSoftRampFactor);
     const gateANetzCard = mkCard('Gate A – Netz', [
+      { label: 'Status', value: gridBind ? 'begrenzt reale Ladeanforderung' : 'überwacht – kein Eingriff' },
       { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
-      { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
-      { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
-      { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
-      { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'Netzlimit (eff / Hard)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
+      { label: 'Soft-Schwelle (90 %)', value: _fmtW(n(ctrl.gridImportPlanningW)) },
+      { label: 'NVP-Quelle', value: String(ctrl.gridMeasurementSource || '--') },
+      { label: 'Netz signed', value: _fmtW(n(ctrl.gridImportW)) },
+      { label: 'Hard-Headroom signed', value: _fmtW(n(ctrl.gridHardHeadroomRawW)) },
+      { label: 'Soft-Rampenfaktor', value: Number.isFinite(gridSoftFactor) ? `${Math.round(Number(gridSoftFactor) * 100)} %` : '--' },
+      { label: 'Offline-Reserve', value: _fmtW(n(ctrl.gridOfflineReserveW)) },
       { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
-      { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
+      { label: 'EVCS Anforderung', value: _fmtW(n(ctrl.gridDemandRequestedW)) },
+      { label: 'EVCS zulässig', value: _fmtW(n(ctrl.gridAllowedDemandW)) },
       { label: 'EVCS Cap (NVP / Importgrenze)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'Tatsächlich reduziert', value: _fmtW(n(ctrl.gridReductionW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 
@@ -15264,7 +15271,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // First show the central overview, then the gates in alphabetic/functional order.
     if (centralActive) {
-      const cKind = (Number.isFinite(centralPvW) && centralPvW > 0) ? 'ok' : 'warn';
+      const centralBinding = String(ctrl.emsBudgetBinding || '').toLowerCase();
+      const cKind = /nvp_|grid-hard|grid-soft|peak|14a/.test(centralBinding) ? 'warn' : 'ok';
       els.chargingBudget.appendChild(mkCard('Zentrales EMS-Budget', [
         { label: 'Mode', value: String(ctrl.emsBudgetMode || 'central-background') },
         { label: 'PV Budget raw', value: _fmtW(centralPvRawW) },
