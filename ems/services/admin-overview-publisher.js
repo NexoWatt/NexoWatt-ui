@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/admin-overview-publisher.ts
- * Quell-Hash: sha256:a749d423a5117782f5e41c68dbaa6639f416b13d6d0bdcc406df7dcb74bab2b2
+ * Quell-Hash: sha256:cedb794bcc6ac1f264c001ec0ee389db6e580e7b69c6dab77ee680615bf906db
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -16,6 +16,74 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 'use strict';
+const DEFAULT_PUBLISH_INTERVAL_MS = 5000;
+const DEFAULT_STATE_READ_TIMEOUT_MS = 1200;
+const DEFAULT_STATE_WRITE_TIMEOUT_MS = 1200;
+const DEFAULT_OBJECT_TIMEOUT_MS = 2500;
+const DEFAULT_IO_CONCURRENCY = 8;
+// The EMS normally publishes every few seconds. A 30-second window tolerates a
+// short controller or database delay without incorrectly calling the complete
+// adapter "offline". Tick freshness is still exposed separately and becomes a
+// visible warning once this threshold is exceeded.
+const DEFAULT_TICK_FRESH_THRESHOLD_MS = 30000;
+class AdminOverviewTimeoutError extends Error {
+    constructor(label, timeoutMs) {
+        super(`${label} timed out after ${timeoutMs} ms`);
+        this.name = 'AdminOverviewTimeoutError';
+        this.label = label;
+    }
+}
+/**
+ * Waits for an ioBroker operation without allowing a missing callback to block
+ * the read-only overview forever. The underlying Promise is deliberately not
+ * discarded here; the publisher keeps one in-flight operation per label and
+ * therefore never starts an unbounded number of duplicate reads or writes.
+ */
+function waitWithTimeout(operation, timeoutMs, label) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled)
+                return;
+            settled = true;
+            reject(new AdminOverviewTimeoutError(label, timeoutMs));
+        }, Math.max(1, timeoutMs));
+        // Do not `unref()` this short watchdog timer: initialization can run before
+        // the regular adapter interval exists, and the timeout must still settle the
+        // awaited operation deterministically in tests and during early startup.
+        operation.then((value) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        }, (error) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            reject(error);
+        });
+    });
+}
+/**
+ * Runs a bounded number of state/database operations in parallel. This avoids
+ * the former long sequential refresh chain while still protecting the ioBroker
+ * state backend from a burst of dozens of simultaneous requests.
+ */
+async function mapWithConcurrency(items, concurrency, worker) {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.max(1, Math.min(items.length || 1, concurrency)) }, async () => {
+        while (nextIndex < items.length) {
+            const index = nextIndex;
+            nextIndex += 1;
+            results[index] = await worker(items[index]);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
 function finite(value, fallback = 0) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
@@ -294,8 +362,14 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const peakActive = !['', 'off', 'inactive', 'disabled', 'idle', 'none'].includes(peakStatus.toLowerCase());
     const controlStatus = text(firstValue(adapter, ['chargingManagement.control.status'], audit && audit.status), '', 160);
     const controlMode = text(firstValue(adapter, ['chargingManagement.control.mode'], audit && audit.mode), '', 60);
+    const publisherHealth = adapter && adapter._nwAdminOverviewPublisherHealth && typeof adapter._nwAdminOverviewPublisherHealth === 'object'
+        ? adapter._nwAdminOverviewPublisherHealth
+        : {};
+    const tickFreshThresholdMs = Math.max(10000, Math.round(finite(publisherHealth.tickFreshThresholdMs, DEFAULT_TICK_FRESH_THRESHOLD_MS)));
+    const adapterOnline = bool(firstValue(adapter, ['info.connection'], true), true);
     const lastTickTs = Math.max(0, Math.round(finite(firstValue(adapter, [
         'ems.core.lastTickStart',
+        'ems.core.lastTickEnd',
         'chargingManagement.summary.lastUpdate',
         'ems.budget.lastUpdate',
     ], audit && audit.ts), finite(audit && audit.ts, 0))));
@@ -305,7 +379,9 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const tickKnown = lastTickAgeMs !== null;
     // Some installations do not enable every EMS module. Missing tick telemetry is
     // therefore an informational startup/idle state, not an adapter failure.
-    const emsOnline = !tickKnown || (lastTickAgeMs !== null && lastTickAgeMs <= 20000);
+    const tickFresh = !tickKnown || (lastTickAgeMs !== null && lastTickAgeMs <= tickFreshThresholdMs);
+    const publisherStatus = text(publisherHealth.status, 'ok', 40).toLowerCase();
+    const publisherDegraded = !['', 'ok', 'healthy'].includes(publisherStatus);
     const auditLimiterRaw = normalizeLimiter(firstValue(adapter, [
         'chargingManagement.audit.activeLimiter',
     ], audit && audit.activeLimiter));
@@ -336,9 +412,13 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const safetyActive = safetyStage.toUpperCase() !== 'NORMAL'
         || bool(firstValue(adapter, ['chargingManagement.audit.safetyActive'], audit && audit.safetyActive), false);
     const safetyStop = safetyStage.toUpperCase() === 'EOS-SAFETY-STOP';
-    const status = maxSeverity(statusFromAudit({ ...audit, activeLimiter: auditLimiter, safetyStage }, paraFallback, storageWriteOk, forecastFresh), (!safetyValid || safetyEmergencyStop || safetyStop || lastTickError || !emsOnline)
+    const status = maxSeverity(statusFromAudit({ ...audit, activeLimiter: auditLimiter, safetyStage }, paraFallback, storageWriteOk, forecastFresh), (!adapterOnline || !safetyValid || safetyEmergencyStop || safetyStop || lastTickError)
         ? 'error'
-        : (safetyActive ? 'warning' : (!tickKnown ? 'info' : 'ok')), chargingFaultCount > 0 ? 'error' : 'ok', gridHardActive ? 'error' : (gridSoftActive || exportLimitExceeded ? 'warning' : 'ok'));
+        : (!tickFresh || publisherDegraded || safetyActive ? 'warning' : (!tickKnown ? 'info' : 'ok')), 
+    // A single unavailable charge point is a local partial fault. It remains
+    // visible in the charge-point tile but must not label the complete EMS as
+    // offline while NVP monitoring and the remaining devices continue safely.
+    chargingFaultCount > 0 ? 'warning' : 'ok', gridHardActive ? 'error' : (gridSoftActive || exportLimitExceeded ? 'warning' : 'ok'));
     let binding = centralBudgetBinding !== 'none' ? centralBudgetBinding : auditLimiter;
     if (binding === 'none' && gridHardActive)
         binding = 'grid-hard';
@@ -353,10 +433,14 @@ function buildOverviewContract(adapter, now = Date.now()) {
     if (binding === 'none' && storageWriteOk === false)
         binding = 'storage-write';
     let headline = 'EMS arbeitet normal';
-    if (!tickKnown)
+    if (!adapterOnline)
+        headline = 'NexoWatt UI ist offline';
+    else if (!tickKnown)
         headline = 'EMS-Diagnose bereit – noch kein aktiver Regeltick';
-    else if (!emsOnline)
-        headline = 'NexoWatt EMS ist nicht aktuell';
+    else if (!tickFresh)
+        headline = 'Adapter online – EMS-Regelschleife verzögert';
+    else if (publisherDegraded)
+        headline = 'Adapter online – Diagnoseaktualisierung verzögert';
     else if (gridHardActive && safetyValid && !safetyEmergencyStop && !safetyStop)
         headline = 'Netzanschluss-Hardlimit aktiv';
     else if (status === 'error')
@@ -384,6 +468,31 @@ function buildOverviewContract(adapter, now = Date.now()) {
     const adapterVersion = text(adapter && adapter.version, text(adapter && adapter.packageVersion, '', 32), 32)
         || text(adapter && adapter.ioPack && adapter.ioPack.common && adapter.ioPack.common.version, '', 32);
     const port = Math.max(1, Math.round(finite(adapter && adapter.config && adapter.config.port, 8188)));
+    // Keep the health explanation as an explicit decision tree. This is easier
+    // to audit than a deeply nested ternary and documents why "adapter online",
+    // "EMS tick stale" and "diagnostic publisher delayed" are different states.
+    let overviewReason = audit && (audit.status || audit.mode);
+    if (!adapterOnline) {
+        overviewReason = 'Die Adapterinstanz meldet info.connection=false. Diagnose- und Regelwerte sind deshalb nicht als aktuell zu behandeln.';
+    }
+    else if (tickKnown && !tickFresh) {
+        overviewReason = `Der Adapter ist online, aber der letzte EMS-Regelzyklus ist älter als ${Math.round(tickFreshThresholdMs / 1000)} Sekunden.`;
+    }
+    else if (publisherDegraded) {
+        overviewReason = 'Der Adapter und die EMS-Regelung sind erreichbar; mindestens ein rein diagnostischer Lese- oder Schreibzugriff war verzögert.';
+    }
+    else if (!tickKnown) {
+        overviewReason = 'Noch kein Regeltick veröffentlicht; optionale EMS-Module dürfen deaktiviert sein.';
+    }
+    else if (status === 'error') {
+        overviewReason = safetyReason || lastTickError || (audit && (audit.safetyReason || audit.status));
+    }
+    else if (binding !== 'none') {
+        overviewReason = humanizeLimiter(binding);
+    }
+    else if (gridMonitoring) {
+        overviewReason = `NVP-Bezug wird dauerhaft überwacht und liegt aktuell unter Soft- und Hardlimit. ${exportLimitEnabled ? 'Die Einspeisung wird über das konfigurierte Export-Limit überwacht.' : 'Die Einspeisung wird ohne aktiviertes Export-Limit nicht begrenzt.'}`;
+    }
     return {
         schemaVersion: 1,
         generatedAt: now,
@@ -392,24 +501,35 @@ function buildOverviewContract(adapter, now = Date.now()) {
         available: true,
         status,
         headline,
-        reason: text(tickKnown && !emsOnline
-            ? 'Der letzte EMS-Regelzyklus ist älter als 20 Sekunden oder die Adapterinstanz ist offline.'
-            : (!tickKnown
-                ? 'Noch kein Regeltick veröffentlicht; optionale EMS-Module dürfen deaktiviert sein.'
-                : (status === 'error'
-                    ? (safetyReason || lastTickError || (audit && (audit.safetyReason || audit.status)))
-                    : (binding !== 'none'
-                        ? humanizeLimiter(binding)
-                        : (gridMonitoring
-                            ? `NVP-Bezug wird dauerhaft überwacht und liegt aktuell unter Soft- und Hardlimit. ${exportLimitEnabled ? 'Die Einspeisung wird über das konfigurierte Export-Limit überwacht.' : 'Die Einspeisung wird ohne aktiviertes Export-Limit nicht begrenzt.'}`
-                            : (audit && (audit.status || audit.mode)))))), status === 'ok'
+        reason: text(overviewReason, status === 'ok'
             ? (gridMonitoring ? 'NVP-Bezug überwacht – keine aktive Begrenzung.' : 'EMS arbeitet innerhalb aller aktiven Grenzen.')
             : humanizeLimiter(binding), 260),
         binding,
         details: { port, path: '/ems-apps.html?tab=status' },
+        adapter: {
+            online: adapterOnline,
+            connectionState: adapterOnline ? 'online' : 'offline',
+        },
+        publisher: {
+            status: publisherStatus || 'ok',
+            healthy: !publisherDegraded,
+            heartbeatAt: Math.max(0, Math.round(finite(publisherHealth.heartbeatAt, 0))),
+            lastSuccessAt: Math.max(0, Math.round(finite(publisherHealth.lastSuccessAt, 0))),
+            cycleDurationMs: Math.max(0, Math.round(finite(publisherHealth.cycleDurationMs, 0))),
+            readTimeouts: Math.max(0, Math.round(finite(publisherHealth.readTimeouts, 0))),
+            writeTimeouts: Math.max(0, Math.round(finite(publisherHealth.writeTimeouts, 0))),
+            readErrors: Math.max(0, Math.round(finite(publisherHealth.readErrors, 0))),
+            writeErrors: Math.max(0, Math.round(finite(publisherHealth.writeErrors, 0))),
+            pendingOperations: Math.max(0, Math.round(finite(publisherHealth.pendingOperations, 0))),
+            lastError: text(publisherHealth.lastError, '', 220),
+        },
         ems: {
-            active: emsOnline && bool(firstValue(adapter, ['chargingManagement.control.active', 'ems.budget.active'], true), true),
-            online: emsOnline,
+            active: adapterOnline && bool(firstValue(adapter, ['chargingManagement.control.active', 'ems.budget.active'], true), true),
+            online: adapterOnline,
+            tickFresh,
+            tickKnown,
+            tickFreshThresholdMs,
+            health: !adapterOnline ? 'offline' : (tickFresh ? 'ok' : 'tick-stale'),
             mode: controlMode || centralBudgetMode,
             status: controlStatus,
             lastTickTs,
@@ -624,15 +744,30 @@ function normalizeAuditEvent(event) {
     };
 }
 class AdminOverviewPublisher {
-    constructor(adapter) {
+    constructor(adapter, options = {}) {
         this.timer = null;
         this.running = false;
+        this.runningSince = 0;
         this.stopped = false;
         this.lastSignature = '';
         this.lastValues = new Map();
         this.events = [];
         this.maxEvents = 60;
+        this.inFlight = new Map();
+        this.lastSuccessAt = 0;
+        this.lastWarningAt = 0;
+        this.cycleReadTimeouts = 0;
+        this.cycleWriteTimeouts = 0;
+        this.cycleReadErrors = 0;
+        this.cycleWriteErrors = 0;
+        this.cycleLastError = '';
         this.adapter = adapter;
+        this.intervalMs = Math.max(1000, Math.round(finite(options.intervalMs, DEFAULT_PUBLISH_INTERVAL_MS)));
+        this.readTimeoutMs = Math.max(20, Math.round(finite(options.readTimeoutMs, DEFAULT_STATE_READ_TIMEOUT_MS)));
+        this.writeTimeoutMs = Math.max(20, Math.round(finite(options.writeTimeoutMs, DEFAULT_STATE_WRITE_TIMEOUT_MS)));
+        this.objectTimeoutMs = Math.max(50, Math.round(finite(options.objectTimeoutMs, DEFAULT_OBJECT_TIMEOUT_MS)));
+        this.ioConcurrency = Math.max(1, Math.min(16, Math.round(finite(options.ioConcurrency, DEFAULT_IO_CONCURRENCY))));
+        this.tickFreshThresholdMs = Math.max(10000, Math.round(finite(options.tickFreshThresholdMs, DEFAULT_TICK_FRESH_THRESHOLD_MS)));
     }
     async initialize() {
         await this.ensureStates();
@@ -658,8 +793,8 @@ class AdminOverviewPublisher {
         await this.tick('startup');
         const callback = () => { this.tick('timer').catch(() => { }); };
         this.timer = typeof this.adapter._nwSetInterval === 'function'
-            ? this.adapter._nwSetInterval(callback, 5000)
-            : (typeof this.adapter.setInterval === 'function' ? this.adapter.setInterval(callback, 5000) : setInterval(callback, 5000));
+            ? this.adapter._nwSetInterval(callback, this.intervalMs)
+            : (typeof this.adapter.setInterval === 'function' ? this.adapter.setInterval(callback, this.intervalMs) : setInterval(callback, this.intervalMs));
     }
     stop() {
         this.stopped = true;
@@ -675,14 +810,26 @@ class AdminOverviewPublisher {
         }
         catch (_error) { }
         this.timer = null;
+        // In-flight ioBroker Promises cannot always be cancelled. Clearing our
+        // bounded registry removes the publisher's own references during adapter
+        // shutdown; no follow-up operation is started because `stopped` is true.
+        this.inFlight.clear();
     }
-    async tick(_reason = 'manual') {
+    async tick(reason = 'manual') {
         if (this.stopped || this.running || this.adapter._nwShuttingDown)
             return;
         this.running = true;
+        this.runningSince = Date.now();
+        this.resetCycleDiagnostics();
         try {
+            // `updatedAt` acts as the lightweight publisher heartbeat consumed by
+            // older EOS-Admin versions. It is intentionally written before the more
+            // expensive state refresh, so a delayed diagnostic read can never be
+            // mistaken for an offline adapter.
+            await this.setIfChanged('info.adminOverview.updatedAt', this.runningSince, true);
             await this.primeVolatileStates();
             const now = Date.now();
+            this.updateInternalHealth(now, this.cycleReadTimeouts || this.cycleReadErrors ? 'degraded' : 'ok');
             const contract = buildOverviewContract(this.adapter, now);
             this.ingestAuditEvents();
             const signature = eventSignature(contract);
@@ -691,18 +838,149 @@ class AdminOverviewPublisher {
                 this.lastSignature = signature;
             }
             this.dedupeAndTrimEvents();
-            await this.publish(contract);
+            const published = await this.publish(contract);
+            if (published)
+                this.lastSuccessAt = Date.now();
+        }
+        catch (error) {
+            this.cycleLastError = text(error && error.message, String(error || 'unknown overview error'), 220);
+            this.noteCycleFailure('write', false, this.cycleLastError);
         }
         finally {
+            const finishedAt = Date.now();
+            const cycleDurationMs = Math.max(0, finishedAt - this.runningSince);
+            const healthStatus = this.cycleReadTimeouts || this.cycleWriteTimeouts || this.cycleReadErrors || this.cycleWriteErrors
+                ? 'degraded'
+                : 'ok';
+            this.updateInternalHealth(finishedAt, healthStatus, cycleDurationMs);
+            await this.publishHealthStates(finishedAt, healthStatus, cycleDurationMs, reason);
+            this.logCycleDegradation(finishedAt, healthStatus, reason);
             this.running = false;
+            this.runningSince = 0;
         }
     }
+    resetCycleDiagnostics() {
+        this.cycleReadTimeouts = 0;
+        this.cycleWriteTimeouts = 0;
+        this.cycleReadErrors = 0;
+        this.cycleWriteErrors = 0;
+        this.cycleLastError = '';
+    }
+    noteCycleFailure(kind, timedOut, message) {
+        if (kind === 'read') {
+            if (timedOut)
+                this.cycleReadTimeouts += 1;
+            else
+                this.cycleReadErrors += 1;
+        }
+        else if (timedOut)
+            this.cycleWriteTimeouts += 1;
+        else
+            this.cycleWriteErrors += 1;
+        if (!this.cycleLastError)
+            this.cycleLastError = text(message, 'diagnostic I/O failed', 220);
+    }
+    updateInternalHealth(now, status, cycleDurationMs = 0) {
+        // This object is local process telemetry only. `buildOverviewContract` reads
+        // it synchronously, so no additional database request is needed merely to
+        // describe the publisher that is already running inside this adapter.
+        this.adapter._nwAdminOverviewPublisherHealth = {
+            status,
+            heartbeatAt: now,
+            lastSuccessAt: this.lastSuccessAt,
+            cycleDurationMs,
+            readTimeouts: this.cycleReadTimeouts,
+            writeTimeouts: this.cycleWriteTimeouts,
+            readErrors: this.cycleReadErrors,
+            writeErrors: this.cycleWriteErrors,
+            pendingOperations: this.inFlight.size,
+            lastError: this.cycleLastError,
+            tickFreshThresholdMs: this.tickFreshThresholdMs,
+        };
+    }
+    logCycleDegradation(now, status, reason) {
+        if (status === 'ok' || now - this.lastWarningAt < 60000)
+            return;
+        this.lastWarningAt = now;
+        try {
+            this.adapter.log?.warn?.(`[admin-overview] Diagnosezyklus ${reason} verzögert: `
+                + `readTimeouts=${this.cycleReadTimeouts}, writeTimeouts=${this.cycleWriteTimeouts}, `
+                + `readErrors=${this.cycleReadErrors}, writeErrors=${this.cycleWriteErrors}, `
+                + `pending=${this.inFlight.size}${this.cycleLastError ? `, last=${this.cycleLastError}` : ''}`);
+        }
+        catch (_error) { }
+    }
+    async runOperation(kind, label, timeoutMs, task) {
+        const operationKey = `${kind}:${label}`;
+        let operation = this.inFlight.get(operationKey);
+        const reused = Boolean(operation);
+        if (!operation) {
+            operation = Promise.resolve().then(task);
+            this.inFlight.set(operationKey, operation);
+            const cleanup = () => {
+                if (this.inFlight.get(operationKey) === operation)
+                    this.inFlight.delete(operationKey);
+            };
+            // Both fulfillment and rejection must release the bounded registry. The
+            // second callback also consumes a late rejection after our timeout, so it
+            // can never surface as an unhandled Promise rejection.
+            operation.then(cleanup, cleanup);
+        }
+        try {
+            const value = await waitWithTimeout(operation, timeoutMs, operationKey);
+            return { ok: true, value, timedOut: false, reused, error: '' };
+        }
+        catch (error) {
+            const timedOut = error instanceof AdminOverviewTimeoutError;
+            const message = text(error && error.message, String(error || `${operationKey} failed`), 220);
+            this.noteCycleFailure(kind, timedOut, message);
+            return { ok: false, timedOut, reused, error: message };
+        }
+    }
+    async readState(id) {
+        return this.runOperation('read', `state:${id}`, this.readTimeoutMs, async () => this.adapter.getStateAsync(id));
+    }
+    async writeState(id, value) {
+        return this.runOperation('write', `state:${id}`, this.writeTimeoutMs, async () => (this.adapter.setStateAsync(id, { val: value, ack: true })));
+    }
+    async ensureObject(id, object) {
+        const result = await this.runOperation('write', `object:${id}`, this.objectTimeoutMs, async () => this.adapter.setObjectNotExistsAsync(id, object));
+        if (!result.ok)
+            throw new Error(`Admin overview object ${id} could not be ensured: ${result.error}`);
+    }
+    async publishHealthStates(now, status, cycleDurationMs, reason) {
+        const lastTickTs = Math.max(0, Math.round(finite(firstValue(this.adapter, [
+            // Prefer the canonical EMS timestamps. `lastTickEnd` is important on
+            // installations where the start timestamp is not mirrored every cycle.
+            'ems.core.lastTickStart',
+            'ems.core.lastTickEnd',
+            'chargingManagement.summary.lastUpdate',
+            'ems.budget.lastUpdate',
+        ], 0), 0)));
+        const tickAgeMs = lastTickTs > 0 ? Math.max(0, now - lastTickTs) : 0;
+        const adapterOnline = bool(firstValue(this.adapter, ['info.connection'], true), true);
+        const values = [
+            ['publisherHeartbeatAt', now, true],
+            ['publisherLastSuccessAt', this.lastSuccessAt, true],
+            ['publisherStatus', status],
+            ['publisherCycleDurationMs', cycleDurationMs, true],
+            ['publisherReadTimeoutCount', this.cycleReadTimeouts, true],
+            ['publisherWriteTimeoutCount', this.cycleWriteTimeouts, true],
+            ['publisherPendingOperationCount', this.inFlight.size, true],
+            ['publisherLastError', this.cycleLastError],
+            ['publisherLastReason', text(reason, 'timer', 40)],
+            ['adapterOnline', adapterOnline, true],
+            ['emsTickFresh', lastTickTs <= 0 || tickAgeMs <= this.tickFreshThresholdMs, true],
+            ['emsTickAgeMs', tickAgeMs, true],
+        ];
+        await mapWithConcurrency(values, Math.min(4, this.ioConcurrency), async ([id, value, force]) => (this.setIfChanged(`info.adminOverview.${id}`, value, Boolean(force))));
+    }
     async ensureStates() {
-        await this.adapter.setObjectNotExistsAsync('info.adminOverview', {
+        await this.ensureObject('info.adminOverview', {
             type: 'channel', common: { name: 'NexoWatt EMS Live-Diagnose für EOS Admin' }, native: {},
         });
         const ensure = async (id, name, type, role, def) => {
-            await this.adapter.setObjectNotExistsAsync(`info.adminOverview.${id}`, {
+            await this.ensureObject(`info.adminOverview.${id}`, {
                 type: 'state',
                 common: { name, type, role, read: true, write: false, def },
                 native: {},
@@ -718,10 +996,28 @@ class AdminOverviewPublisher {
         await ensure('summaryJson', 'EMS-Übersicht kompakt (JSON)', 'string', 'json', '{}');
         await ensure('eventsJson', 'Letzte EMS-Entscheidungen (JSON)', 'string', 'json', '[]');
         await ensure('eventCount', 'Anzahl EMS-Entscheidungen im Ringpuffer', 'number', 'value', 0);
+        // Separate health states keep adapter connectivity, EMS tick freshness and
+        // the read-only publisher lifecycle distinguishable for current and future
+        // EOS-Admin versions. None of these states participates in EMS arbitration.
+        await ensure('adapterOnline', 'Adapter/Web-API online', 'boolean', 'indicator.connected', false);
+        await ensure('emsTickFresh', 'EMS-Regeltick aktuell', 'boolean', 'indicator', false);
+        await ensure('emsTickAgeMs', 'Alter des letzten EMS-Regelticks', 'number', 'value.interval', 0);
+        await ensure('publisherHeartbeatAt', 'Diagnose-Publisher Heartbeat', 'number', 'value.time', 0);
+        await ensure('publisherLastSuccessAt', 'Letzte vollständig veröffentlichte Diagnose', 'number', 'value.time', 0);
+        await ensure('publisherStatus', 'Status des Diagnose-Publishers', 'string', 'text', 'initializing');
+        await ensure('publisherCycleDurationMs', 'Laufzeit des Diagnosezyklus', 'number', 'value.interval', 0);
+        await ensure('publisherReadTimeoutCount', 'Diagnose-Lesezeitüberschreitungen im letzten Zyklus', 'number', 'value', 0);
+        await ensure('publisherWriteTimeoutCount', 'Diagnose-Schreibzeitüberschreitungen im letzten Zyklus', 'number', 'value', 0);
+        await ensure('publisherPendingOperationCount', 'Noch offene Diagnoseoperationen', 'number', 'value', 0);
+        await ensure('publisherLastError', 'Letzter Diagnosefehler', 'string', 'text', '');
+        await ensure('publisherLastReason', 'Auslöser des letzten Diagnosezyklus', 'string', 'text', 'startup');
     }
     async restoreEvents() {
         try {
-            const state = await this.adapter.getStateAsync('info.adminOverview.eventsJson');
+            const read = await this.readState('info.adminOverview.eventsJson');
+            if (!read.ok)
+                return;
+            const state = read.value;
             const parsed = parseJson(state && state.val, []);
             if (Array.isArray(parsed)) {
                 this.events = parsed.filter((event) => event && typeof event === 'object')
@@ -755,7 +1051,7 @@ class AdminOverviewPublisher {
             'chargingManagement.wallboxCount', 'chargingManagement.summary.totalPowerW', 'chargingManagement.summary.totalTargetPowerW', 'chargingManagement.summary.totalReservedPowerW', 'chargingManagement.summary.lastUpdate',
             'chargingManagement.control.active', 'chargingManagement.control.status', 'chargingManagement.control.mode', 'chargingManagement.control.budgetW', 'chargingManagement.control.usedW', 'chargingManagement.control.remainingW',
             'chargingManagement.control.gridCapBinding', 'chargingManagement.control.phaseCapBinding', 'chargingManagement.control.para14aActive', 'chargingManagement.control.para14aBinding',
-            'ems.core.lastTickStart', 'ems.core.lastTickDurationMs', 'ems.core.lastTickError',
+            'info.connection', 'ems.core.lastTickStart', 'ems.core.lastTickEnd', 'ems.core.lastTickDurationMs', 'ems.core.lastTickError',
             'ems.safety.valid', 'ems.safety.emergencyStop', 'ems.safety.reason', 'ems.safety.gridHeadroomW', 'ems.safety.evcsCapW',
             'ems.budget.active', 'ems.budget.mode', 'ems.budget.source', 'ems.budget.lastUpdate', 'ems.budget.totalBudgetW', 'ems.budget.remainingTotalW', 'ems.budget.flexUsedW',
             'ems.budget.binding', 'ems.budget.gridW', 'ems.budget.gridImportW', 'ems.budget.gridExportW', 'ems.budget.pvPowerW',
@@ -769,20 +1065,19 @@ class AdminOverviewPublisher {
             'forecast.effective.source', 'forecast.effective.fresh', 'forecast.effective.powerNowW', 'forecast.effective.energy6hWh', 'forecast.effective.energy12hWh', 'forecast.effective.energy24hWh', 'forecast.effective.error',
             'forecast.pv.source', 'forecast.pv.valid', 'storageSoc', 'storagePower',
         ];
-        for (const key of keys)
-            await this.prime(key);
+        await mapWithConcurrency(keys, this.ioConcurrency, async (key) => this.prime(key));
     }
     async primeVolatileStates() {
-        for (const key of [
+        const keys = [
             'chargingManagement.audit.snapshotJson', 'chargingManagement.audit.recentEventsJson',
-            'ems.core.lastTickStart', 'ems.core.lastTickDurationMs', 'ems.core.lastTickError',
+            'info.connection', 'ems.core.lastTickStart', 'ems.core.lastTickEnd', 'ems.core.lastTickDurationMs', 'ems.core.lastTickError',
             'ems.safety.valid', 'ems.safety.emergencyStop', 'ems.safety.reason',
             'ems.budget.totalBudgetW', 'ems.budget.remainingTotalW', 'ems.budget.flexUsedW', 'ems.budget.binding', 'ems.budget.remainingPvW',
             'gridConstraints.exportLimit.enabled', 'gridConstraints.exportLimit.diagnosticOnly', 'gridConstraints.exportLimit.exportOverLimitW', 'gridConstraints.exportLimit.statusLabel',
             'speicher.regelung.sollW', 'speicher.regelung.acceptedSollW', 'speicher.regelung.batteryPowerFeedbackMeasuredW',
             'forecast.effective.source', 'forecast.effective.fresh', 'forecast.effective.powerNowW',
-        ])
-            await this.prime(key, 7000);
+        ];
+        await mapWithConcurrency(keys, this.ioConcurrency, async (key) => this.prime(key, 7000));
     }
     async prime(key, maxAgeMs = Number.POSITIVE_INFINITY) {
         try {
@@ -790,7 +1085,10 @@ class AdminOverviewPublisher {
             const ageMs = cached && Number.isFinite(Number(cached.ts)) ? Date.now() - Number(cached.ts) : Number.POSITIVE_INFINITY;
             if (cached && ageMs <= maxAgeMs)
                 return;
-            const state = await this.adapter.getStateAsync(key);
+            const read = await this.readState(key);
+            if (!read.ok)
+                return;
+            const state = read.value;
             if (state && state.val !== undefined) {
                 if (typeof this.adapter.updateValue === 'function')
                     this.adapter.updateValue(key, state.val, state.ts || Date.now());
@@ -838,25 +1136,36 @@ class AdminOverviewPublisher {
             headline: contract.headline,
             reason: contract.reason,
             binding: contract.binding,
-            updatedAt: contract.generatedAt,
             summaryJson: JSON.stringify(contract),
             eventsJson: JSON.stringify(this.events.slice(-8).reverse()),
             eventCount: this.events.length,
         };
-        for (const [key, value] of Object.entries(values))
-            await this.setIfChanged(`info.adminOverview.${key}`, value);
-    }
-    async setIfChanged(id, value) {
-        if (this.stopped || this.adapter._nwShuttingDown)
-            return;
-        const signature = typeof value === 'string' ? value : JSON.stringify(value);
-        if (id !== 'info.adminOverview.updatedAt' && this.lastValues.get(id) === signature)
-            return;
-        this.lastValues.set(id, signature);
-        try {
-            await this.adapter.setStateAsync(id, { val: value, ack: true });
+        const entries = Object.entries(values);
+        const results = await mapWithConcurrency(entries, Math.min(4, this.ioConcurrency), async ([key, value]) => ({
+            key,
+            ok: await this.setIfChanged(`info.adminOverview.${key}`, value),
+        }));
+        // `summaryJson` is the transactional payload used by EOS Admin. Only after
+        // it was accepted do we mark the cycle as a complete snapshot. The separate
+        // `updatedAt` heartbeat has already proven publisher liveness at cycle start.
+        const summaryWritten = results.some((entry) => entry.key === 'summaryJson' && entry.ok);
+        if (summaryWritten) {
+            await this.setIfChanged('info.adminOverview.publisherLastSuccessAt', Date.now(), true);
         }
-        catch (_error) { }
+        return summaryWritten;
+    }
+    async setIfChanged(id, value, force = false) {
+        if (this.stopped || this.adapter._nwShuttingDown)
+            return false;
+        const signature = typeof value === 'string' ? value : JSON.stringify(value);
+        if (!force && this.lastValues.get(id) === signature)
+            return true;
+        const write = await this.writeState(id, value);
+        // Cache the signature only after a confirmed write. A timed-out write must
+        // be retried later instead of being mistaken for an already published value.
+        if (write.ok)
+            this.lastValues.set(id, signature);
+        return write.ok;
     }
 }
 module.exports = {

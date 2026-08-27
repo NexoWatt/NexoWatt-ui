@@ -1,3 +1,13 @@
+## 0.8.214 - 2026-08-27
+
+- RC89 trennt in der EOS-Admin-Diagnose Adapter-Erreichbarkeit, EMS-Regeltick-Aktualität und den rein lesenden Diagnose-Publisher. Ein verzögerter Diagnose-Snapshot kann dadurch nicht mehr fälschlich den vollständigen NexoWatt-UI-Adapter als „Offline / veraltet“ darstellen.
+- `info.adminOverview.updatedAt` wird als leichter Kompatibilitäts-Heartbeat bereits am Beginn jedes Diagnosezyklus aktualisiert. Bestehende EOS-Admin-Versionen erhalten damit weiterhin ungefähr alle fünf Sekunden ein Lebenszeichen, bevor umfangreichere Diagnoseabfragen stattfinden.
+- Sämtliche State-Lese-, State-Schreib- und Objektoperationen des Admin-Overview-Publishers besitzen feste Timeouts und begrenzte Parallelität. Eine hängende Diagnoseoperation wird je Kennung quarantänisiert und nicht in jedem Zyklus erneut parallel gestartet.
+- Neue read-only Gesundheitsstates zeigen `adapterOnline`, `emsTickFresh`, `emsTickAgeMs`, Publisher-Heartbeat, letzten vollständigen Erfolg, Zyklusdauer, Timeouts, offene Operationen und letzten Diagnosefehler getrennt an.
+- Bei aktueller Adapterverbindung, aber veraltetem Regeltick lautet der Zustand „Adapter online – EMS-Regelschleife verzögert“. Nur `info.connection=false` wird als tatsächlicher Adapter-Offlinezustand gewertet.
+- Nicht offensichtliche Timeout-, Fallback-, Kompatibilitäts- und Gesundheitslogik ist in der kanonischen TypeScript-Quelle ausführlich kommentiert. Der Kommentarstandard wurde um Sicherheitsinvarianten, Vorzeichenverträge und die Synchronisierung generierter Runtimes ergänzt.
+- RC89 verändert keine NVP-, Lade-, Speicher-, Tarif-, §14a-, PV-, Export-, 0-Einspeise- oder Safety-Entscheidung. Die SSE-/Heap-Härtung aus RC88 bleibt unverändert erhalten.
+
 ## 0.8.213 - 2026-08-26
 
 - RC88 schließt die bei der Analyse des nach mehreren Stunden auftretenden V8-Heap-Out-of-Memory-Absturzes identifizierten unbegrenzten Speicherhaltepfade im LIVE- und Watchdog-Lifecycle. Server-Sent-Events berücksichtigen jetzt HTTP-Backpressure, begrenzen pro Verbindung den Schreibpuffer und schließen halb offene beziehungsweise nicht mehr lesende Browser-/VPN-Verbindungen nach einer festen Frist.

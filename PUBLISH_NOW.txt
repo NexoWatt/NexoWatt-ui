@@ -1,12 +1,22 @@
-NexoWatt EOS 0.8.208 RC83 – Speicher-Netzladen nur bei günstigem Tarif / Log-Spam-Fix
+NexoWatt UI 0.8.214 RC89 – Admin-Overview Health Recovery
 
 Veröffentlichen aus einem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.208 auf npm noch frei ist,
+- ob Version 0.8.214 auf npm noch frei ist,
 - ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
 - ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
 
-RC83 erlaubt Speicher-Netzladen nur bei aktivem, frischem und günstigem dynamischen Tarif. Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht. Neutral, teuer, unbekannt, Tarif aus oder stale Preis führen sofort zur Eigenverbrauchsoptimierung. Auch gehaltene alte Tarif-/Reserve-Sollwerte werden unmittelbar vor dem Hardware-Write gestoppt. Andere Ladepfade bleiben auf lokalen PV-Überschuss begrenzt; validierter PV-/Last-Feed-forward erhält die Eigenverbrauchsladung bei träger Batterie-Telemetrie. Das fehlende Objekt gridConstraints.exportLimit.sinkFieldProtocolJson wird vor dem ersten Write angelegt; die wiederkehrende ioBroker-Warnflut endet nach dem Adapterneustart.
+RC89 korrigiert ausschließlich die read-only EMS-Diagnosekette:
+- Adapter-Erreichbarkeit, EMS-Regeltick und Diagnose-Publisher werden getrennt bewertet.
+- Ein leichter Heartbeat hält bestehende EOS-Admin-Versionen aktuell.
+- Diagnose-Lese-/Schreibzugriffe besitzen Timeouts, begrenzte Parallelität und Duplicate-Quarantäne.
+- Bei aktuellem Adapter, aber verzögertem Tick beziehungsweise Publisher erscheint eine eindeutige Warnung statt eines falschen Adapter-Offlinezustands.
+- NVP-, Lade-, Speicher-, Tarif-, §14a-, Forecast-, Export-, 0-Einspeise- und Safety-Regelungen bleiben unverändert.
+
+Details:
+- docs/RC89_ADMIN_OVERVIEW_HEALTH_RECOVERY_DE.md
+- RC89_VALIDATION_REPORT.md
+- RC89_FELDTEST_CHECKLISTE_DE.md

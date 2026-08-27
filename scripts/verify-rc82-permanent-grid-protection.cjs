@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC82 / 0.8.213
+ * RC82 / 0.8.214
  * Permanenter Netzlimits-Kernschutz:
  * - Netzlimits ist in Home und Pro verfügbar und als Pflicht-App normalisiert.
  * - Legacy/AppCenter/Backup-Flags können den Import-/NVP-Schutz nicht abschalten.
@@ -32,8 +32,8 @@ function sliceBetween(source, startMarker, endMarker) {
 (() => {
   const pkg = readJson('package.json');
   const io = readJson('io-package.json');
-  assert.strictEqual(pkg.version, '0.8.213');
-  assert.strictEqual(io.common.version, '0.8.213');
+  assert.strictEqual(pkg.version, '0.8.214');
+  assert.strictEqual(io.common.version, '0.8.214');
 
   // 1) Netzschutz gehört zu Home und Pro. Die sichtbare Featurematrix bleibt
   //    lizenzgebunden, der eigentliche Sicherheitskern wird davon aber nicht abgeschaltet.

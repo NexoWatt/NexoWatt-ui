@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC81 / 0.8.213
+ * RC81 / 0.8.214
  * Single Source of Truth fuer Netzanschlussleistung und NVP:
  * - installerConfig.gridConnectionPower aus Zuordnung -> Allgemein = statisches Hard-Limit
  * - datapoints.gridPointPower aus Zuordnung -> Allgemein = alleinige signierte NVP-Messung
@@ -62,8 +62,8 @@ async function runPlanning({ connectionW, legacyHardW, peakLegacyW, rlmEnabled =
 (async () => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.213');
-  assert.strictEqual(io.common.version, '0.8.213');
+  assert.strictEqual(pkg.version, '0.8.214');
+  assert.strictEqual(io.common.version, '0.8.214');
 
   // 1) Zuordnung gewinnt gegen alte Netzlimits- und Peak-Shaving-Overrides.
   const assignment = await runPlanning({

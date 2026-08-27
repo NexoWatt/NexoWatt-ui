@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * RC79/RC80 regression / 0.8.213
+ * RC79/RC80 regression / 0.8.214
  * - zweistufiges Import Soft-/Hard-Limit mit signiertem NVP
  * - 0-Einspeise-PV-Feed-forward nach realer lokaler Aufnahme + Speicherladung
  * - keine PV-Abregelung bei gleichzeitiger Speicherentladung
@@ -62,8 +62,8 @@ function makeGridRuntime({ pvActualW = 20000, initialLimitW = null } = {}) {
 (async () => {
   const pkg = JSON.parse(read('package.json'));
   const io = JSON.parse(read('io-package.json'));
-  assert.strictEqual(pkg.version, '0.8.213');
-  assert.strictEqual(io.common.version, '0.8.213');
+  assert.strictEqual(pkg.version, '0.8.214');
+  assert.strictEqual(io.common.version, '0.8.214');
 
   // 1) RC80-Korrektur: immer exakt 10 %, ohne Mindest-/Maximalwert.
   assert.strictEqual(resolveAutoReserveW(5000, 0), 500);

@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.213",
+  "version": "0.8.214",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -292,6 +292,11 @@
       "path": "docs/RC88_SSE_BACKPRESSURE_MEMORY_STABILITY_DE.md",
       "size": 6129,
       "sha256": "67231085e710ab09c3b5d4a1ad482570152521fb2479da1348fc34e59f10a628"
+    },
+    {
+      "path": "docs/RC89_ADMIN_OVERVIEW_HEALTH_RECOVERY_DE.md",
+      "size": 3939,
+      "sha256": "c224d4a728585603fda2d8e46f13f62843f6180f81f5f76054e0aba49417aa53"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -585,8 +590,8 @@
     },
     {
       "path": "ems/services/admin-overview-publisher.js",
-      "size": 47059,
-      "sha256": "ba7c68b0bc2fb7e1146055395a0338c85b68ffa1d897c2bd70e1f5c18c398df8"
+      "size": 64174,
+      "sha256": "045caf47e2416e35abdd46972846765d83d6da397d563534ed2337ae101fdcf9"
     },
     {
       "path": "ems/services/charging-management-audit.js",
@@ -741,7 +746,7 @@
     {
       "path": "io-package.json",
       "size": 24405,
-      "sha256": "12e06c5749ac2e0f32ba0b6705fe53904ad67b514fe6d9725b71cd4fd76da854"
+      "sha256": "c5e7ac58a051c6d93573c74e1e790706c83443288a98694d6bcec5307d87eabf"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -1036,32 +1041,37 @@
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
       "size": 7222,
-      "sha256": "a07d1bf5d7c58cae31e6dad4727f44c3c912dd167cb69b982567853f81bb258e"
+      "sha256": "a646cd008ba6bce4a2f9a6c281db9ade9f61392bf44f7d68e5bc61ebdc9b0c33"
     },
     {
       "path": "scripts/verify-rc82-permanent-grid-protection.cjs",
       "size": 10585,
-      "sha256": "27a21b2ac9885c26183ccf177cf5b62d642e6186f82dbf4d71ed7650f4c5debb"
+      "sha256": "194157164fed80a3ac0443625797855ca977507c177387f59fc04cf3e86f7e7f"
     },
     {
       "path": "scripts/verify-rc83-storage-cheap-only-log-object.cjs",
       "size": 13315,
-      "sha256": "98ecc621f6a51ffde1c07497e581ef6c9c6b3c0a71f79a7aeaefda3cd721db3b"
+      "sha256": "f635400addcb01332205002157ed4a646c1b4b543e23c674c9dc9db26c0e7e86"
     },
     {
       "path": "scripts/verify-rc86-gate-a-demand-binding.cjs",
       "size": 7237,
-      "sha256": "a18aa094ba534b8b6e4ef6933a1851d5b99ae98c6a61136b250d715c776f6a98"
+      "sha256": "74f560b0695721778916aaa2b48e5cafa131a0de2e89d90669aa53e2f596a4d3"
     },
     {
       "path": "scripts/verify-rc87-monitoring-display-only.cjs",
       "size": 10014,
-      "sha256": "e09b8543acbd45dc79e7848e779a9624af9eacb2ba367ff8f1d527092f30d135"
+      "sha256": "55cca1637540fffc91d7bb9544f71f61927bca85420400f744075e2ea7131ea4"
     },
     {
       "path": "scripts/verify-rc88-memory-stability.cjs",
       "size": 11410,
-      "sha256": "11ddde192465771834ec969420d570d9d1ec57f8612a67fb964c6b39e0d1bad3"
+      "sha256": "5254835bdd905003fdfcd819ca23d6ee9be072439312eef717f3c25525332300"
+    },
+    {
+      "path": "scripts/verify-rc89-admin-overview-health.cjs",
+      "size": 8934,
+      "sha256": "a2591e2155d236358bd05a6de777a4847ec9fef0a86c83e9a96581e2458d2059"
     },
     {
       "path": "www/admin-guard.js",
@@ -1341,7 +1351,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "4e6c17b4d8e57ce68706d8e83a6553f69bb4bbbb98f9aecc3b424bdd40d7b016"
+      "sha256": "5b259ba48c286542708fc24537a3a307742968eb7abeabd78de277b6bc5108ee"
     },
     {
       "path": "www/mesh-microgrid.html",
