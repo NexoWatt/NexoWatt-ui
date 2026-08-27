@@ -746,7 +746,7 @@
     {
       "path": "io-package.json",
       "size": 24405,
-      "sha256": "c5e7ac58a051c6d93573c74e1e790706c83443288a98694d6bcec5307d87eabf"
+      "sha256": "059d635b0bbc8b82f47fbf2d7dc31046a798dd01c435b11d058d35863db86255"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -1000,8 +1000,8 @@
     },
     {
       "path": "main.js",
-      "size": 1734269,
-      "sha256": "448f74d943a03e1e5ec7acaa29b29aa55aa6d3251dd19a1cef92f98159b92dce"
+      "size": 1736561,
+      "sha256": "68a0f8a1ec96cba9fd9c67a7ce8a0c60ab57f199000a16efd88034d5b128f24b"
     },
     {
       "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
@@ -1041,37 +1041,37 @@
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
       "size": 7222,
-      "sha256": "a646cd008ba6bce4a2f9a6c281db9ade9f61392bf44f7d68e5bc61ebdc9b0c33"
+      "sha256": "45e5286c56cea22bb33d135bb174d6ad46bdffc86b1284012d541fbaeb81fdc1"
     },
     {
       "path": "scripts/verify-rc82-permanent-grid-protection.cjs",
       "size": 10585,
-      "sha256": "194157164fed80a3ac0443625797855ca977507c177387f59fc04cf3e86f7e7f"
+      "sha256": "d1446f1ed09cdb204f6663db01753928f21ea03c08ceac265c89e9b18e90f234"
     },
     {
       "path": "scripts/verify-rc83-storage-cheap-only-log-object.cjs",
       "size": 13315,
-      "sha256": "f635400addcb01332205002157ed4a646c1b4b543e23c674c9dc9db26c0e7e86"
+      "sha256": "45da78b31e0d9bc23b8e5abef84f5a0968fe351a411aef277069784f1e9bb3a3"
     },
     {
       "path": "scripts/verify-rc86-gate-a-demand-binding.cjs",
       "size": 7237,
-      "sha256": "74f560b0695721778916aaa2b48e5cafa131a0de2e89d90669aa53e2f596a4d3"
+      "sha256": "de6fd24cc8d3d1ee011e1e34afabb7f53fee0d249dd5f2be8a239f2292f92189"
     },
     {
       "path": "scripts/verify-rc87-monitoring-display-only.cjs",
       "size": 10014,
-      "sha256": "55cca1637540fffc91d7bb9544f71f61927bca85420400f744075e2ea7131ea4"
+      "sha256": "2b42caebcd8b5dc46403591dc8957d1a1f7e209b645a36c90aed3bce3fc4be6d"
     },
     {
       "path": "scripts/verify-rc88-memory-stability.cjs",
       "size": 11410,
-      "sha256": "5254835bdd905003fdfcd819ca23d6ee9be072439312eef717f3c25525332300"
+      "sha256": "adbdc4e1b151a247fe11e30aff299f35357d7656655c5cff0b2d2c58bfebe2f9"
     },
     {
       "path": "scripts/verify-rc89-admin-overview-health.cjs",
       "size": 8934,
-      "sha256": "a2591e2155d236358bd05a6de777a4847ec9fef0a86c83e9a96581e2458d2059"
+      "sha256": "56f12f6992f8764083039a67ceb5be64325d1ebcca89c3ac264d7ab49ff5a8a2"
     },
     {
       "path": "www/admin-guard.js",
@@ -1351,7 +1351,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "5b259ba48c286542708fc24537a3a307742968eb7abeabd78de277b6bc5108ee"
+      "sha256": "98f7d51905a8d8657561125a9e1052dc3bbc5c6e95bb42a087fd19756b033a41"
     },
     {
       "path": "www/mesh-microgrid.html",

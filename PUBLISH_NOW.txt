@@ -1,22 +1,22 @@
-NexoWatt UI 0.8.215 RC89 – Admin-Overview Health Recovery
+NexoWatt UI 0.8.215 RC90 – SSE Stability + Publish-Manifest-Fix
 
-Veröffentlichen aus einem frisch entpackten Repository-ZIP:
+Veröffentlichen ausschließlich aus diesem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
 - ob Version 0.8.215 auf npm noch frei ist,
-- ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
-- ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
+- ob alle 310 npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
+- ob die Version in package.json und io-package.json synchron ist.
 
-RC89 korrigiert ausschließlich die read-only EMS-Diagnosekette:
-- Adapter-Erreichbarkeit, EMS-Regeltick und Diagnose-Publisher werden getrennt bewertet.
-- Ein leichter Heartbeat hält bestehende EOS-Admin-Versionen aktuell.
-- Diagnose-Lese-/Schreibzugriffe besitzen Timeouts, begrenzte Parallelität und Duplicate-Quarantäne.
-- Bei aktuellem Adapter, aber verzögertem Tick beziehungsweise Publisher erscheint eine eindeutige Warnung statt eines falschen Adapter-Offlinezustands.
-- NVP-, Lade-, Speicher-, Tarif-, §14a-, Forecast-, Export-, 0-Einspeise- und Safety-Regelungen bleiben unverändert.
+RC90 korrigiert den LIVE-/SSE-Resync und verhindert die zuvor beobachtete
+Reconnect-/resync-error-Schleife. Der Publish-Fix verändert keine Runtime- oder
+Regellogik. Er versiegelt lediglich das Release-Artefakt nach sämtlichen RC90-
+Änderungen neu, damit io-package.json, main.js, die betroffenen Prüfscripte und
+www/manifest.webmanifest mit ihren tatsächlich ausgelieferten Inhalten geprüft
+werden.
 
-Details:
-- docs/RC89_ADMIN_OVERVIEW_HEALTH_RECOVERY_DE.md
-- RC89_VALIDATION_REPORT.md
-- RC89_FELDTEST_CHECKLISTE_DE.md
+Wichtig:
+- Den alten RC90-Ordner vollständig löschen.
+- Dieses ZIP in einen neuen, leeren Ordner entpacken.
+- Keine Dateien aus dem alten Ordner hinein kopieren.

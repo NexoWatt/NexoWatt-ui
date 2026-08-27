@@ -54,7 +54,14 @@ function matchingBrace(text, openIndex) {
     throw new Error('Unclosed callback body');
 }
 
+// Do not scan this regression test itself: it intentionally contains the
+// marker strings below and would otherwise be mistaken for a production
+// callback. Restrict the assertion to executable adapter/runtime files.
+const thisFile = path.resolve(__filename);
 const targets = walk(root).filter(file => {
+    if (path.resolve(file) === thisFile) return false;
+    const relative = path.relative(root, file).replace(/\\/g, '/');
+    if (relative.startsWith('test/') || relative.startsWith('tests/')) return false;
     const text = fs.readFileSync(file, 'utf8');
     return text.includes('getSnapshotChunk:') && text.includes('_nwBuildPublicStateSnapshot');
 });
