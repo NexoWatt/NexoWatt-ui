@@ -242,8 +242,8 @@ async function main() {
 
   const pkg = require(path.join(root, 'package.json'));
   const io = require(path.join(root, 'io-package.json'));
-  assert.equal(pkg.version, '0.8.214');
-  assert.equal(io.common.version, '0.8.214');
+  assert.equal(pkg.version, '0.8.215');
+  assert.equal(io.common.version, '0.8.215');
   console.log('[RC88] SSE backpressure (1,000,000 blocked updates), orphan-operation deduplication and early heap guard passed');
 }
 

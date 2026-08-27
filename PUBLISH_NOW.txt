@@ -1,11 +1,11 @@
-NexoWatt UI 0.8.214 RC89 – Admin-Overview Health Recovery
+NexoWatt UI 0.8.215 RC89 – Admin-Overview Health Recovery
 
 Veröffentlichen aus einem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.214 auf npm noch frei ist,
+- ob Version 0.8.215 auf npm noch frei ist,
 - ob die Paketdateiliste dem geprüften Release-Artefakt entspricht,
 - ob keine Konfliktmarker oder unerwarteten Dateien enthalten sind.
 

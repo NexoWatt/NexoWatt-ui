@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.214",
+  "version": "0.8.215",
   "files": [
     {
       "path": "admin/admin_logo_.ico",

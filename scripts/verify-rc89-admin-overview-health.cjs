@@ -25,8 +25,8 @@ function cache(values, now = Date.now()) {
 
 function contractAdapter(values, extra = {}) {
   return {
-    version: '0.8.214',
-    packageVersion: '0.8.214',
+    version: '0.8.215',
+    packageVersion: '0.8.215',
     config: { port: 8188 },
     stateCache: cache(values),
     ...extra,
@@ -103,8 +103,8 @@ function createPublisherMock({ hangReadId = '', hangWriteId = '' } = {}) {
   const never = new Promise(() => {});
   const adapter = {
     namespace: 'nexowatt-ui.0',
-    version: '0.8.214',
-    packageVersion: '0.8.214',
+    version: '0.8.215',
+    packageVersion: '0.8.215',
     config: { port: 8188 },
     stateCache,
     _nwShuttingDown: false,
@@ -209,8 +209,8 @@ async function main() {
 
   const pkg = require(path.join(root, 'package.json'));
   const io = require(path.join(root, 'io-package.json'));
-  assert.equal(pkg.version, '0.8.214');
-  assert.equal(io.common.version, '0.8.214');
+  assert.equal(pkg.version, '0.8.215');
+  assert.equal(io.common.version, '0.8.215');
   console.log('[RC89] Adapter-, EMS-Tick- und Diagnose-Publisher-Status getrennt; I/O-Timeouts und Heartbeat-Recovery bestanden.');
 }
 

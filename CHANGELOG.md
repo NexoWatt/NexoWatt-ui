@@ -1,4 +1,4 @@
-## 0.8.214 - 2026-08-27
+## 0.8.215 - 2026-08-27
 
 - RC89 trennt in der EOS-Admin-Diagnose Adapter-Erreichbarkeit, EMS-Regeltick-Aktualität und den rein lesenden Diagnose-Publisher. Ein verzögerter Diagnose-Snapshot kann dadurch nicht mehr fälschlich den vollständigen NexoWatt-UI-Adapter als „Offline / veraltet“ darstellen.
 - `info.adminOverview.updatedAt` wird als leichter Kompatibilitäts-Heartbeat bereits am Beginn jedes Diagnosezyklus aktualisiert. Bestehende EOS-Admin-Versionen erhalten damit weiterhin ungefähr alle fünf Sekunden ein Lebenszeichen, bevor umfangreichere Diagnoseabfragen stattfinden.

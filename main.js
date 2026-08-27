@@ -181,10 +181,49 @@ class NexoWattVis extends utils.Adapter {
       backpressureTimeoutMs: this.config && this.config.sseBackpressureTimeoutMs,
       heartbeatMs: this.config && this.config.sseHeartbeatMs,
       getSnapshotChunk: (client) => {
-        const snapshot = client && client.internal
-          ? this.stateCache
-          : nwBuildPublicStateSnapshot(this.stateCache, true);
-        return "data: " + JSON.stringify({ type: 'init', payload: snapshot }) + "\n\n";
+          // RC90: Backpressure resync runs long after this callback was created. Never call
+          // a startServer-local function directly here; use the exported privacy filter instead.
+          const adapter = this;
+          const cacheKey = client?.internal ? 'internal' : 'public';
+          const now = Date.now();
+          const cacheRoot = adapter._nwSseSnapshotChunkCache ||
+              (adapter._nwSseSnapshotChunkCache = Object.create(null));
+          const cached = cacheRoot[cacheKey];
+          // A very short cache only coalesces the initial write and its immediate drain-resync.
+          // It is deliberately not a long-lived state cache, so configuration changes cannot go stale.
+          if (cached && now - cached.createdAt <= 250) return cached.chunk;
+          
+          try {
+              const publicBuilder = adapter._nwBuildPublicStateSnapshot;
+              if (!client?.internal && typeof publicBuilder !== 'function') {
+                  throw new Error('public SSE snapshot builder is not initialized');
+              }
+              const snapshot = client?.internal
+                  ? adapter.stateCache
+                  : publicBuilder(adapter.stateCache, true);
+              const chunk = `data: ${JSON.stringify({ type: 'init', payload: snapshot })}\n\n`;
+              cacheRoot[cacheKey] = { createdAt: now, chunk };
+              adapter._nwSseSnapshotBuilds = Number(adapter._nwSseSnapshotBuilds || 0) + 1;
+              return chunk;
+          } catch (error) {
+              // A malformed state must never tear down every LIVE connection and start a reconnect loop.
+              // Return a bounded degraded snapshot and rate-limit the diagnostic warning.
+              adapter._nwSseSnapshotBuildErrors = Number(adapter._nwSseSnapshotBuildErrors || 0) + 1;
+              const message = error instanceof Error ? error.message : String(error);
+              const lastWarnAt = Number(adapter._nwSseSnapshotLastWarnAt || 0);
+              if (now - lastWarnAt >= 60_000) {
+                  adapter._nwSseSnapshotLastWarnAt = now;
+                  adapter.log?.warn?.(`[RC90 SSE] Snapshot fallback used: ${message}`);
+              }
+              const chunk = `data: ${JSON.stringify({
+                  type: 'init',
+                  payload: {},
+                  degraded: true,
+                  reason: 'snapshot-unavailable',
+              })}\n\n`;
+              cacheRoot[cacheKey] = { createdAt: now, chunk };
+              return chunk;
+          }
       },
     });
     this.sseClients = this._nwSseGuard.clients;

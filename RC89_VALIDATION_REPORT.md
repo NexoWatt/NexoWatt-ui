@@ -1,6 +1,6 @@
 # RC89 Validierungsbericht
 
-**Adapter:** `iobroker.nexowatt-ui` 0.8.214  
+**Adapter:** `iobroker.nexowatt-ui` 0.8.215  
 **Release-Kandidat:** RC89  
 **Stand:** 27.08.2026  
 **Ziel:** Falsche Anzeige „Offline / veraltet“ beseitigen, ohne EMS-Regelentscheidungen oder Hardware-Sollwerte zu verändern.
