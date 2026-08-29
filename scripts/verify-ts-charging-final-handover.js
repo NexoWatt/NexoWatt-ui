@@ -75,9 +75,12 @@ if (!blocked || blocked.readyForEvcsJsDecisionTreeRemoval || blocked.runtimeSour
 }
 
 const cm = read('ems/modules/charging-management.js');
-const applySetpointCalls = (cm.match(/const res = await applySetpoint/g) || []).length;
-if (applySetpointCalls !== 1) {
-  console.error(`[ts-charging-final-handover] Es darf nur noch einen zentralen applySetpoint-Executor geben, gefunden: ${applySetpointCalls}`);
+// Seit RC88 läuft der einzige Hardware-Executor im isolierten Watchdog. Deshalb wird
+// der semantische Callback gezählt und nicht mehr die veraltete direkte `await applySetpoint`-Schreibweise.
+const applySetpointCalls = (cm.match(/\(\)\s*=>\s*applySetpoint\s*\(/g) || []).length;
+const directAwaitApplySetpointCalls = (cm.match(/await\s+applySetpoint\s*\(/g) || []).length;
+if (applySetpointCalls !== 1 || directAwaitApplySetpointCalls !== 0) {
+  console.error(`[ts-charging-final-handover] Es darf nur noch einen zentralen applySetpoint-Executor geben, gefunden: isoliert=${applySetpointCalls}, direkt=${directAwaitApplySetpointCalls}`);
   process.exit(1);
 }
 if (!cm.includes("source: 'ts-charging-legacy-js-decision-tree-reduction-v5'")) {

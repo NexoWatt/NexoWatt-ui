@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 81d9afa8b3ffbe41ae483269eb0855e481dc97fbba043df32d4b3956e3ebdc55
+ * Original-Hash: 3daab361c24e6f43eae1c5057dc48718fd8769402825210e34d6291eeeb88d70
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -698,7 +698,7 @@ interface EmsAppsWindow extends Window {
     { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false, hems: false },
     { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false, hems: true },
     { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false, hems: true },
-    { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
+    { id: 'grid', label: 'Netzlimits', desc: 'Dauerhafter Netzanschlussschutz mit Import-Soft-/Hard-Limit; 0‑Einspeisung bleibt optional', mandatory: true, hems: true },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
     { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Home/Pro: read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und Ladezähler; erzeugt prüfbare Journale, schreibt aber niemals auf Hardware', mandatory: false, hems: true },
@@ -1304,8 +1304,8 @@ interface EmsAppsWindow extends Window {
   const shadowJsonDetailsOpen = new Set();
 
 
-  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger']);
-  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport','nlP1','nlP1Basic','p1Dsmr']);
+  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger']);
+  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','gridConstraints','gridLimits','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport','nlP1','nlP1Basic','p1Dsmr']);
   const APP_LICENSE_FEATURES = Object.freeze({
     charging: 'chargingManagement',
     peak: 'peakShaving',
@@ -2369,7 +2369,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Gas m³ optional</span><input class="nw-config-input" data-nlp1-dp="gasM3" value="${_nwHtmlEscape(dps.gasM3 || '')}" placeholder="dsmr.0.gas_delivered_total" /></label>
           <label class="nw-config-field"><span class="nw-config-label">Aktiver Tarif optional</span><input class="nw-config-input" data-nlp1-dp="activeTariff" value="${_nwHtmlEscape(dps.activeTariff || '')}" placeholder="dsmr.0.active_tariff" /></label>
         </div>
-        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
+        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard für DE/NL mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
       </div>`;
     return card;
   }
@@ -3105,31 +3105,57 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const idInstalled = `app_${app.id}_installed`;
       const idEnabled = `app_${app.id}_enabled`;
 
-      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
-      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
+      const tInstalled = mkToggle(idInstalled, 'Installiert', app.id === 'grid' ? true : st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
+      const tEnabled = mkToggle(idEnabled, 'Aktiv', app.id === 'grid' ? true : st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
 
-      // Behaviour: if app is uninstalled, force enabled=false
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      tInstalled.inp.addEventListener('change', () => {
-        const installed = !!tInstalled.inp.checked;
-        if (!installed) {
-          tEnabled.inp.checked = false;
-          tEnabled.inp.disabled = true;
-        } else {
-          tEnabled.inp.disabled = false;
-        }
+      // Netzlimits ist kein optionaler Komfortbaustein, sondern der dauerhafte
+      // NVP-/Anschlussschutz. Deshalb gibt es für diese App keinen sichtbaren
+      // Aus-/Deinstallieren-Schalter. Die versteckten Eingaben bleiben nur für
+      // den bestehenden Save-Vertrag vorhanden und sind unveränderbar auf true.
+      if (app.id === 'grid') {
+        tInstalled.inp.checked = true;
+        tEnabled.inp.checked = true;
+        tInstalled.inp.disabled = true;
+        tEnabled.inp.disabled = true;
+        actions.appendChild(tInstalled.inp);
+        actions.appendChild(tEnabled.inp);
+        const protection = document.createElement('div');
+        protection.className = 'nw-app-core-protection';
+        protection.textContent = 'Netzschutz dauerhaft aktiv';
+        protection.style.display = 'inline-flex';
+        protection.style.alignItems = 'center';
+        protection.style.padding = '7px 11px';
+        protection.style.borderRadius = '999px';
+        protection.style.border = '1px solid rgba(0, 230, 118, .45)';
+        protection.style.background = 'rgba(0, 230, 118, .12)';
+        protection.style.color = '#7dffbd';
+        protection.style.fontWeight = '800';
+        protection.style.fontSize = '.78rem';
+        actions.appendChild(protection);
+      } else {
+        // Behaviour: if app is uninstalled, force enabled=false
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+        tInstalled.inp.addEventListener('change', () => {
+          const installed = !!tInstalled.inp.checked;
+          if (!installed) {
+            tEnabled.inp.checked = false;
+            tEnabled.inp.disabled = true;
+          } else {
+            tEnabled.inp.disabled = false;
+          }
 
-        try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons(tEnabled.inp.id); } catch (_e) {}
+          try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons(tEnabled.inp.id); } catch (_e) {}
 
-        // Live UI: Zuordnungs-/Spezialreiter reagieren sofort auf Install/Uninstall.
-        // Mesh/Microgrid ist bewusst nicht mehr als Detailkarte im Apps-Reiter,
-        // sondern nur im eigenen Reiter vorhanden, sobald die App installiert ist.
-        try { buildAppCenterStructurePanels(); } catch (_e) {}
-        try { applyAppDependentVisibility(); } catch (_e) {}
-      });
+          // Live UI: Zuordnungs-/Spezialreiter reagieren sofort auf Install/Uninstall.
+          // Mesh/Microgrid ist bewusst nicht mehr als Detailkarte im Apps-Reiter,
+          // sondern nur im eigenen Reiter vorhanden, sobald die App installiert ist.
+          try { buildAppCenterStructurePanels(); } catch (_e) {}
+          try { applyAppDependentVisibility(); } catch (_e) {}
+        });
 
-      actions.appendChild(tInstalled.wrap);
-      actions.appendChild(tEnabled.wrap);
+        actions.appendChild(tInstalled.wrap);
+        actions.appendChild(tEnabled.wrap);
+      }
 
       top.appendChild(title);
       top.appendChild(actions);
@@ -3137,7 +3163,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       const subtitle = document.createElement('div');
       subtitle.className = 'nw-config-card__subtitle';
-      subtitle.textContent = app.mandatory ? (app.desc + ' (Basis)') : app.desc;
+      subtitle.textContent = app.id === 'grid' ? (app.desc + ' · Nicht abschaltbar') : (app.mandatory ? (app.desc + ' (Basis)') : app.desc);
       header.appendChild(subtitle);
 
       const body = document.createElement('div');
@@ -7839,7 +7865,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (!meterEl && !importEl && !rlmEl && !zeroEl && !evuEl && !pvEl) return;
 
     const apps = (currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps) ? currentConfig.emsApps.apps : {};
-    const a = (apps && apps.grid) ? apps.grid : { installed: false, enabled: false };
+    const a = { installed: true, enabled: true, ...((apps && apps.grid && typeof apps.grid === 'object') ? apps.grid : {}) };
+    a.installed = true;
+    a.enabled = true;
 
     /**
      * Code-Teil: Arrow-Funktion `mkMsg`
@@ -8368,6 +8396,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Zweistufiges Importlimit: ausschließlich aus Zuordnung → Allgemein.
     if (importEl) {
+      const permanentStatus = document.createElement('div');
+      permanentStatus.className = 'nw-config-badge nw-config-badge--ok';
+      permanentStatus.style.display = 'inline-flex';
+      permanentStatus.style.alignItems = 'center';
+      permanentStatus.style.marginBottom = '10px';
+      permanentStatus.style.padding = '7px 11px';
+      permanentStatus.style.fontWeight = '800';
+      permanentStatus.textContent = 'Netzschutz dauerhaft aktiv · nicht abschaltbar';
+      importEl.appendChild(permanentStatus);
       const assignedHardW = Number(currentConfig?.installerConfig?.gridConnectionPower || 0) || 0;
       const fixedReserveW = assignedHardW > 0 ? Math.round(assignedHardW * 0.10) : 0;
       const fixedSoftW = assignedHardW > 0 ? Math.max(0, Math.round(assignedHardW) - fixedReserveW) : 0;

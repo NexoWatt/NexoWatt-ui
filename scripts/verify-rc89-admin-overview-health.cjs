@@ -14,6 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+const releaseVersion = require(path.join(root, 'package.json')).version;
 const {
   AdminOverviewPublisher,
   buildOverviewContract,
@@ -25,8 +26,8 @@ function cache(values, now = Date.now()) {
 
 function contractAdapter(values, extra = {}) {
   return {
-    version: '0.8.215',
-    packageVersion: '0.8.215',
+    version: releaseVersion,
+    packageVersion: releaseVersion,
     config: { port: 8188 },
     stateCache: cache(values),
     ...extra,
@@ -103,8 +104,8 @@ function createPublisherMock({ hangReadId = '', hangWriteId = '' } = {}) {
   const never = new Promise(() => {});
   const adapter = {
     namespace: 'nexowatt-ui.0',
-    version: '0.8.215',
-    packageVersion: '0.8.215',
+    version: releaseVersion,
+    packageVersion: releaseVersion,
     config: { port: 8188 },
     stateCache,
     _nwShuttingDown: false,
@@ -209,8 +210,8 @@ async function main() {
 
   const pkg = require(path.join(root, 'package.json'));
   const io = require(path.join(root, 'io-package.json'));
-  assert.equal(pkg.version, '0.8.215');
-  assert.equal(io.common.version, '0.8.215');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(io.common.version, pkg.version);
   console.log('[RC89] Adapter-, EMS-Tick- und Diagnose-Publisher-Status getrennt; I/O-Timeouts und Heartbeat-Recovery bestanden.');
 }
 

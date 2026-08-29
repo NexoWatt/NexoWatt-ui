@@ -28,5 +28,8 @@ assert(text.includes('RC85_SOFT_PROGRESSIVE'),'soft grid limit is still acting a
 assert(text.includes('RC85_STALE_TICK_RECOVERY'),'stale tick recovery missing');
 assert(text.includes('RC85_BOUNDED_COLLECTION')||text.includes('startRc85HeapMonitor'),'memory hardening missing');
 assert(text.includes('sinkFieldProtocolJson'),'sink field state missing');
-assert.equal(require(path.join(root,'package.json')).version,'0.8.215','package version');
+const pkg = require(path.join(root, 'package.json'));
+const io = require(path.join(root, 'io-package.json'));
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'gültige package version');
+assert.equal(io.common.version, pkg.version, 'Release-Versionen synchron');
 console.log('[RC85] stability contract passed');

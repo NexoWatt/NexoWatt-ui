@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:8ad6a02d2b4f0506c45938acb1f83526159bfc1a8559d7cee0f5e9957eb6b42b
+ * Quell-Hash: sha256:982ff9b8eb5ac33dbb398201dd22726e94a3ec4070571e8c7d5c610dbe5e62e4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2061,7 +2061,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Gas m³ optional</span><input class="nw-config-input" data-nlp1-dp="gasM3" value="${_nwHtmlEscape(dps.gasM3 || '')}" placeholder="dsmr.0.gas_delivered_total" /></label>
           <label class="nw-config-field"><span class="nw-config-label">Aktiver Tarif optional</span><input class="nw-config-input" data-nlp1-dp="activeTariff" value="${_nwHtmlEscape(dps.activeTariff || '')}" placeholder="dsmr.0.active_tariff" /></label>
         </div>
-        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
+        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard für DE/NL mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
       </div>`;
     return card;
   }

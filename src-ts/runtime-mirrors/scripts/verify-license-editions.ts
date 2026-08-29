@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 535d307c53a493c14cb7ed5a103fdb382dca4ee13921423da793c0aa863335a2
+ * Original-Hash: 849a3475cef9be8689611d46eff4624a6c91fd9213f1c8b0e571a8deeb2777e4
  */
 
 /**
@@ -93,7 +93,23 @@ need(main.includes('sendNoStore(res)') && main.includes('Refresh the runtime lic
 need(main.includes('_nwRefreshLicenseFromConfiguredKey'), 'main.js: Lizenzstatus-Refresh aus gespeicherter Adapter-Konfiguration fehlt.');
 need(main.includes("await this._nwRefreshLicenseFromConfiguredKey(false)") && main.includes("app.use(async (req, res, next)"), 'main.js: Lizenz-API/App-Center/VIS-Gate müssen die Freischaltung ohne manuellen Neustart synchronisieren.');
 need(moduleManager.includes('_licenseAllowsApp'), 'ems/module-manager.js: Modulmanager-Lizenzgate fehlt.');
-need(moduleManager.includes("const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'])"), 'ems/module-manager.js: HEMS-App-Liste fehlt oder falsch.');
+// Der Modulmanager besitzt einen lokalen Notfall-Fallback. Er darf nicht als veraltete
+// Kopie der zentralen Lizenzmatrix auseinanderlaufen, weil andernfalls einzelne Home-Apps
+// nur bei einem Importfehler unbemerkt gesperrt würden.
+const featureFlags = require(path.join(root, 'ems/services/feature-flags.js'));
+const fallbackMatch = moduleManager.match(/const hemsApps = new Set\(\[([^\]]*)\]\)/);
+const fallbackApps = fallbackMatch
+  ? fallbackMatch[1].split(',').map((entry) => entry.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+  : [];
+const expectedHomeApps = typeof featureFlags.homeIncludedApps === 'function'
+  ? featureFlags.homeIncludedApps().map(String)
+  : [];
+need(
+  fallbackMatch && expectedHomeApps.length > 0
+    && expectedHomeApps.every((appId) => fallbackApps.includes(appId))
+    && fallbackApps.every((appId) => expectedHomeApps.includes(appId)),
+  `ems/module-manager.js: Home-Fallback weicht von HOME_APP_IDS ab (fallback=${fallbackApps.join(',')}; zentral=${expectedHomeApps.join(',')}).`,
+);
 need(moduleManager.includes("key: 'peakShaving'") && moduleManager.includes("this._licenseAllowsApp('peak')"), 'ems/module-manager.js: Peak-Shaving muss EOS-gated sein.');
 need(moduleManager.includes("key: 'chargingManagement'") && moduleManager.includes("this._licenseAllowsApp('charging')"), 'ems/module-manager.js: Lademanagement-Gate fehlt.');
 need(app.includes('HEMS_APP_IDS'), 'www/ems-apps.js: HEMS-App-Whitelist fehlt.');

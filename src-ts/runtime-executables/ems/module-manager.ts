@@ -254,7 +254,10 @@ class ModuleManager {
         } catch (_e) {}
         if (edition === 'eos') return true;
         if (edition !== 'hems') return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+        // Notfall-Fallback: Muss der zentralen HOME_APP_IDS-Matrix entsprechen. So bleiben
+        // Home-Apps auch dann korrekt freigegeben, wenn der Feature-Service beim Start
+        // ausnahmsweise nicht geladen werden kann.
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger', 'nlP1']);
         return hemsApps.has(String(appId || ''));
     }
 

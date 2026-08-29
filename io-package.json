@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.215",
+    "version": "0.8.216",
     "news": {
+      "0.8.216": {
+        "de": "RC91 gleicht die App-Kataloge von Browser, Adapterstart, Installer, Save und Backup vollständig ab. Energy Ledger und Mesh/Microgrid behalten ihre Installiert-/Aktiv-Zustände jetzt auch beim Speichern anderer AppCenter-Reiter; das verborgene DC-Stationsdisplay bleibt erhalten, ohne doppelte App-Karte. Zusätzlich bleibt die textstabil erzeugte main.js strikt JavaScript-kompatibel. Die produktive NVP-, Lade-, Speicher-, Tarif-, §14a- und Safety-Regelung wurde nicht verändert.",
+        "en": "RC91 fully aligns the app catalogues used by the browser, adapter startup, installer, save and backup paths. Energy Ledger and Mesh/Microgrid now preserve their installed/enabled state when unrelated App Center tabs are saved; the hidden DC station display is retained without creating a duplicate app card. The text-stable generated main.js is also kept strictly JavaScript-compatible. Productive grid, charging, storage, tariff, Section 14a and safety control logic is unchanged.",
+        "nl": "RC91 brengt de appcatalogi van browser, adapterstart, installer, opslaan en back-up volledig met elkaar in overeenstemming. Energy Ledger en Mesh/Microgrid behouden nu hun geïnstalleerde/actieve status wanneer andere AppCenter-tabbladen worden opgeslagen; het verborgen DC-stationsdisplay blijft behouden zonder dubbele appkaart. Ook blijft de tekststabiel gegenereerde main.js strikt JavaScript-compatibel. De productieve net-, laad-, opslag-, tarief-, §14a- en veiligheidsregeling is niet gewijzigd."
+      },
       "0.8.210": {
         "de": "RC83 erlaubt Speicher-Netzladen ausschließlich bei aktivem, frischem und günstigem dynamischen Tarif. Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht. Neutral, teuer, unbekannt, Tarif aus oder veraltete Preis-/Freigabedaten führen sofort zur Eigenverbrauchsoptimierung; auch gehaltene alte Tarif-/Reserve-Sollwerte werden unmittelbar vor dem Hardware-Write auf 0 W gestoppt. Das fehlende Objekt gridConstraints.exportLimit.sinkFieldProtocolJson wird vor dem ersten Write angelegt und beendet die wiederkehrende ioBroker-Warnflut.",
         "en": "RC83 permits storage charging from the grid only with an active, fresh and cheap dynamic tariff. If variable grid fees are enabled, the configured off-peak/quarter window is an additional requirement. Neutral, expensive, unknown, disabled or stale tariff data immediately falls back to self-consumption; held legacy tariff/reserve commands are stopped at 0 W before the hardware write. The missing gridConstraints.exportLimit.sinkFieldProtocolJson object is now created before its first write, eliminating the recurring ioBroker warning flood.",
@@ -32,11 +37,6 @@
         "de": "RC78 korrigiert die Netzanschluss-Budgetierung auf eine reine Bezugsgrenze. Der NVP bleibt signiert: Bezug ist positiv, Einspeisung negativ und erhöht die verfügbare Lastfreigabe. Zentrales EMS-Budget, EVCS-Netzcap und die finale Safety-Prüfung vor dem Hardware-Write verwenden denselben Vertrag. Bereits laufende geregelte Lasten werden korrekt zum Gesamtziel zurückaddiert; Überbezug reduziert sie weiterhin aktiv. Im Feldfall mit 30 kW Grenze und 10,1 kW Einspeisung stehen 40,1 kW Gesamtbudget beziehungsweise nach 11,0 kW EVCS und 9,3 kW Speicher 19,8 kW Restbudget zur Verfügung.",
         "en": "RC78 corrects grid-connection budgeting so the configured limit applies to import only. The point-of-connection value remains signed: import is positive, export is negative and increases available flexible-load headroom. The central EMS budget, EVCS grid cap and final safety check before each hardware write now use the same contract. Existing controlled loads are added back correctly to the total target, while an import overload still forces active load reduction. With a 30 kW limit and 10.1 kW export, the total budget is 40.1 kW and 19.8 kW remains after reserving 11.0 kW for EVCS and 9.3 kW for storage.",
         "nl": "RC78 corrigeert de netaansluitbudgettering zodat de ingestelde grens uitsluitend voor netafname geldt. De NVP-waarde blijft voorzien van teken: afname is positief, teruglevering negatief en vergroot de beschikbare ruimte voor flexibele belasting. Het centrale EMS-budget, de EVCS-netcap en de laatste veiligheidscontrole vóór elke hardware-write gebruiken nu hetzelfde contract. Reeds actieve geregelde lasten worden correct aan het totale doel toegevoegd; overschrijding van de afnamegrens verlaagt de belasting nog steeds actief. Bij een grens van 30 kW en 10,1 kW teruglevering bedraagt het totale budget 40,1 kW en resteert 19,8 kW na 11,0 kW EVCS en 9,3 kW opslag."
-      },
-      "0.8.202": {
-        "de": "RC77 behebt die fehlenden PV-Prognosewerte in der Kundenoberfläche: Provider- und EMS-Forecast-States werden vor dem ersten Abruf abonniert, beim Start in den UI-Cache eingelesen und bei jeder Aktualisierung direkt gespiegelt. Eine frische persistierte Kurve übersteht Adapterneustarts und kurzfristige Provider-Ausfälle bis zu zwei Stunden; abgelaufene Kurven werden verworfen. Browser-Cache und Forecast-Diagnose wurden zusätzlich gehärtet.",
-        "en": "RC77 fixes missing PV forecast values in the customer UI: provider and EMS forecast states are subscribed before the first request, primed into the UI cache at startup and mirrored directly on every update. A fresh persisted curve survives adapter restarts and short provider outages for up to two hours, while expired curves are rejected. Browser caching and forecast diagnostics are hardened as well.",
-        "nl": "RC77 verhelpt ontbrekende PV-prognosewaarden in de klanteninterface: provider- en EMS-prognosestates worden vóór de eerste aanvraag geabonneerd, bij het opstarten in de UI-cache geladen en bij elke update direct gespiegeld. Een recente opgeslagen curve overleeft adapterherstarts en korte providerstoringen tot twee uur; verlopen curves worden geweigerd. Ook browsercache en prognosediagnose zijn verder gehard."
       }
     },
     "title": "NexoWatt EOS",
@@ -295,6 +295,7 @@
       "storageValueEurPerKwh": 0
     },
     "enableEnergyWallet": true,
+    "enableEnergyLedger": false,
     "enableChargeKiosk": false,
     "chargeKiosk": {
       "enabled": false,

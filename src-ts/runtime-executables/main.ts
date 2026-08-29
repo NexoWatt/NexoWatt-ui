@@ -167,7 +167,9 @@ class NexoWattVis extends utils.Adapter {
       getSnapshotChunk: (client) => {
           // RC90: Backpressure resync runs long after this callback was created. Never call
           // a startServer-local function directly here; use the exported privacy filter instead.
-          const adapter = this as any;
+          // main.ts wird textstabil nach main.js kopiert und muss deshalb gültiges JavaScript bleiben.
+          // TypeScript-only Assertions wären nach dem Build in Node.js nicht parsbar und würden den Adapterstart verhindern.
+          const adapter = this;
           const cacheKey = client?.internal ? 'internal' : 'public';
           const now = Date.now();
           const cacheRoot = adapter._nwSseSnapshotChunkCache ||
@@ -4568,6 +4570,11 @@ class NexoWattVis extends utils.Adapter {
       { id: 'grid',        enableFlag: 'enableGridConstraints', mandatory: true, defaultInstalled: true },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
+      // Das im AppCenter sichtbare read-only Herkunftsjournal behält einen Legacy-Flag.
+      // Dadurch liefern ältere Modulprüfungen und die neue emsApps-Quelle denselben Aktivzustand.
+      { id: 'energyLedger', enableFlag: 'enableEnergyLedger' },
+      // chargeKiosk wird im Reiter Ladepunkte konfiguriert und nicht als doppelte Apps-Karte angezeigt.
+      // Sein Installiert-/Aktiv-Zustand muss trotzdem jeden AppCenter-Lade-/Speicherzyklus überleben.
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'netOperator', enableFlag: 'enableNetOperatorInterface', noLegacyDefault: true },
@@ -4683,6 +4690,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet' },
+      { id: 'energyLedger', enableFlag: 'enableEnergyLedger' },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'netOperator', enableFlag: 'enableNetOperatorInterface' },
@@ -4694,6 +4702,21 @@ class NexoWattVis extends utils.Adapter {
       n[a.enableFlag] = a.id === 'grid'
         ? true
         : (this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled));
+    }
+
+    // Cross-App-Invariante: Module mit eigenem `config.enabled` spiegeln zusätzlich zum
+    // Legacy-enableX-Flag auch den AppCenter-Zustand. Sonst könnte das Speichern eines
+    // anderen Reiters UI, API und Modulmanager mit widersprüchlichen Aktivzuständen
+    // zurücklassen. Die übrige verschachtelte Modulkonfiguration bleibt erhalten.
+    for (const [appId, configKey] of [
+      ['energyLedger', 'energyLedger'],
+      ['chargeKiosk', 'chargeKiosk'],
+      ['meshMicrogrid', 'meshMicrogrid'],
+    ]) {
+      const st = (apps.apps && apps.apps[appId]) ? apps.apps[appId] : null;
+      const enabled = this._nwLicenseAllowsAppId(appId) && !!(st && st.installed && st.enabled);
+      n[configKey] = (n[configKey] && typeof n[configKey] === 'object') ? n[configKey] : {};
+      n[configKey].enabled = enabled;
     }
 
     // §14a is controlled via installerConfig.para14a
@@ -15097,6 +15120,11 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       { id: 'grid', label: 'Netzlimits', desc: 'Dauerhafter Netzanschlussschutz mit Import-Soft-/Hard-Limit; 0‑Einspeisung bleibt optional', enableFlag: 'enableGridConstraints', mandatory: true },
       { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung / Energie‑Tipps ohne automatische Schaltbefehle', enableFlag: 'enableAiAdvisor', mandatory: false },
       { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert und Einspeisewert für das Kundenfrontend (Home + EOS)', enableFlag: 'enableEnergyWallet', mandatory: true },
+      { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Read-only 15-Minuten-Bilanz und Herkunftsjournal', enableFlag: 'enableEnergyLedger', mandatory: false },
+      // Verborgener AppCenter-Zustand: Das Stationsdisplay wird unter Ladepunkte konfiguriert.
+      // Die Normalisierung muss es trotzdem erhalten, wenn ein anderer AppCenter-Reiter speichert.
+      { id: 'chargeKiosk', label: 'DC-Stationsdisplay', desc: 'Tokenisierte Stationsseiten für DC-Ladepunkte', enableFlag: 'enableChargeKiosk', mandatory: false, hidden: true },
+      { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'Lokale Energie-Knoten, Cluster und sichere Feldsteuerung', enableFlag: 'enableMeshMicrogrid', mandatory: false },
       // tariff is a shared helper module (provider + budget). Keep it always present.
       { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
@@ -15193,6 +15221,19 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         n[a.enableFlag] = enabled;
       }
 
+      // Verschachtelte Modulschalter mit emsApps synchronisieren. Dadurch bleiben
+      // Herkunftsjournal, DC-Display und Mesh beim Speichern anderer Reiter erhalten.
+      for (const [appId, configKey] of [
+        ['energyLedger', 'energyLedger'],
+        ['chargeKiosk', 'chargeKiosk'],
+        ['meshMicrogrid', 'meshMicrogrid'],
+      ]) {
+        const st = emsApps.apps && emsApps.apps[appId] ? emsApps.apps[appId] : null;
+        const enabled = this._nwLicenseAllowsAppId(appId) && !!(st && st.installed && st.enabled);
+        n[configKey] = (n[configKey] && typeof n[configKey] === 'object') ? n[configKey] : {};
+        n[configKey].enabled = enabled;
+      }
+
       // §14a is controlled via installerConfig.para14a
       try {
         const p = emsApps.apps && emsApps.apps.para14a ? emsApps.apps.para14a : null;
@@ -15239,6 +15280,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         enableGridConstraints: true,
         enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
         enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
+        enableEnergyLedger: (typeof n.enableEnergyLedger === 'boolean') ? n.enableEnergyLedger : undefined,
         enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
         enableMeshMicrogrid: (typeof n.enableMeshMicrogrid === 'boolean') ? n.enableMeshMicrogrid : undefined,
         enableNetOperatorInterface: (typeof n.enableNetOperatorInterface === 'boolean') ? n.enableNetOperatorInterface : undefined,
@@ -15251,6 +15293,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         // KI‑Energieberater
         aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
         energyWallet: (n.energyWallet && typeof n.energyWallet === 'object') ? n.energyWallet : {},
+        energyLedger: (n.energyLedger && typeof n.energyLedger === 'object') ? n.energyLedger : { enabled: false },
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
         meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
         netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
@@ -15653,7 +15696,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableEnergyLedger','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -15662,7 +15705,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','energyLedger','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -15909,7 +15952,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableEnergyLedger','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -15918,7 +15961,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','energyLedger','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',

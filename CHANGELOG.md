@@ -1,3 +1,15 @@
+## 0.8.216 - 2026-08-27
+
+- RC91 prüft die AppCenter- und Backend-Verträge aller produktiven EMS-Apps gemeinsam. Der sichtbare Browser-Katalog, die Adapterstart-Normalisierung und der Installer-HTTP-Roundtrip müssen dieselben App-IDs erhalten; absichtlich verborgene Module werden ausdrücklich konserviert.
+- `energyLedger` und `meshMicrogrid` gingen in einzelnen Backend-Katalogen bislang verloren. Das Speichern eines anderen AppCenter-Reiters konnte dadurch Installiert-/Aktiv-Zustände stillschweigend zurücksetzen. Beide Apps sind jetzt in Start-, Save-, Backup- und Installer-Verträgen vollständig enthalten.
+- `chargeKiosk` bleibt weiterhin ausschließlich im Reiter Ladepunkte konfigurierbar, wird aber als verborgener AppCenter-Zustand durch Start, Save und Backup erhalten. Es erscheint keine doppelte Apps-Karte.
+- Verschachtelte Modulschalter (`energyLedger.enabled`, `chargeKiosk.enabled`, `meshMicrogrid.enabled`), Legacy-Flags und `emsApps` werden gemeinsam synchronisiert. UI, API und Modulmanager können dadurch nach einem Fremdtab-Save nicht mehr widersprüchliche Aktivzustände führen.
+- Die kanonische `main.ts`-Runtime bleibt strikt JavaScript-kompatibel. Eine TypeScript-only Assertion, die beim Regenerieren wortwörtlich in `main.js` übernommen worden wäre und den Adapterstart verhindert hätte, wurde entfernt und durch einen dokumentierten textstabilen Vertrag abgesichert.
+- Veraltete Releaseprüfungen für die dauerhaft aktive Netzschutz-App und den seit RC88 watchdog-isolierten Ladepunkt-Executor wurden auf die aktuellen semantischen Sicherheitsverträge angehoben. Die produktive Netz-, Lade- und Safety-Regelung wurde dabei nicht verändert.
+- Ein neuer RC91-Cross-App-Test prüft Katalogparität, versteckte App-Erhaltung, Save-/Backup-Allowlisten, verschachtelte Aktivschalter und die Syntax der tatsächlich ausgelieferten `main.js`.
+- Der lokale Home-Lizenzfallback des Modulmanagers wird jetzt automatisch gegen die zentrale `HOME_APP_IDS`-Matrix geprüft und enthält auch Netzschutz, Energy Ledger und NL-P1. Damit kann ein seltener Ladefehler des Feature-Services keine eigentlich freigegebene Home-App unbemerkt sperren.
+- Die Prüfung umfasste zusätzlich Speicherregelung und Speicherfarm, MultiUse, Heizstab/Thermik, BHKW/Generator/Relais, Peak-Shaving, §14a, Netzbetreiber-Schnittstelle, Tarife, PV-Prognose, Energie-Wertkonto/Herkunft, Mesh/Microgrid, SmartHome/NexoLogic, OCPP/EVCS sowie RC78 bis RC90. Es wurden keine neuen fachlichen Sollwert- oder Hardwareentscheidungen eingeführt.
+
 ## 0.8.215 - 2026-08-27
 
 - RC89 trennt in der EOS-Admin-Diagnose Adapter-Erreichbarkeit, EMS-Regeltick-Aktualität und den rein lesenden Diagnose-Publisher. Ein verzögerter Diagnose-Snapshot kann dadurch nicht mehr fälschlich den vollständigen NexoWatt-UI-Adapter als „Offline / veraltet“ darstellen.

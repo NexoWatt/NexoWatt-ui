@@ -2063,7 +2063,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Gas m³ optional</span><input class="nw-config-input" data-nlp1-dp="gasM3" value="${_nwHtmlEscape(dps.gasM3 || '')}" placeholder="dsmr.0.gas_delivered_total" /></label>
           <label class="nw-config-field"><span class="nw-config-label">Aktiver Tarif optional</span><input class="nw-config-input" data-nlp1-dp="activeTariff" value="${_nwHtmlEscape(dps.activeTariff || '')}" placeholder="dsmr.0.active_tariff" /></label>
         </div>
-        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
+        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard für DE/NL mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
       </div>`;
     return card;
   }

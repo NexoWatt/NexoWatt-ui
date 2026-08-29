@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ffe33ea908cdf9e69fbab86306c20f74b02141ce24adc3976c3d551190b0674a
+ * Original-Hash: 70bbbd211e6836d1c171ab7fb6b5a8483c61ddbaec83346bbe2e532f44193918
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:5f9789e531de81cb4361074ece3c327c459213a3b15dd4c0be117663cbba40f2
+ * Quell-Hash: sha256:d25f1cf7913cbc83357e93591733179c8c4f865daca8a725d88b69fe4ee48526
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -258,7 +258,10 @@ class ModuleManager {
             return true;
         if (edition !== 'hems')
             return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+        // Notfall-Fallback: Muss der zentralen HOME_APP_IDS-Matrix entsprechen. So bleiben
+        // Home-Apps auch dann korrekt freigegeben, wenn der Feature-Service beim Start
+        // ausnahmsweise nicht geladen werden kann.
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger', 'nlP1']);
         return hemsApps.has(String(appId || ''));
     }
     _getDiagCfg() {

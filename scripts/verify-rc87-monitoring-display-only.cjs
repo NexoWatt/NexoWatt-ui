@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+const releaseVersion = require(path.join(root, 'package.json')).version;
 const auditRuntime = require(path.join(root, 'ems/services/charging-management-audit.js'));
 const overviewRuntime = require(path.join(root, 'ems/services/admin-overview-publisher.js'));
 
@@ -12,7 +13,7 @@ function stateCache(values) {
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, ts: Date.now() }]));
 }
 
-function buildAdapter(values, version = '0.8.215') {
+function buildAdapter(values, version = releaseVersion) {
   return {
     version,
     packageVersion: version,
@@ -248,7 +249,7 @@ assert.equal(legacyEvent.reason, 'Keine aktive Begrenzung');
 
 const pkg = require(path.join(root, 'package.json'));
 const io = require(path.join(root, 'io-package.json'));
-assert.equal(pkg.version, '0.8.215');
-assert.equal(io.common.version, '0.8.215');
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+assert.equal(io.common.version, pkg.version);
 
 console.log('[RC87] Monitoring-only NVP/no-demand display and real soft/hard/export limit states passed');

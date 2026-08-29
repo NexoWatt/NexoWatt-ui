@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:5f9789e531de81cb4361074ece3c327c459213a3b15dd4c0be117663cbba40f2
+ * Quell-Hash: sha256:d25f1cf7913cbc83357e93591733179c8c4f865daca8a725d88b69fe4ee48526
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -216,7 +216,10 @@ class ModuleManager {
             return true;
         if (edition !== 'hems')
             return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+        // Notfall-Fallback: Muss der zentralen HOME_APP_IDS-Matrix entsprechen. So bleiben
+        // Home-Apps auch dann korrekt freigegeben, wenn der Feature-Service beim Start
+        // ausnahmsweise nicht geladen werden kann.
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger', 'nlP1']);
         return hemsApps.has(String(appId || ''));
     }
     _getDiagCfg() {

@@ -63,10 +63,15 @@ function runAppCenterInstallColorTest(): void {
   const css = read('www/styles.css');
 
   assert(ts.includes("toggleKind = ''"), 'ems-apps.ts muss Toggle-Arten für App-Center-Status unterscheiden.');
-  assert(ts.includes("mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed')"), 'Installiert-Toggle muss als installed markiert werden.');
-  assert(ts.includes("mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled')"), 'Aktiv-Toggle muss separat als enabled markiert werden.');
+  // Netzlimits ist eine dauerhaft installierte Safety-App. Der Test prüft deshalb
+  // semantisch die Toggle-Art und erlaubt die explizite `grid ? true : state`-Härtung,
+  // statt eine veraltete Quelltextzeile wortwörtlich zu verlangen.
+  const installedToggle = /mkToggle\(idInstalled,\s*'Installiert',\s*(?:app\.id\s*===\s*'grid'\s*\?\s*true\s*:\s*)?st\.installed,\s*app\.mandatory,\s*'Ja',\s*'Nein',\s*'installed'\)/;
+  const enabledToggle = /mkToggle\(idEnabled,\s*'Aktiv',\s*(?:app\.id\s*===\s*'grid'\s*\?\s*true\s*:\s*)?st\.enabled,\s*app\.mandatory\s*\|\|\s*!st\.installed,\s*'An',\s*'Aus',\s*'enabled'\)/;
+  assert(installedToggle.test(ts), 'Installiert-Toggle muss als installed markiert werden.');
+  assert(enabledToggle.test(ts), 'Aktiv-Toggle muss separat als enabled markiert werden.');
   assert(js.includes('nw-app-toggle--${toggleKind}'), 'Generiertes www/ems-apps.js muss die Toggle-Art-Klasse enthalten.');
-  assert(js.includes("mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed')"), 'Generiertes www/ems-apps.js muss Installiert als installed markieren.');
+  assert(installedToggle.test(js), 'Generiertes www/ems-apps.js muss Installiert als installed markieren.');
 
   assert(css.includes('App-Center: nicht installierte Apps'), 'styles.css muss den App-Center-Farbblock enthalten.');
   assert(css.includes('.nw-toggle[data-toggle-kind="installed"] button[data-value="false"].active'), 'styles.css muss nur Installiert-Nein gezielt rot färben.');

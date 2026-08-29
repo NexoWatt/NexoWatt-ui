@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 731c51faa1200ff069ba19cf87a4c0437d25a7f1492ea9518efee8745a09085b
+ * Original-Hash: 60831612ff2e36d4209bc26df2bad4a4425b87850cc5604328888a75b56e3527
  */
 
 /**
@@ -107,9 +107,12 @@ if (!cm.includes('controlBasis: plannedBasis') || !cm.includes('{ targetW, targe
   console.error('[ts-charging-js-executor-fallback] JS-Executor nutzt nicht konsequent die TS-geplante Basis.');
   process.exit(1);
 }
-const applySetpointCalls = (cm.match(/const res = await applySetpoint/g) || []).length;
-if (applySetpointCalls !== 1) {
-  console.error(`[ts-charging-js-executor-fallback] Erwartet genau einen applySetpoint-Aufruf im zentralen Executor, gefunden: ${applySetpointCalls}`);
+// Seit RC88 läuft der einzige Hardware-Executor im isolierten Watchdog. Deshalb wird
+// der semantische Callback gezählt und nicht mehr die veraltete direkte `await applySetpoint`-Schreibweise.
+const applySetpointCalls = (cm.match(/\(\)\s*=>\s*applySetpoint\s*\(/g) || []).length;
+const directAwaitApplySetpointCalls = (cm.match(/await\s+applySetpoint\s*\(/g) || []).length;
+if (applySetpointCalls !== 1 || directAwaitApplySetpointCalls !== 0) {
+  console.error(`[ts-charging-js-executor-fallback] Erwartet genau einen applySetpoint-Aufruf im zentralen Executor, gefunden: isoliert=${applySetpointCalls}, direkt=${directAwaitApplySetpointCalls}`);
   process.exit(1);
 }
 const inlineMapInputUsages = (cm.match(/wallboxes: this\._mapChargingWallboxesForTsAllocation\(wbList\)/g) || []).length;

@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 448f74d943a03e1e5ec7acaa29b29aa55aa6d3251dd19a1cef92f98159b92dce
+ * Original-Hash: 176890bd3ae1cfe69087d519153979e6d073dc20dd5bce21e968cf648ae82c58
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.
@@ -448,11 +448,11 @@ const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
-const { buildStationDisplayPresentation } = require('./lib/station-display-presentation');
-const { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
+const { SseRuntimeGuard } = require('./lib/sse-runtime-guard');
+const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
-const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast');
+const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast'), { AdminOverviewPublisher } = require('./ems/services/admin-overview-publisher');
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
  * Zweck: Lädt den ersten echten TypeScript-Helfer für kleine main.js-Aufgaben.
@@ -589,7 +589,65 @@ class NexoWattVis extends utils.Adapter {
     // Public values may be normalized for UI/module safety (e.g. charge/discharge magnitudes).
     // Keep the original signed input values as well so signed battery fallbacks can be split correctly.
     this._nwRawValueCache = {};
-    this.sseClients = new Set();
+    // RC88_SSE_BACKPRESSURE_GUARD: Slow or half-open browser/VPN connections
+    // must never make Node.js buffer an unlimited number of live updates in the
+    // adapter heap. The guard stops writes on backpressure, resynchronizes after
+    // drain, removes stale clients and caps the total client/buffer count.
+    this._nwSseGuard = new SseRuntimeGuard({
+      log: this.log,
+      maxClients: this.config && this.config.sseMaxClients,
+      maxBufferedBytes: this.config && this.config.sseMaxBufferedBytes,
+      backpressureTimeoutMs: this.config && this.config.sseBackpressureTimeoutMs,
+      heartbeatMs: this.config && this.config.sseHeartbeatMs,
+      getSnapshotChunk: (client) => {
+          // RC90: Backpressure resync runs long after this callback was created. Never call
+          // a startServer-local function directly here; use the exported privacy filter instead.
+          // main.ts wird textstabil nach main.js kopiert und muss deshalb gültiges JavaScript bleiben.
+          // TypeScript-only Assertions wären nach dem Build in Node.js nicht parsbar und würden den Adapterstart verhindern.
+          const adapter = this;
+          const cacheKey = client?.internal ? 'internal' : 'public';
+          const now = Date.now();
+          const cacheRoot = adapter._nwSseSnapshotChunkCache ||
+              (adapter._nwSseSnapshotChunkCache = Object.create(null));
+          const cached = cacheRoot[cacheKey];
+          // A very short cache only coalesces the initial write and its immediate drain-resync.
+          // It is deliberately not a long-lived state cache, so configuration changes cannot go stale.
+          if (cached && now - cached.createdAt <= 250) return cached.chunk;
+          
+          try {
+              const publicBuilder = adapter._nwBuildPublicStateSnapshot;
+              if (!client?.internal && typeof publicBuilder !== 'function') {
+                  throw new Error('public SSE snapshot builder is not initialized');
+              }
+              const snapshot = client?.internal
+                  ? adapter.stateCache
+                  : publicBuilder(adapter.stateCache, true);
+              const chunk = `data: ${JSON.stringify({ type: 'init', payload: snapshot })}\n\n`;
+              cacheRoot[cacheKey] = { createdAt: now, chunk };
+              adapter._nwSseSnapshotBuilds = Number(adapter._nwSseSnapshotBuilds || 0) + 1;
+              return chunk;
+          } catch (error) {
+              // A malformed state must never tear down every LIVE connection and start a reconnect loop.
+              // Return a bounded degraded snapshot and rate-limit the diagnostic warning.
+              adapter._nwSseSnapshotBuildErrors = Number(adapter._nwSseSnapshotBuildErrors || 0) + 1;
+              const message = error instanceof Error ? error.message : String(error);
+              const lastWarnAt = Number(adapter._nwSseSnapshotLastWarnAt || 0);
+              if (now - lastWarnAt >= 60_000) {
+                  adapter._nwSseSnapshotLastWarnAt = now;
+                  adapter.log?.warn?.(`[RC90 SSE] Snapshot fallback used: ${message}`);
+              }
+              const chunk = `data: ${JSON.stringify({
+                  type: 'init',
+                  payload: {},
+                  degraded: true,
+                  reason: 'snapshot-unavailable',
+              })}\n\n`;
+              cacheRoot[cacheKey] = { createdAt: now, chunk };
+              return chunk;
+          }
+      },
+    });
+    this.sseClients = this._nwSseGuard.clients;
     // Batch SSE updates to prevent UI freezes on frequent state updates
     this._ssePendingPayload = {};
     this._sseFlushTimer = null;
@@ -812,6 +870,52 @@ class NexoWattVis extends utils.Adapter {
       if (!timer) resolve(false);
     });
   }
+  /** RC88: bounded runtime diagnostics for heap-pressure analysis. */
+  _nwGetMemoryDiagnostics() {
+    let sse = null;
+    try { sse = this._nwSseGuard && this._nwSseGuard.getStats ? this._nwSseGuard.getStats() : null; } catch (_e) {}
+    return {
+      sse,
+      ssePendingKeys: this._ssePendingPayload && typeof this._ssePendingPayload === 'object'
+        ? Object.keys(this._ssePendingPayload).length
+        : 0,
+      stateCacheKeys: this.stateCache && typeof this.stateCache === 'object' ? Object.keys(this.stateCache).length : 0,
+      rawCacheKeys: this._nwRawValueCache && typeof this._nwRawValueCache === 'object' ? Object.keys(this._nwRawValueCache).length : 0,
+      serverSockets: this._serverSockets && typeof this._serverSockets.size === 'number' ? this._serverSockets.size : 0,
+      shuttingDown: this._nwShuttingDown === true,
+    };
+  }
+
+  /** RC88: release buffered live clients without touching EMS control. */
+  _nwHandleHeapPressure(sample) {
+    let removed = 0;
+    try {
+      const ratio = Number(sample?.ratio || 0);
+      const level = ratio >= 0.82 ? 'critical' : 'pressure';
+      if (this._nwSseGuard && typeof this._nwSseGuard.mitigatePressure === 'function') {
+        removed = this._nwSseGuard.mitigatePressure(level);
+      }
+    } catch (_e) {}
+    // A pending coalesced patch is disposable: every browser receives a full
+    // current snapshot after reconnect/resync, while EMS control is untouched.
+    try { this._ssePendingPayload = {}; } catch (_e) {}
+    try {
+      if (removed > 0) {
+        this.log.warn(`[RC88 heap] ${removed} SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
+      }
+    } catch (_e) {}
+    return { removed };
+  }
+
+  /** RC88: final cleanup before the emergency restart safety net. */
+  _nwPrepareControlledRestart(sample) {
+    try { this._nwCloseSseClients(); } catch (_e) {}
+    try { this._ssePendingPayload = {}; } catch (_e) {}
+    try {
+      this.log.error(`[RC88 heap] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
+    } catch (_e) {}
+  }
+
   /** Code-Teil: ensureInfoConnectionState – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async ensureInfoConnectionState() {
     await this.setObjectNotExistsAsync('info', {
@@ -2656,8 +2760,8 @@ class NexoWattVis extends utils.Adapter {
         return nwFeatureFlagsService.buildFeatureMap(ed);
       }
     } catch (_eFeatureFlags) {}
-    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','operatingStrategies','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','gridConstraints','gridLimits','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','operatingStrategies','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2754,8 +2858,8 @@ class NexoWattVis extends utils.Adapter {
       storagePowerProfile,
       maxStoragePowerW: Number(storagePowerProfile.maxCommandW || 0),
       features,
-      hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
-      homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
+      hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
+      homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'grid', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
       eosFullAccess: edition === 'eos',
       proFullAccess: edition === 'eos'
     };
@@ -2766,7 +2870,17 @@ class NexoWattVis extends utils.Adapter {
     out.schemaVersion = out.schemaVersion || 1;
     out.apps = (out.apps && typeof out.apps === 'object') ? out.apps : {};
     for (const appId of Object.keys(out.apps)) {
-      if (!this._nwLicenseAllowsAppId(appId)) {
+      // Netzlimits ist ein Sicherheitskern und darf auch bei abgelaufener, noch
+      // nicht aktivierter oder vorübergehend nicht lesbarer Lizenz niemals aus
+      // der Runtime entfernt werden. Nur Komfort-/Funktionsmodule werden lizenziert.
+      if (appId === 'grid') {
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, {
+          installed: true,
+          enabled: true,
+          licenseBlocked: false,
+          requiredLicense: 'Kernschutz',
+        });
+      } else if (!this._nwLicenseAllowsAppId(appId)) {
         out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'Pro' });
       } else {
         out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'Home' : 'Pro' });
@@ -3197,6 +3311,21 @@ class NexoWattVis extends utils.Adapter {
       weatherEnabled: { type: 'boolean', role: 'state', def: false },
       weatherUsageMode: { type: 'string', role: 'text', def: 'private' },
       weatherApiKey: { type: 'string', role: 'text', def: '' },
+      forecastSourceMode: { type: 'string', role: 'text', def: 'auto' },
+      openMeteoPvEnabled: { type: 'boolean', role: 'state', def: false },
+      forecastFallbackToDatapoints: { type: 'boolean', role: 'state', def: true },
+      openMeteoLatitude: { type: 'number', role: 'value.gps.latitude', def: 0 },
+      openMeteoLongitude: { type: 'number', role: 'value.gps.longitude', def: 0 },
+      openMeteoTimezone: { type: 'string', role: 'text', def: 'auto' },
+      forecastUpdateIntervalMin: { type: 'number', role: 'value.interval', def: 30 },
+      forecastHorizonHours: { type: 'number', role: 'value.interval', def: 48 },
+      pvForecastPlanningSafetyPct: { type: 'number', role: 'value.percent', def: 85 },
+      pvForecastInstalledKwp: { type: 'number', role: 'value.power', def: 0 },
+      pvForecastTiltDeg: { type: 'number', role: 'value', def: 30 },
+      pvForecastAzimuthDeg: { type: 'number', role: 'value', def: 0 },
+      pvForecastLossPercent: { type: 'number', role: 'value.percent', def: 14 },
+      pvForecastInverterLimitW: { type: 'number', role: 'value.power', def: 0 },
+      pvForecastArrays: { type: 'string', role: 'json', def: '[]' },
 
       // EVCS defaults mirrored into runtime settings (written by syncSettingsConfigToStates())
       evcsCount: { type: 'number', role: 'value', def: 0 },
@@ -4318,7 +4447,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.192',
+        liveControlVersion: '0.8.202',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -4873,9 +5002,14 @@ class NexoWattVis extends utils.Adapter {
       { id: 'generator',   enableFlag: 'enableGeneratorControl' },
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
       { id: 'relay',       enableFlag: 'enableRelayControl' },
-      { id: 'grid',        enableFlag: 'enableGridConstraints' },
+      { id: 'grid',        enableFlag: 'enableGridConstraints', mandatory: true, defaultInstalled: true },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
+      // Das im AppCenter sichtbare read-only Herkunftsjournal behält einen Legacy-Flag.
+      // Dadurch liefern ältere Modulprüfungen und die neue emsApps-Quelle denselben Aktivzustand.
+      { id: 'energyLedger', enableFlag: 'enableEnergyLedger' },
+      // chargeKiosk wird im Reiter Ladepunkte konfiguriert und nicht als doppelte Apps-Karte angezeigt.
+      // Sein Installiert-/Aktiv-Zustand muss trotzdem jeden AppCenter-Lade-/Speicherzyklus überleben.
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'netOperator', enableFlag: 'enableNetOperatorInterface', noLegacyDefault: true },
@@ -4991,6 +5125,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet' },
+      { id: 'energyLedger', enableFlag: 'enableEnergyLedger' },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'netOperator', enableFlag: 'enableNetOperatorInterface' },
@@ -4999,7 +5134,24 @@ class NexoWattVis extends utils.Adapter {
 
     for (const a of CATALOG) {
       const st = (apps.apps && apps.apps[a.id]) ? apps.apps[a.id] : null;
-      n[a.enableFlag] = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
+      n[a.enableFlag] = a.id === 'grid'
+        ? true
+        : (this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled));
+    }
+
+    // Cross-App-Invariante: Module mit eigenem `config.enabled` spiegeln zusätzlich zum
+    // Legacy-enableX-Flag auch den AppCenter-Zustand. Sonst könnte das Speichern eines
+    // anderen Reiters UI, API und Modulmanager mit widersprüchlichen Aktivzuständen
+    // zurücklassen. Die übrige verschachtelte Modulkonfiguration bleibt erhalten.
+    for (const [appId, configKey] of [
+      ['energyLedger', 'energyLedger'],
+      ['chargeKiosk', 'chargeKiosk'],
+      ['meshMicrogrid', 'meshMicrogrid'],
+    ]) {
+      const st = (apps.apps && apps.apps[appId]) ? apps.apps[appId] : null;
+      const enabled = this._nwLicenseAllowsAppId(appId) && !!(st && st.installed && st.enabled);
+      n[configKey] = (n[configKey] && typeof n[configKey] === 'object') ? n[configKey] : {};
+      n[configKey].enabled = enabled;
     }
 
     // §14a is controlled via installerConfig.para14a
@@ -7985,10 +8137,7 @@ class NexoWattVis extends utils.Adapter {
       const maxChargeW = (maxChargeFromStatus !== null) ? maxChargeFromStatus : maxChargeFromConfig;
       const maxDischargeW = (maxDischargeFromStatus !== null) ? maxDischargeFromStatus : maxDischargeFromConfig;
       const chargeDispatchAvailable = (st && typeof st.chargeDispatchAvailable === 'boolean') ? st.chargeDispatchAvailable : false;
-      let dischargeDispatchAvailable = (st && typeof st.dischargeDispatchAvailable === 'boolean') ? st.dischargeDispatchAvailable : false;
-        const __rc85OfflineReserveW = rc85OfflineReserveW(storages);
-        dischargeDispatchAvailable = Math.max(0, Number(dischargeDispatchAvailable) - __rc85OfflineReserveW); // RC85_OFFLINE_RESERVE_APPLIED
-
+      const dischargeDispatchAvailable = (st && typeof st.dischargeDispatchAvailable === 'boolean') ? st.dischargeDispatchAvailable : false;
 
       return {
         ...s,
@@ -11896,11 +12045,11 @@ async onReady() {
       // Damit kann ein angenommener LPC-Befehl sofort einen vollständigen
       // Regelzyklus auslösen und wird nicht nur in Diagnose-States abgelegt.
       try { await this._para14aEebusApi.init(); } catch (e) { this.log.warn('§14a EEBUS direct API init failed: ' + (e && e.message ? e.message : e)); }
-
       // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
       // Without this, the UI might fall back to legacy or show default values after reload.
       try { await this.subscribeEmsUiStates(); } catch (e) { this.log.debug('EMS UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
-
+      try { this._adminOverviewPublisher?.stop(); this._adminOverviewPublisher = new AdminOverviewPublisher(this); await this._adminOverviewPublisher.initialize(); }
+      catch (e) { this._adminOverviewPublisher = null; this.log.warn('EOS Admin EMS overview failed: ' + (e && e.message ? e.message : e)); }
       // Focused 5s live refresh for Energiefluss + charging inputs.
       try {
         this._nwStartLiveCoreRefresh();
@@ -12684,12 +12833,7 @@ async onReady() {
     // -------------------------------------------------------------------
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: (req, res, next) => {
     app.use(async (req, res, next) => {
-      // Ein neues System muss die streng rollen-geschützte Lizenzverwaltung
-      // auch ohne bereits vorhandene Lizenz erreichen können. Dieser Bootstrap
-      // gibt ausschließlich die Login-/Lizenzpfade und deren minimale Assets frei.
-      // Alle Lizenzdaten-APIs und die Seite selbst bleiben zusätzlich über
-      // `license.manage` auf Installer/Admin beschränkt.
-      if (isUnlicensedLicenseBootstrapRequest(req)) return next();
+      if (isUnlicensedLicenseBootstrapRequest(req)) return next(); // Enger Admin-/Installer-Lizenz-Bootstrap vor dem allgemeinen Gate.
 
       if (!this._nwLicenseOk) {
         try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (_eLicGate) {}
@@ -12753,10 +12897,7 @@ async onReady() {
               .card{width:min(720px,92vw);background:rgba(2,6,23,0.55);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:20px 18px;box-shadow:0 20px 80px rgba(0,0,0,0.55)}
               h1{font-size:18px;margin:0 0 10px 0}
               p{margin:8px 0;color:rgba(255,255,255,0.85);line-height:1.45}
-              code{background:rgba(148,163,184,0.14);padding:2px 6px;border-radius:8px}
-              .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
-              .btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:11px;text-decoration:none;font-weight:750;border:1px solid rgba(148,163,184,.28);color:#eef7ff;background:rgba(15,23,42,.8)}
-              .btn.primary{color:#00160d;border-color:rgba(0,230,118,.75);background:linear-gradient(135deg,#00e676,#22f2a1);box-shadow:0 10px 30px rgba(0,230,118,.2)}
+              code{background:rgba(148,163,184,0.14);padding:2px 6px;border-radius:8px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:11px;text-decoration:none;font-weight:750;border:1px solid rgba(148,163,184,.28);color:#eef7ff;background:rgba(15,23,42,.8)}.btn.primary{color:#00160d;border-color:rgba(0,230,118,.75);background:linear-gradient(135deg,#00e676,#22f2a1);box-shadow:0 10px 30px rgba(0,230,118,.2)}
             </style>
           </head>
           <body>
@@ -12764,9 +12905,7 @@ async onReady() {
               <h1>${headline}</h1>
               <p><b>Status:</b> ${esc(lMsg)}</p>
               ${detailLine}
-              <p>Die Bedienoberfläche und alle lizenzpflichtigen EOS-Bereiche bleiben bis zur Aktivierung gesperrt. Die Lizenzverwaltung selbst ist bewusst auch auf einem neuen, noch nicht lizenzierten System erreichbar.</p>
-              <p>Öffne <b>Lizenz aktivieren</b>, melde dich dort mit den EOS-Admin- oder Installer-Zugangsdaten an und trage den gültigen Lizenzschlüssel ein. Die Lizenz wird beim Speichern sofort geprüft und übernommen.</p>
-              <div class="actions"><a class="btn primary" href="/license.html?nwAdmin=1">Lizenz aktivieren</a></div>
+              <p>Die Bedienoberfläche und alle lizenzpflichtigen EOS-Bereiche bleiben bis zur Aktivierung gesperrt. Die Lizenzverwaltung selbst ist bewusst auch auf einem neuen, noch nicht lizenzierten System erreichbar.</p><p>Öffne <b>Lizenz aktivieren</b>, melde dich dort mit den EOS-Admin- oder Installer-Zugangsdaten an und trage den gültigen Lizenzschlüssel ein. Die Lizenz wird beim Speichern sofort geprüft und übernommen.</p><div class="actions"><a class="btn primary" href="/license.html?nwAdmin=1">Lizenz aktivieren</a></div>
             </div>
           </body>
         </html>`);
@@ -13174,20 +13313,14 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * Sie lädt nur auth.js, damit sich ein Admin/Installer am Adapter anmelden
      * kann. Nach erfolgreicher Anmeldung wird die ursprüngliche URL neu geladen.
      */
-    const renderRuntimeAccessPage = (title, capability, requiredRole) => {
-      const isLicenseBootstrap = String(capability || '') === 'license.manage';
-      const subtitle = isLicenseBootstrap
-        ? 'Die Lizenzverwaltung bleibt auch ohne aktive EOS-Lizenz erreichbar. Bitte mit den EOS-Admin- oder Installer-Zugangsdaten anmelden; erst danach werden System-UUID und Lizenzfeld geladen.'
-        : 'Diese Seite ist geschützt. Bitte mit passender EOS-Rolle anmelden. Ohne Berechtigung werden keine Hintergrundwerte geladen oder angezeigt.';
-      const loginLabel = isLicenseBootstrap ? 'Admin-/Installer-Anmeldung' : 'Anmelden';
-      return `<!doctype html>
+    const renderRuntimeAccessPage = (title, capability, requiredRole) => `<!doctype html>
 <html lang="de"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>NexoWatt EOS – Zugriff geschützt</title><link href="/static/styles.css" rel="stylesheet"/></head>
 <body class="nw-cockpit-page nw-cockpit-skin" data-nw-required-capability="${String(capability || '')}" data-nw-page-name="${String(title || 'geschützte Seite')}" data-nw-required-role="${String(requiredRole || 'passende Rolle')}">
 <main><section class="nw-config-card" style="max-width:760px;margin:48px auto;padding:22px">
 <div class="nw-config-card__title">${String(title || 'Zugriff geschützt')}</div>
-<p class="nw-config-card__subtitle">${subtitle}</p>
-<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn" id="nwAccessLoginBtn" type="button">${loginLabel}</button><button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button></div>
+<p class="nw-config-card__subtitle">${String(capability || '') === 'license.manage' ? 'Die Lizenzverwaltung bleibt auch ohne aktive EOS-Lizenz erreichbar. Bitte mit den EOS-Admin- oder Installer-Zugangsdaten anmelden; erst danach werden System-UUID und Lizenzfeld geladen.' : 'Diese Seite ist geschützt. Bitte mit passender EOS-Rolle anmelden. Ohne Berechtigung werden keine Hintergrundwerte geladen oder angezeigt.'}</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn" id="nwAccessLoginBtn" type="button">${String(capability || '') === 'license.manage' ? 'Admin-/Installer-Anmeldung' : 'Anmelden'}</button><button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button></div>
 </section></main><script src="/static/auth.js"></script><script>
 window.addEventListener('nw-auth-login', function(){ try { window.location.reload(); } catch(e) {} });
 document.addEventListener('DOMContentLoaded', function(){
@@ -13195,7 +13328,6 @@ document.addEventListener('DOMContentLoaded', function(){
   try { document.getElementById('nwAccessAdminBtn').addEventListener('click', function(){ var h=window.location.hostname||'localhost'; window.location.href=(window.location.protocol||'http:')+'//'+h+':8081/#tab-nexowatt-ui-0'; }); } catch(e) {}
 });
 </script></body></html>`;
-    };
 
     /** Rollenprüfung direkt vor Auslieferung sensibler HTML-Seiten. */
     const requirePageAccessOrRenderLock = async (req, res, cap, title, requiredRole) => {
@@ -15420,9 +15552,14 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', enableFlag: 'enableGeneratorControl', mandatory: false },
       { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', enableFlag: 'enableThresholdControl', mandatory: false },
       { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', enableFlag: 'enableRelayControl', mandatory: false },
-      { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (z.B. RLM/0‑Einspeisung/Import‑Limits)', enableFlag: 'enableGridConstraints', mandatory: false },
+      { id: 'grid', label: 'Netzlimits', desc: 'Dauerhafter Netzanschlussschutz mit Import-Soft-/Hard-Limit; 0‑Einspeisung bleibt optional', enableFlag: 'enableGridConstraints', mandatory: true },
       { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung / Energie‑Tipps ohne automatische Schaltbefehle', enableFlag: 'enableAiAdvisor', mandatory: false },
       { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert und Einspeisewert für das Kundenfrontend (Home + EOS)', enableFlag: 'enableEnergyWallet', mandatory: true },
+      { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Read-only 15-Minuten-Bilanz und Herkunftsjournal', enableFlag: 'enableEnergyLedger', mandatory: false },
+      // Verborgener AppCenter-Zustand: Das Stationsdisplay wird unter Ladepunkte konfiguriert.
+      // Die Normalisierung muss es trotzdem erhalten, wenn ein anderer AppCenter-Reiter speichert.
+      { id: 'chargeKiosk', label: 'DC-Stationsdisplay', desc: 'Tokenisierte Stationsseiten für DC-Ladepunkte', enableFlag: 'enableChargeKiosk', mandatory: false, hidden: true },
+      { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'Lokale Energie-Knoten, Cluster und sichere Feldsteuerung', enableFlag: 'enableMeshMicrogrid', mandatory: false },
       // tariff is a shared helper module (provider + budget). Keep it always present.
       { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
@@ -15513,8 +15650,23 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       for (const a of _nwAppCatalog) {
         if (!a.enableFlag) continue;
         const st = emsApps.apps && emsApps.apps[a.id] ? emsApps.apps[a.id] : null;
-        const enabled = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
+        const enabled = a.id === 'grid'
+          ? true
+          : (this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled));
         n[a.enableFlag] = enabled;
+      }
+
+      // Verschachtelte Modulschalter mit emsApps synchronisieren. Dadurch bleiben
+      // Herkunftsjournal, DC-Display und Mesh beim Speichern anderer Reiter erhalten.
+      for (const [appId, configKey] of [
+        ['energyLedger', 'energyLedger'],
+        ['chargeKiosk', 'chargeKiosk'],
+        ['meshMicrogrid', 'meshMicrogrid'],
+      ]) {
+        const st = emsApps.apps && emsApps.apps[appId] ? emsApps.apps[appId] : null;
+        const enabled = this._nwLicenseAllowsAppId(appId) && !!(st && st.installed && st.enabled);
+        n[configKey] = (n[configKey] && typeof n[configKey] === 'object') ? n[configKey] : {};
+        n[configKey].enabled = enabled;
       }
 
       // §14a is controlled via installerConfig.para14a
@@ -15560,9 +15712,10 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         enableGeneratorControl: (typeof n.enableGeneratorControl === 'boolean') ? n.enableGeneratorControl : undefined,
         enableThresholdControl: (typeof n.enableThresholdControl === 'boolean') ? n.enableThresholdControl : undefined,
         enableRelayControl: (typeof n.enableRelayControl === 'boolean') ? n.enableRelayControl : undefined,
-        enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
+        enableGridConstraints: true,
         enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
         enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
+        enableEnergyLedger: (typeof n.enableEnergyLedger === 'boolean') ? n.enableEnergyLedger : undefined,
         enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
         enableMeshMicrogrid: (typeof n.enableMeshMicrogrid === 'boolean') ? n.enableMeshMicrogrid : undefined,
         enableNetOperatorInterface: (typeof n.enableNetOperatorInterface === 'boolean') ? n.enableNetOperatorInterface : undefined,
@@ -15575,6 +15728,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         // KI‑Energieberater
         aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
         energyWallet: (n.energyWallet && typeof n.energyWallet === 'object') ? n.energyWallet : {},
+        energyLedger: (n.energyLedger && typeof n.energyLedger === 'object') ? n.energyLedger : { enabled: false },
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
         meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
         netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
@@ -15977,7 +16131,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableEnergyLedger','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -15986,7 +16140,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','energyLedger','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -16233,7 +16387,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableEnergyLedger','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -16242,7 +16396,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','energyLedger','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -21280,7 +21434,7 @@ const _nwDisplayBuildPayload = (station) => {
       warnings: presentation.warnings,
     },
     display: {
-      apiVersion: '0.8.192',
+      apiVersion: '0.8.202',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -21473,7 +21627,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.192';
+  commandPayload.version = '0.8.202';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -22710,7 +22864,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.192').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.202').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -23363,7 +23517,7 @@ settingsConfig: {
           evcsAvailable: evcsAvailableEffective,
           peakShavingEnabled: boolOr(cfg.enablePeakShaving, false) || boolOr(cfg && cfg.peakShaving && cfg.peakShaving.atypical && cfg.peakShaving.atypical.enabled, false),
           para14aEnabled: boolOr(cfg && cfg.installerConfig && cfg.installerConfig.para14a, false),
-          gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
+          gridConstraintsEnabled: true,
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: storageFarmAvailableEffective,
           storageFarmAppActive: storageFarmAppActive,
@@ -26191,22 +26345,30 @@ return res.json(out);
     app.get('/events', async (req, res) => {
       res.set({
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
       });
       res.flushHeaders();
 
       const access = authEnabled ? await resolveAccess(req) : null;
-      const client = { req, res, internal: !!(authEnabled && access && access.isInstaller) };
-      this.sseClients.add(client);
+      const client = this._nwSseGuard.addClient({
+        req,
+        res,
+        internal: !!(authEnabled && access && access.isInstaller),
+      });
+      if (!client) {
+        try { res.end(); } catch (_eEnd) {}
+        return;
+      }
 
       // Initialpayload folgt derselben Sicherheitsgrenze wie /api/state.
       const initialPayload = client.internal ? this.stateCache : nwBuildPublicStateSnapshot(this.stateCache, true);
-      res.write("data: " + JSON.stringify({ type: 'init', payload: initialPayload }) + "\n\n");
-
-      req.on('close', () => {
-        this.sseClients.delete(client);
-      });
+      this._nwSseGuard.write(
+        client,
+        "retry: 3000\n" + "data: " + JSON.stringify({ type: 'init', payload: initialPayload }) + "\n\n",
+        { kind: 'init' },
+      );
     });
 
     const bind = (this.config && (this.config.ip || this.config.bind)) || '0.0.0.0';
@@ -26807,6 +26969,13 @@ return res.json(out);
       this._nwRefreshLiveCoreDatapoints('interval').catch(() => {});
     }, intervalMs);
   }
+  /**
+   * Subscribes and primes all integrated and effective PV forecast states.
+   *
+   * The web frontend receives `/api/state` and SSE values exclusively from the
+   * adapter's `stateCache`. Forecast provider and EMS modules write local
+   * ioBroker states directly, so they require an explicit cache bridge here.
+   */
   async subscribeForecastUiStates() {
     const namespace = this.namespace;
     const prefix = `${namespace}.forecast.`;
@@ -26888,7 +27057,6 @@ return res.json(out);
     }
   }
 
-
   /**
    * Code-Teil: subscribeConfiguredStates
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -26940,8 +27108,10 @@ return res.json(out);
       'netFeeQ4NtStart','netFeeQ4NtEnd','netFeeQ4HtStart','netFeeQ4HtEnd',
       // EVCS defaults
       'evcsMaxPower','evcsCount',
-      // Weather App (FIS settings)
-      'weatherEnabled','weatherUsageMode','weatherApiKey'
+      // Weather App + optional customer PV forecast (FIS settings)
+      'weatherEnabled','weatherUsageMode','weatherApiKey','forecastSourceMode','openMeteoPvEnabled','forecastFallbackToDatapoints',
+      'openMeteoLatitude','openMeteoLongitude','openMeteoTimezone','forecastUpdateIntervalMin','forecastHorizonHours','pvForecastPlanningSafetyPct',
+      'pvForecastInstalledKwp','pvForecastTiltDeg','pvForecastAzimuthDeg','pvForecastLossPercent','pvForecastInverterLimitW','pvForecastArrays'
     ];
     const storageFarmLocalKeys = [
       'enabled', 'mode', 'configJson', 'groupsJson',
@@ -33906,6 +34076,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
 // push update to all SSE clients (batched to avoid UI freezes)
     try {
+      // RC88_SSE_IDLE_ZERO_ALLOCATION: without connected dashboards there is
+      // nothing to batch or serialize. Avoid a permanent 120-ms timer/allocation
+      // chain on headless customer systems.
+      if (!this.sseClients || !this.sseClients.size) {
+        this._ssePendingPayload = {};
+        return;
+      }
       if (!this._ssePendingPayload) this._ssePendingPayload = {};
       Object.assign(this._ssePendingPayload, payload);
 
@@ -33917,17 +34094,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           this._sseFlushTimer = null;
           if (!p || !Object.keys(p).length) return;
 
-          for (const client of Array.from(this.sseClients)) {
-            try {
-              const publicPatch = client && client.internal
-                ? p
-                : (typeof this._nwBuildPublicStatePatch === 'function' ? this._nwBuildPublicStatePatch(p) : {});
-              if (!publicPatch || !Object.keys(publicPatch).length) continue;
-              client.res.write("data: " + JSON.stringify({ type: 'update', payload: publicPatch }) + "\n\n");
-            } catch (_e) {
-              this.sseClients.delete(client);
-            }
-          }
+          if (!this.sseClients || !this.sseClients.size) return;
+          try {
+            const clients = Array.from(this.sseClients);
+            const hasInternal = clients.some((client) => client && client.internal);
+            const hasPublic = clients.some((client) => !(client && client.internal));
+            const internalChunk = hasInternal
+              ? "data: " + JSON.stringify({ type: 'update', payload: p }) + "\n\n"
+              : '';
+            const publicPatch = hasPublic
+              ? (typeof this._nwBuildPublicStatePatch === 'function' ? this._nwBuildPublicStatePatch(p) : {})
+              : null;
+            const publicChunk = publicPatch && Object.keys(publicPatch).length
+              ? "data: " + JSON.stringify({ type: 'update', payload: publicPatch }) + "\n\n"
+              : '';
+            this._nwSseGuard.broadcast({ internalChunk, publicChunk });
+          } catch (_e) {}
         }, Math.max(10, batchMs));
       }
     } catch (_e) {}
@@ -33953,20 +34135,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwCloseSseClients() {
+    try { this._nwClearTimer('_sseFlushTimer'); } catch (_e0) {}
     try {
-      for (const client of Array.from(this.sseClients || [])) {
-        if (!client) continue;
-        try { client.res && client.res.write("event: shutdown\ndata: {}\n\n"); } catch (_e0) {}
-        try { client.res && client.res.end(); } catch (_e1) {}
-        try {
-          const socket = (client.req && client.req.socket) || (client.res && client.res.socket) || null;
-          if (socket && typeof socket.destroy === 'function') socket.destroy();
-        } catch (_e2) {}
+      if (this._nwSseGuard && typeof this._nwSseGuard.closeAll === 'function') {
+        this._nwSseGuard.closeAll('adapter-unload');
+      } else {
+        for (const client of Array.from(this.sseClients || [])) {
+          try { client && client.res && client.res.end && client.res.end(); } catch (_e1) {}
+        }
+        try { this.sseClients.clear(); } catch (_e2) {}
       }
     } catch (_e3) {}
-
-    try { this.sseClients.clear(); } catch (_e4) {}
-    try { this._ssePendingPayload = {}; } catch (_e5) {}
+    try { this._ssePendingPayload = {}; } catch (_e4) {}
   }
   /**
    * Code-Teil: _nwCloseServer
@@ -34066,7 +34246,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     this._nwShutdownStartedAt = Date.now();
     try { if (this._openMeteoPvForecastRuntime) this._openMeteoPvForecastRuntime.stop(); } catch (_eForecast) {}
     this._openMeteoPvForecastRuntime = null;
-
+    try { this._adminOverviewPublisher?.stop(); } catch (_eAdminOverview) {}
     try { this._nwStopConnectionHeartbeat(); } catch (_eBeat) {}
     try { this._nwSetInfoConnection(false, 'unload').catch(() => {}); } catch (_eConn) {}
     /**
