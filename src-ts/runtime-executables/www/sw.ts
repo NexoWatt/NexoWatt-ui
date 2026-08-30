@@ -44,7 +44,8 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v491';
+// RC92: Mobile History touch/tooltip patch; force existing PWA clients to refresh.
+const CACHE_NAME = 'nexowatt-cache-v492';
 
 const OFFLINE_URLS = [
   './',

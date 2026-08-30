@@ -1,20 +1,22 @@
-NexoWatt UI 0.8.216 RC91 – Cross-App Stability Candidate
+NexoWatt UI 0.8.217 RC92 – History Mobile Touch Stable Candidate
 
 Veröffentlichen ausschließlich aus diesem frisch entpackten Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.216 auf npm noch frei ist,
+- ob Version 0.8.217 auf npm noch frei ist,
 - ob alle npm-Paketdateien exakt dem zuletzt erzeugten Release-Artefakt entsprechen,
 - ob package.json, package-lock.json, io-package.json und Webmanifest dieselbe Version führen,
-- ob die RC91-Cross-App-, Runtime-, NVP-, Lade-, Speicher- und Safety-Verträge bestehen.
+- ob Runtime-Dateien und TypeScript-Quellen synchron sind.
 
-RC91 behebt Katalog- und Save-/Backup-Konsistenzfehler zwischen Energy Ledger,
-Mesh/Microgrid und dem unter Ladepunkte verborgenen DC-Stationsdisplay. Zusätzlich
-wird verhindert, dass TypeScript-only Syntax in die textstabil erzeugte main.js gelangt.
-Die produktive NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardware-Regelung bleibt
-fachlich unverändert.
+RC92 ist ein isolierter Frontend-Patch für die Historienseite:
+- flüssiges vertikales Scrollen auf Smartphones,
+- Tap zeigt Tagesleistung beziehungsweise Zeitraumenergie wie am Laptop,
+- Woche/Monat/Jahr zeigen kWh pro ausgewähltem Balken,
+- Tooltip bleibt im sichtbaren Smartphone-Viewport,
+- horizontaler Tages-Zoom bleibt erhalten,
+- keine Änderung an EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- oder Hardware-Regelung.
 
 Wichtig:
 - Alten Projektordner vollständig löschen oder umbenennen.

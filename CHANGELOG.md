@@ -1,3 +1,14 @@
+## 0.8.217 - 2026-08-29
+
+- RC92 korrigiert ausschließlich die mobile Bedienung der Historienseite; sämtliche EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardwareentscheidungen bleiben gegenüber RC91 unverändert.
+- Hauptchart und Preis-Chart verwenden `touch-action: pan-y pinch-zoom`, KPI-Karten `touch-action: auto`. Vertikale Wischbewegungen gehören dadurch wieder dem Browser und blockieren das Seitenscrollen nicht mehr.
+- Die Gestenerkennung unterscheidet belastbar zwischen kurzem Tap, vertikalem Scrollen und einer klar horizontalen Tages-Zoomgeste. `preventDefault()` wird ausschließlich beim bestätigten horizontalen Tages-Zoom aufgerufen.
+- Ein Smartphone-Tap nutzt denselben zentralen Auswertungspfad wie der Desktop-Klick: Tag zeigt Leistung in kW, Woche/Monat/Jahr zeigen Energie des ausgewählten Balkens in kWh.
+- Das Wertefenster ist viewportfest, für Safe-Area und schmale Displays begrenzt und bei vielen optionalen Verbraucher-/Erzeugerzeilen intern scrollbar. Damit bleibt es auch nach dem Herunterscrollen vollständig sichtbar.
+- Preis-Chart-Taps sind ebenfalls von Scrollgesten getrennt; synthetische Folge-Klicks werden unterdrückt, damit Wertefenster nicht doppelt geöffnet oder sofort wieder geschlossen werden.
+- Canvas-Resize und wiederholte Renderanforderungen werden pro Animationsframe gebündelt. Browserleisten- und Orientierungsänderungen erzeugen nicht mehr mehrere unnötige Vollzeichnungen hintereinander.
+- Ein neuer RC92-Browsertest emuliert ein 390-px-Touchgerät und prüft Tageswerte, Wochenenergien, vertikales Scrollen, Tooltip-Viewportgrenzen sowie den weiterhin funktionierenden horizontalen Tages-Zoom.
+
 ## 0.8.216 - 2026-08-27
 
 - RC91 prüft die AppCenter- und Backend-Verträge aller produktiven EMS-Apps gemeinsam. Der sichtbare Browser-Katalog, die Adapterstart-Normalisierung und der Installer-HTTP-Roundtrip müssen dieselben App-IDs erhalten; absichtlich verborgene Module werden ausdrücklich konserviert.

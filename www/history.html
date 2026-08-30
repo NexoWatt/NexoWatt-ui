@@ -38,7 +38,9 @@
       background: rgba(2, 6, 23, 0.62);
       border: 1px solid rgba(148, 163, 184, 0.18);
       border-radius: 18px;
-      touch-action: none;
+      /* RC92: Vertikale Smartphone-Gesten gehören dem Browser. Nur eine klar
+         horizontale Geste wird von history.js als Tages-Zoom übernommen. */
+      touch-action: pan-y pinch-zoom;
       user-select: none;
       -webkit-user-select: none;
       margin-bottom: 18px;
@@ -103,7 +105,9 @@
       background: linear-gradient(135deg, #111827, #020617);
       border: 1px solid rgba(148, 163, 184, 0.18);
       border-radius: 18px;
-      touch-action: none;
+      /* KPI-Karten besitzen keine eigene Wischgeste und dürfen das Scrollen
+         der Historienseite deshalb niemals blockieren. */
+      touch-action: auto;
       user-select: none;
       -webkit-user-select: none;
       padding: 12px;
@@ -122,7 +126,9 @@
       background: rgba(2, 6, 23, 0.62);
       border: 1px solid rgba(148, 163, 184, 0.18);
       border-radius: 18px;
-      touch-action: none;
+      /* Preiswerte lassen sich antippen; vertikales Scrollen und Pinch-Zoom
+         bleiben auf Touch-Geräten trotzdem native Browserfunktionen. */
+      touch-action: pan-y pinch-zoom;
       user-select: none;
       -webkit-user-select: none;
       margin-bottom: 14px;
@@ -135,6 +141,37 @@
     .price-legend .sw.import{ background:#3498db; height:8px; border-radius:3px; }
     .price-legend .sw.cost{ background:#ef4444; }
     #priceCards{ margin-top: 6px; }
+
+    /* RC92: Tooltip-Basis. Das Wertefenster wird am Viewport statt am langen
+       <main>-Container ausgerichtet und kann nach dem Scrollen nicht mehr
+       oberhalb des sichtbaren Smartphone-Bereichs landen. */
+    .nx-tip{
+      position: fixed;
+      z-index: 10000;
+      pointer-events: none;
+      box-sizing: border-box;
+      width: max-content;
+      max-width: min(320px, calc(100vw - 20px));
+    }
+    @media (max-width: 640px), (pointer: coarse){
+      .nx-tip.nx-tip--mobile{
+        left: 12px !important;
+        right: 12px !important;
+        top: auto !important;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: min(52vh, 420px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        pointer-events: auto;
+        padding: 11px 12px !important;
+        border-radius: 14px !important;
+        font-size: 13px !important;
+        line-height: 1.45;
+        box-shadow: 0 16px 42px rgba(0,0,0,.58) !important;
+      }
+    }
 
     /* Topbar Styling kommt zentral aus styles.css (fixiert/responsiv). */
   

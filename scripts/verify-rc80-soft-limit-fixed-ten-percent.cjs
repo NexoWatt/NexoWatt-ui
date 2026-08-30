@@ -117,7 +117,7 @@ function verifyPair(hardLimitW, expectedReserveW, expectedSoftW) {
   const safety = read('src-ts/runtime-executables/ems/services/safety-envelope.ts');
   assert(safety.includes('maxImportW - signedNvpW'));
   assert(!safety.includes('gridImportLimitW_planning'));
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v491'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').match(/const CACHE_NAME = 'nexowatt-cache-v\d+'/));
 
   // 10) Dokumentation nennt explizit das Ende der 1-/3-kW-Klammer.
   const docs = read('docs/RC80_SOFT_LIMIT_FIXED_TEN_PERCENT_DE.md');

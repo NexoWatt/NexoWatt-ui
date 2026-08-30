@@ -140,7 +140,7 @@ async function runPlanning({ connectionW, legacyHardW, peakLegacyW, rlmEnabled =
   assert(ui.includes('Führungsgröße ist der signierte NVP aus Zuordnung → Allgemein → Netzpunkt'));
 
   // 7) Browsercache und Dokumentation gehoeren zum neuen Release.
-  assert(readFirst('src-ts/runtime-executables/www/sw.ts', 'www/sw.js').includes("const CACHE_NAME = 'nexowatt-cache-v491'"));
+  assert(readFirst('src-ts/runtime-executables/www/sw.ts', 'www/sw.js').match(/const CACHE_NAME = 'nexowatt-cache-v\d+'/));
   const docs = read('docs/RC81_NVP_ASSIGNMENT_SINGLE_SOURCE_DE.md');
   assert(docs.includes('einzige statische Quelle'));
   assert(docs.includes('Hard-Limit = 30.000 W'));

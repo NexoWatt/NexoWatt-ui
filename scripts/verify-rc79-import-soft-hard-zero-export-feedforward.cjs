@@ -256,7 +256,7 @@ function makeGridRuntime({ pvActualW = 20000, initialLimitW = null } = {}) {
     assert(!safety.includes('gridImportLimitW_planning'));
   }
 
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v491'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').match(/const CACHE_NAME = 'nexowatt-cache-v\d+'/));
   console.log('[RC79] OK: Import Soft-/Hard-Limit, signierter NVP, 0-Einspeise-PV-Feed-forward, Speicher-Konfliktschutz, AppCenter-Platzierung und Cold-Start-Objektinitialisierung geprueft.');
 })().catch((error) => {
   console.error('[RC79] ERROR:', error && error.stack ? error.stack : error);

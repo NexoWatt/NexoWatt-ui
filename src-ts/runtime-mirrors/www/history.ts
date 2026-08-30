@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 20426f8d303f7b429215bc2bcd90c7732d19d8ed7f767d5170b697adfbeedae6
+ * Original-Hash: e9820ad342005965d5e096a9a974e67d29b5811e9175cbae429f65beb6b08194
  */
 
 /**
@@ -243,26 +243,77 @@ const historyWindow = window as HistoryWindow;
 
 (function(){
   // simple line chart renderer on canvas
-  const canvas = document.getElementById('chart') as HTMLCanvasElement;
-  const ctx: HistoryCanvasContext = canvas.getContext('2d');
-  const priceCanvas = document.getElementById('priceChart') as HTMLCanvasElement | null;
-  const priceCtx: HistoryCanvasContext = priceCanvas ? priceCanvas.getContext('2d') : null;
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const priceCanvas = document.getElementById('priceChart');
+  const priceCtx = priceCanvas ? priceCanvas.getContext('2d') : null;
   /**
    * Code-Teil: resize
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  let historyRenderFrame = 0;
+  let historyRenderSettleTimer = null;
+  let historyResizeSettleTimer = null;
+
+  /**
+   * RC92 – Canvas-Größe nur bei einer echten Layoutänderung aktualisieren.
+   *
+   * Das erneute Setzen von width/height löscht den gesamten Canvas. Mobile
+   * Browser senden beim Ein-/Ausblenden ihrer Adressleiste mehrere Resize-
+   * Ereignisse. Ohne diese Prüfung entstanden dadurch unnötige Vollzeichnungen
+   * und kurze Blockaden des Hauptthreads während des Scrollens.
+   */
   function resize(){
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
+    let changed = false;
+    const chartWidth = Math.max(1, Math.round(canvas.clientWidth || 1));
+    const chartHeight = Math.max(1, Math.round(canvas.clientHeight || 1));
+    if (canvas.width !== chartWidth) { canvas.width = chartWidth; changed = true; }
+    if (canvas.height !== chartHeight) { canvas.height = chartHeight; changed = true; }
     if (priceCanvas) {
-      priceCanvas.width = priceCanvas.clientWidth;
-      priceCanvas.height = priceCanvas.clientHeight;
+      const priceWidth = Math.max(1, Math.round(priceCanvas.clientWidth || 1));
+      const priceHeight = Math.max(1, Math.round(priceCanvas.clientHeight || 1));
+      if (priceCanvas.width !== priceWidth) { priceCanvas.width = priceWidth; changed = true; }
+      if (priceCanvas.height !== priceHeight) { priceCanvas.height = priceHeight; changed = true; }
+    }
+    return changed;
+  }
+
+  /**
+   * RC92 – Mehrere Renderanforderungen eines Frames zusammenfassen.
+   *
+   * Fachliche Daten werden nicht gedrosselt oder verändert. Es wird lediglich
+   * verhindert, dass dieselben Canvas-Daten innerhalb eines Browserframes
+   * mehrfach vollständig gezeichnet werden.
+   */
+  function scheduleHistoryFrame(){
+    if (historyRenderFrame) return;
+    const render = ()=>{
+      historyRenderFrame = 0;
+      try { resize(); } catch(_e){}
+      try { draw(); } catch(_e){}
+      try { drawPricingHistoryChart(); } catch(_e){}
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      historyRenderFrame = window.requestAnimationFrame(render);
+    } else {
+      historyRenderFrame = window.setTimeout(render, 16);
     }
   }
-  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  window.addEventListener('resize', ()=>{ resize(); draw(); drawPricingHistoryChart(); });
+
+  // Mobile Viewport-Änderungen werden pro Frame zusammengefasst. Ein später
+  // Settle-Render übernimmt die endgültige Größe nach der Browserleisten-Animation.
+  window.addEventListener('resize', ()=>{
+    scheduleHistoryFrame();
+    if (historyResizeSettleTimer) clearTimeout(historyResizeSettleTimer);
+    historyResizeSettleTimer = setTimeout(scheduleHistoryFrame, 140);
+  }, { passive: true });
+  window.addEventListener('orientationchange', ()=>{
+    scheduleHistoryFrame();
+    if (historyResizeSettleTimer) clearTimeout(historyResizeSettleTimer);
+    historyResizeSettleTimer = setTimeout(scheduleHistoryFrame, 220);
+  }, { passive: true });
   /**
    * Code-Teil: fmt
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -271,8 +322,115 @@ const historyWindow = window as HistoryWindow;
    */
   function fmt(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
-  let data: HistoryRuntimeData = null;
-  let chartMode: HistoryChartMode = 'day'; // 'day' | 'week' | 'month' | 'year'
+
+  /**
+   * RC92 – Maus- und Touchkoordinaten einheitlich lesen.
+   *
+   * `clientX/clientY` bleiben im Viewport-System. Für die Auswertung des
+   * Canvas werden sie separat in dessen interne Pixelkoordinaten umgerechnet.
+   * So stimmt der ausgewählte Zeitpunkt auch bei responsiver Skalierung.
+   */
+  function eventClientPoint(ev){
+    const touch = (ev && ev.touches && ev.touches[0])
+      ? ev.touches[0]
+      : (ev && ev.changedTouches && ev.changedTouches[0])
+        ? ev.changedTouches[0]
+        : null;
+    const clientX = Number(touch ? touch.clientX : ev && ev.clientX);
+    const clientY = Number(touch ? touch.clientY : ev && ev.clientY);
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    return { clientX, clientY };
+  }
+
+  function canvasPointFromEvent(targetCanvas, ev){
+    const point = eventClientPoint(ev);
+    if (!point || !targetCanvas) return null;
+    const rect = targetCanvas.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) return null;
+    const scaleX = Number(targetCanvas.width || 0) / rect.width || 1;
+    const scaleY = Number(targetCanvas.height || 0) / rect.height || 1;
+    return {
+      clientX: point.clientX,
+      clientY: point.clientY,
+      x: (point.clientX - rect.left) * scaleX,
+      y: (point.clientY - rect.top) * scaleY,
+    };
+  }
+
+  function isMobileHistorySurface(){
+    const narrow = Number(window.innerWidth || 0) <= 720;
+    const coarse = Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    return narrow || coarse;
+  }
+
+  /**
+   * RC92 – Wertefenster garantiert im sichtbaren Viewport platzieren.
+   *
+   * Der alte Tooltip war absolut im langen <main>-Container positioniert, seine
+   * Koordinaten stammten jedoch vom Canvas. Nach dem Herunterscrollen lag er auf
+   * Smartphones deshalb häufig außerhalb des sichtbaren Bereichs. Mobile Geräte
+   * erhalten nun eine feste Wertekarte am unteren Viewportrand; Desktop bleibt
+   * bei der vertrauten Position neben dem Mauszeiger.
+   */
+  function showFloatingTip(tip, html, clientX, clientY){
+    if (!tip) return;
+    const mobile = isMobileHistorySurface();
+    tip.innerHTML = html;
+    tip.classList.toggle('nx-tip--mobile', mobile);
+    tip.style.display = 'block';
+    tip.style.visibility = 'hidden';
+
+    if (mobile) {
+      // Die konkrete Position kommt aus der mobilen CSS-Klasse. Alte Desktop-
+      // Inlinewerte müssen vorher gelöscht werden, damit kein versteckter Restwert gewinnt.
+      tip.style.left = '12px';
+      tip.style.right = '12px';
+      tip.style.top = 'auto';
+      tip.style.bottom = 'calc(12px + env(safe-area-inset-bottom, 0px))';
+      tip.style.width = 'auto';
+      tip.style.maxWidth = 'none';
+      // Viele optionale Verbraucher/Erzeuger können die Wertekarte verlängern.
+      // Sie bleibt im Viewport und darf intern scrollen, ohne die Seite zu blockieren.
+      tip.style.maxHeight = 'min(62dvh, 480px)';
+      tip.style.overflowY = 'auto';
+      tip.style.overscrollBehavior = 'contain';
+      tip.style.touchAction = 'pan-y';
+      tip.style.pointerEvents = 'auto';
+      tip.style.visibility = 'visible';
+      return;
+    }
+
+    tip.style.right = 'auto';
+    tip.style.bottom = 'auto';
+    tip.style.width = 'max-content';
+    tip.style.maxWidth = 'min(320px, calc(100vw - 20px))';
+    tip.style.maxHeight = 'none';
+    tip.style.overflowY = 'visible';
+    tip.style.overscrollBehavior = 'auto';
+    tip.style.touchAction = 'auto';
+    tip.style.pointerEvents = 'none';
+    tip.style.left = '0px';
+    tip.style.top = '0px';
+
+    const viewportWidth = Math.max(1, Number(window.innerWidth || document.documentElement.clientWidth || 1));
+    const viewportHeight = Math.max(1, Number(window.innerHeight || document.documentElement.clientHeight || 1));
+    const bounds = tip.getBoundingClientRect();
+    const width = Math.min(bounds.width || 240, Math.max(1, viewportWidth - 20));
+    const height = Math.min(bounds.height || 120, Math.max(1, viewportHeight - 20));
+    const margin = 10;
+    const gap = 16;
+    let left = clientX + gap;
+    if (left + width > viewportWidth - margin) left = clientX - width - gap;
+    let top = clientY - height / 2;
+    left = Math.max(margin, Math.min(left, viewportWidth - width - margin));
+    top = Math.max(margin, Math.min(top, viewportHeight - height - margin));
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.visibility = 'visible';
+  }
+
+  let data=null;
+  let chartMode='day'; // 'day' | 'week' | 'month' | 'year'
   let historyBooted = false;
   let historyRetryTimer = null;
   let historyRetryCount = 0;
@@ -282,25 +440,15 @@ const historyWindow = window as HistoryWindow;
   let historyLastLoadedAt = 0;
   /**
    * Code-Teil: scheduleHistoryRenderBurst
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   * Zweck: Rendert im nächsten Animationsframe und genau einmal nach dem Layout-Settle.
+   * Zusammenhang: Ersetzt den früheren Drei-Zeichnungen-Burst, der auf Smartphones
+   *               beim Scrollen unnötig Hauptthread-Zeit beanspruchte.
+   * RC92-Invariante: Mehrere Aufrufer innerhalb desselben Frames erzeugen nur eine Vollzeichnung.
    */
   function scheduleHistoryRenderBurst(){
-    /**
-     * Code-Teil: doRender
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    const doRender = ()=>{
-      try { resize(); } catch(_e){}
-      try { draw(); } catch(_e){}
-      try { drawPricingHistoryChart(); } catch(_e){}
-    };
-    try { requestAnimationFrame(doRender); } catch(_e) { doRender(); }
-    setTimeout(doRender, 80);
-    setTimeout(doRender, 260);
+    scheduleHistoryFrame();
+    if (historyRenderSettleTimer) clearTimeout(historyRenderSettleTimer);
+    historyRenderSettleTimer = setTimeout(scheduleHistoryFrame, 180);
   }
   /**
    * Code-Teil: countRenderableHistoryPoints
@@ -308,7 +456,7 @@ const historyWindow = window as HistoryWindow;
    * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function countRenderableHistoryPoints(res: HistoryApiResponse | null | undefined): number{
+  function countRenderableHistoryPoints(res){
     let count = 0;
     /**
      * Code-Teil: scan
@@ -918,7 +1066,7 @@ function draw(){
      * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    function line(k: string, color: string, accessor = 'val', dash?: number[], width?: number){
+    function line(k, color, accessor='val', dash, width){
       const vals = (series[k] && series[k].values) || [];
       if(!vals.length) return;
       ctx.save(); ctx.beginPath();
@@ -1793,10 +1941,9 @@ function draw(){
 
   (function initPricingTooltip(){
     if (!priceCanvas || !priceCtx) return;
-    const wrap = document.getElementById('pricingSection') || priceCanvas.parentElement || document.body;
     let tip = document.createElement('div');
     tip.className = 'nx-tip nx-price-tip';
-    tip.style.position = 'absolute';
+    tip.style.position = 'fixed';
     tip.style.pointerEvents = 'none';
     tip.style.background = 'rgba(20,24,28,.95)';
     tip.style.border = '1px solid #2a323b';
@@ -1806,9 +1953,14 @@ function draw(){
     tip.style.color = '#c8d1d9';
     tip.style.boxShadow = '0 8px 22px rgba(0,0,0,.35)';
     tip.style.display = 'none';
-    tip.style.zIndex = '5';
-    wrap.style.position = 'relative';
-    wrap.appendChild(tip);
+    tip.style.zIndex = '10000';
+    tip.style.maxWidth = 'min(320px, calc(100vw - 20px))';
+    tip.style.width = 'max-content';
+    tip.style.boxSizing = 'border-box';
+    tip.dataset.historyTip = 'price';
+    tip.setAttribute('role', 'status');
+    tip.setAttribute('aria-live', 'polite');
+    document.body.appendChild(tip);
     /**
      * Code-Teil: hidePriceTip
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -1818,6 +1970,7 @@ function draw(){
     function hidePriceTip(silent){
       const wasVisible = tip.style.display !== 'none';
       tip.style.display = 'none';
+      tip.style.visibility = 'hidden';
       priceCrossX = null;
       if (!silent && wasVisible) drawPricingHistoryChart();
     }
@@ -1851,14 +2004,9 @@ function draw(){
      */
     function showPriceTipFromEvent(ev){
       if (!pricingChartState || !Array.isArray(pricingChartState.points) || !pricingChartState.points.length) return;
-      const rect = priceCanvas.getBoundingClientRect();
-      const t = (ev.touches && ev.touches[0]) ? ev.touches[0]
-              : (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0]
-              : null;
-      const cx = t ? t.clientX : ev.clientX;
-      const cy = t ? t.clientY : ev.clientY;
-      const xPos = cx - rect.left;
-      const yPos = cy - rect.top;
+      const point = canvasPointFromEvent(priceCanvas, ev);
+      if (!point) return;
+      const { clientX: cx, clientY: cy, x: xPos, y: yPos } = point;
       const state = pricingChartState;
       if (xPos < state.L || xPos > (priceCanvas.width - state.R) || yPos < state.T || yPos > (priceCanvas.height - state.B)) {
         hidePriceTip();
@@ -1879,13 +2027,9 @@ function draw(){
       if (isPriceSeriesVisible('import')) rows.push(row('Bezug', formatKwh2(best.importKwh)));
       if (isPriceSeriesVisible('cost')) rows.push(row('Kosten', formatMoney2(best.costEur)));
       if (!rows.length) { hidePriceTip(); return; }
-      tip.innerHTML = `<div style="margin-bottom:6px;opacity:.9">${formatHeader(best.ts)}</div>` + rows.join('');
-      tip.style.display = 'block';
+      const html = `<div style="margin-bottom:6px;opacity:.9">${formatHeader(best.ts)}</div>` + rows.join('');
       priceCrossX = state.x(best.ts);
-      const left = Math.min(Math.max(priceCrossX + 12, 8), Math.max(8, priceCanvas.width - 240));
-      const top = Math.min(Math.max(yPos - 70, 8), Math.max(8, priceCanvas.height - 150));
-      tip.style.left = left + 'px';
-      tip.style.top = top + 'px';
+      showFloatingTip(tip, html, cx, cy);
       drawPricingHistoryChart();
     }
 
@@ -1893,17 +2037,50 @@ function draw(){
     document.addEventListener('pointerdown', (ev)=>{
       if (tip.style.display === 'none') return;
       const target = ev.target;
-      if (target === priceCanvas) return;
+      if (target === priceCanvas || tip.contains(target)) return;
       hidePriceTip();
     }, true);
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') hidePriceTip(); });
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    priceCanvas.addEventListener('mouseleave', ()=> hidePriceTip());
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    priceCanvas.addEventListener('click', (ev)=> showPriceTipFromEvent(ev));
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    priceCanvas.addEventListener('touchend', (ev)=> showPriceTipFromEvent(ev), { passive:true });
+    // Desktop-Mauszeiger darf das Wertefenster schließen. Auf Touch-Geräten
+    // erzeugte synthetische mouseleave-Ereignisse dürfen einen gerade geöffneten
+    // Tooltip dagegen nicht sofort wieder verstecken.
+    priceCanvas.addEventListener('mouseleave', ()=>{
+      if (!isMobileHistorySurface()) hidePriceTip();
+    });
+    window.addEventListener('scroll', ()=>{
+      if (tip.style.display !== 'none') hidePriceTip();
+    }, { passive: true });
+
+    let priceTouchGesture = null;
+    let priceSuppressClickUntil = 0;
+    priceCanvas.addEventListener('touchstart', (ev)=>{
+      if (!ev.touches || ev.touches.length !== 1) { priceTouchGesture = null; return; }
+      const point = eventClientPoint(ev);
+      priceTouchGesture = point ? { startX: point.clientX, startY: point.clientY, moved: false } : null;
+    }, { passive: true });
+    priceCanvas.addEventListener('touchmove', (ev)=>{
+      if (!priceTouchGesture) return;
+      const point = eventClientPoint(ev);
+      if (!point) return;
+      const dx = point.clientX - priceTouchGesture.startX;
+      const dy = point.clientY - priceTouchGesture.startY;
+      if (Math.hypot(dx, dy) >= 12) priceTouchGesture.moved = true;
+    }, { passive: true });
+    priceCanvas.addEventListener('touchend', (ev)=>{
+      const gesture = priceTouchGesture;
+      priceTouchGesture = null;
+      if (!gesture || gesture.moved) return;
+      priceSuppressClickUntil = Date.now() + 600;
+      showPriceTipFromEvent(ev);
+    }, { passive: true });
+    priceCanvas.addEventListener('touchcancel', ()=>{ priceTouchGesture = null; }, { passive: true });
+    // Desktop-Klick bleibt unverändert. Den nach einem Touch-Tap synthetisierten
+    // Klick unterdrücken wir, damit das Wertefenster nur einmal aktualisiert wird.
+    priceCanvas.addEventListener('click', (ev)=>{
+      if (Date.now() < priceSuppressClickUntil) return;
+      showPriceTipFromEvent(ev);
+    });
   })();
 /**
  * Code-Teil: load
@@ -2304,7 +2481,7 @@ async function load(force = false){
   }
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document.getElementById('loadBtn'). Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  document.getElementById('loadBtn').addEventListener('click', () => load());
+  document.getElementById('loadBtn').addEventListener('click', load);
 
   // stacked/line toggle (day view)
   const stackBtn = document.getElementById('stackToggle');
@@ -2403,10 +2580,9 @@ async function load(force = false){
 
   // === click-to-inspect tooltip (inside main scope) ===
   (function(){
-    const wrap = canvas.parentElement || document.body;
     let tip = document.createElement('div');
     tip.className = 'nx-tip';
-    tip.style.position = 'absolute';
+    tip.style.position = 'fixed';
     tip.style.pointerEvents = 'none';
     tip.style.background = 'rgba(20,24,28,.95)';
     tip.style.border = '1px solid #2a323b';
@@ -2416,10 +2592,15 @@ async function load(force = false){
     tip.style.color = '#c8d1d9';
     tip.style.boxShadow = '0 8px 22px rgba(0,0,0,.35)';
     tip.style.display = 'none';
-    tip.style.zIndex = '5';
+    tip.style.zIndex = '10000';
+    tip.style.maxWidth = 'min(320px, calc(100vw - 20px))';
+    tip.style.width = 'max-content';
+    tip.style.boxSizing = 'border-box';
+    tip.dataset.historyTip = 'main';
+    tip.setAttribute('role', 'status');
+    tip.setAttribute('aria-live', 'polite');
     tip.innerHTML = '';
-    wrap.style.position = 'relative';
-    wrap.appendChild(tip);
+    document.body.appendChild(tip);
 
     let crossX = null;
     /**
@@ -2431,6 +2612,7 @@ async function load(force = false){
     function hideTip(silent){
       const wasVisible = tip.style.display !== 'none';
       tip.style.display = 'none';
+      tip.style.visibility = 'hidden';
       crossX = null;
       if (!silent && wasVisible) draw();
     }
@@ -2463,14 +2645,9 @@ async function load(force = false){
      */
     function showTipFromEvent(ev){
       if (!data) return;
-      const rect = canvas.getBoundingClientRect();
-      const t = (ev.touches && ev.touches[0]) ? ev.touches[0]
-              : (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0]
-              : null;
-      const cx = t ? t.clientX : ev.clientX;
-      const cy = t ? t.clientY : ev.clientY;
-      const x = cx - rect.left;
-      const y = cy - rect.top;
+      const point = canvasPointFromEvent(canvas, ev);
+      if (!point) return;
+      const { clientX: cx, clientY: cy, x, y } = point;
 
       const {start, end} = data;
       const series = buildSeriesAll();
@@ -2487,12 +2664,20 @@ async function load(force = false){
         B = Number.isFinite(Number(barState.B)) ? Number(barState.B) : B;
       }
 
+      // Nur der echte Plotbereich liefert einen Messpunkt. Ein Tap auf Achsen,
+      // Beschriftungen oder leere Ränder schließt den Tooltip nachvollziehbar.
+      if (x < L || x > (W - R) || y < T || y > (H - B)) {
+        hideTip();
+        return;
+      }
+
       // --- BAR TOOLTIP (week/month/year) ---
       if (chartMode !== 'day' && typeof barState === 'object' && barState){
         const visibleKeys = Array.isArray(barState.visibleKeys) ? barState.visibleKeys : ['pv','chg','dchg','sell','buy','evcs','load'].filter(isSeriesVisible);
         if (!visibleKeys.length) { hideTip(true); draw(); return; }
         const buckets = barState.buckets || [];
-        const n = buckets.length || 1;
+        if (!buckets.length) { hideTip(true); draw(); return; }
+        const n = buckets.length;
         const groupW = barState.groupW || ( (W-L-R)/n );
         let idx = Math.floor((x - L) / groupW);
         if (idx < 0) idx = 0;
@@ -2528,14 +2713,9 @@ async function load(force = false){
         if (isSeriesVisible('evcs')) rows.push(kv('E‑Mobilität', evcs));
         if (isSeriesVisible('load')) rows.push(kv('Verbrauch', load));
         if (!rows.length) { hideTip(true); draw(); return; }
-        let html = `<div style="margin-bottom:6px;opacity:.9">${header}</div>` + rows.join('');
-        tip.innerHTML = html;
-        tip.style.display = 'block';
+        const html = `<div style="margin-bottom:6px;opacity:.9"><b>Energie</b> · ${header}</div>` + rows.join('');
         const px = L + idx*groupW + groupW/2;
-        const left = Math.min(Math.max(px + 12, 8), W - 220);
-        const top  = Math.min(Math.max(y - 60, 8), H - 140);
-        tip.style.left = left + 'px';
-        tip.style.top  = top + 'px';
+        showFloatingTip(tip, html, cx, cy);
         crossX = px;
         draw();
         return;
@@ -2592,7 +2772,7 @@ async function load(force = false){
       if (isSeriesVisible('sell')) rows.push(kv2('Einspeisung', sell/1000));
       if (isSeriesVisible('evcs')) rows.push(kv2('E‑Mobilität', (Math.abs(evcs)||0)/1000));
       if (isSeriesVisible('load')) rows.push(kv2('Verbrauch', load/1000));
-      let html = `<div style="margin-bottom:6px;opacity:.9">${hh}</div>` + rows.join('');
+      let html = `<div style="margin-bottom:6px;opacity:.9"><b>Leistung</b> · ${hh}</div>` + rows.join('');
 
       // Optional: Energiefluss Verbraucher/Erzeuger (nur anzeigen wenn vorhanden)
       const ex = getExtras();
@@ -2626,27 +2806,24 @@ async function load(force = false){
       if (soc!=null && isSeriesVisible('soc')) html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px">SoC <b>${soc.toFixed(0)} %</b></div>`;
       if (!rows.length && !extraLines.length && !(soc!=null && isSeriesVisible('soc'))) { hideTip(true); draw(); return; }
 
-      tip.innerHTML = html;
-      tip.style.display = 'block';
       const px = tsToX(nearTs, start, end, L, R, W);
-      const left = Math.min(Math.max(px + 12, 8), W - 220);
-      const top  = Math.min(Math.max(y - 60, 8), H - 140);
-      tip.style.left = left + 'px';
-      tip.style.top  = top + 'px';
+      showFloatingTip(tip, html, cx, cy);
       crossX = px;
       draw(); // redraw to show crosshair
     }
 
 
 
-    // expose for touch drag/tap handling (used by drag-to-zoom on mobile)
+    // Zentraler Einstieg für Desktop-Klick, Touch-Tap und den RC92-Browsertest.
+    // Die fachliche Werteermittlung bleibt dadurch für alle Eingabegeräte identisch.
     window.__nxHistoryShowTipFromEvent = showTipFromEvent;
+    window.__nxHistoryShowTipAtPoint = (clientX, clientY)=> showTipFromEvent({ clientX, clientY });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('pointerdown', (ev)=>{
       if (tip.style.display === 'none') return;
       const target = ev.target;
-      if (target === canvas) return;
+      if (target === canvas || tip.contains(target)) return;
       hideTip();
     }, true);
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -2654,21 +2831,20 @@ async function load(force = false){
       if (ev.key === 'Escape') hideTip();
     });
 
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    canvas.addEventListener('mouseleave', ()=>{ hideTip(); });
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    canvas.addEventListener('click', (ev)=>{ 
+    // Synthetische mouseleave-Ereignisse nach einem Touch-Tap dürfen den mobilen
+    // Tooltip nicht direkt wieder schließen. Auf Desktop bleibt das Verhalten gleich.
+    canvas.addEventListener('mouseleave', ()=>{
+      if (!isMobileHistorySurface()) hideTip();
+    });
+    window.addEventListener('scroll', ()=>{
+      if (tip.style.display !== 'none') hideTip();
+    }, { passive: true });
+    canvas.addEventListener('click', (ev)=>{
       if (Date.now() < zoomSuppressClickUntil) return;
       showTipFromEvent(ev);
     });
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    canvas.addEventListener('touchend', (ev)=>{ 
-      if (Date.now() < zoomSuppressClickUntil) return;
-      // In day view, touch is used for drag-to-zoom; tap-to-inspect is handled there.
-      if (chartMode === 'day') return;
-      showTipFromEvent(ev);
-    }, {passive:true});
-    // (removed duplicate binding)
+    // Touch-Taps aller Chart-Modi werden ausschließlich im Gesten-Handler
+    // verarbeitet. Dadurch öffnet eine Scrollbewegung kein falsches Wertefenster.
 
     // draw crosshair over chart
     const _draw = draw;
@@ -2827,10 +3003,10 @@ async function load(force = false){
      * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    function clearSel(){
+    function clearSel(redraw = true){
       zoomSel = null;
       zoomDragging = false;
-      draw();
+      if (redraw) draw();
     }
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -2847,77 +3023,165 @@ async function load(force = false){
     });
 
 
-    // Touch: drag-to-zoom + tap-to-inspect (Tag-Ansicht)
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    // RC92 – Mobile Gestensteuerung:
+    // - vertikal: natives Seitenscrollen,
+    // - kurzer Tap: Werte des ausgewählten Zeitpunkts/Zeitraums anzeigen,
+    // - klar horizontal in der Tagesansicht: vorhandenen Chart-Zoom verwenden.
+    // Erst nach erkannter horizontaler Zoomgeste wird preventDefault() aufgerufen.
+    let historyTouchGesture = null;
+    let historyTouchDrawFrame = 0;
+    const TOUCH_DIRECTION_LOCK_PX = 10;
+    const TOUCH_TAP_MAX_MOVE_PX = 12;
+    const TOUCH_ZOOM_MIN_PX = 18;
+    const TOUCH_TAP_MAX_DURATION_MS = 900;
+
+    function scheduleHistoryTouchDraw(){
+      if (historyTouchDrawFrame) return;
+      const run = ()=>{ historyTouchDrawFrame = 0; draw(); };
+      if (typeof window.requestAnimationFrame === 'function') {
+        historyTouchDrawFrame = window.requestAnimationFrame(run);
+      } else {
+        historyTouchDrawFrame = window.setTimeout(run, 16);
+      }
+    }
+
     canvas.addEventListener('touchstart', (ev)=>{
-      if (chartMode !== 'day') return;
-      if (!data) return;
-      if (!ev.touches || ev.touches.length !== 1) return;
-      try { ev.preventDefault(); } catch(_e){}
-      const rect = canvas.getBoundingClientRect();
-      const x = ev.touches[0].clientX - rect.left;
-      zoomDragging = true;
-      zoomDragStartX = x;
-      zoomSel = { x0: x, x1: x };
-      draw();
-    }, {passive:false});
+      if (!data || !ev.touches || ev.touches.length !== 1) {
+        historyTouchGesture = null;
+        return;
+      }
+      const point = canvasPointFromEvent(canvas, ev);
+      if (!point) { historyTouchGesture = null; return; }
+      historyTouchGesture = {
+        mode: 'pending',
+        startedAt: Date.now(),
+        startX: point.x,
+        startY: point.y,
+        startClientX: point.clientX,
+        startClientY: point.clientY,
+        lastX: point.x,
+        lastY: point.y,
+      };
+      zoomDragging = false;
+      zoomSel = null;
+      // Kein preventDefault(): Ein vertikaler Wisch muss sofort nativ scrollen können.
+    }, { passive: true });
 
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchmove' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchmove', (ev)=>{
-      if (!zoomDragging) return;
-      if (!ev.touches || !ev.touches[0]) return;
-      try { ev.preventDefault(); } catch(_e){}
-      const rect = canvas.getBoundingClientRect();
-      const x = ev.touches[0].clientX - rect.left;
-      if (!zoomSel) zoomSel = { x0: zoomDragStartX, x1: x };
-      zoomSel.x1 = x;
-      draw();
-    }, {passive:false});
+      if (!historyTouchGesture || !ev.touches || ev.touches.length !== 1) return;
+      const point = canvasPointFromEvent(canvas, ev);
+      if (!point) return;
+      const gesture = historyTouchGesture;
+      gesture.lastX = point.x;
+      gesture.lastY = point.y;
+      const dx = point.clientX - gesture.startClientX;
+      const dy = point.clientY - gesture.startClientY;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
 
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+      if (gesture.mode === 'pending' && Math.max(absX, absY) >= TOUCH_DIRECTION_LOCK_PX) {
+        if (chartMode === 'day' && absX > absY * 1.2) {
+          gesture.mode = 'zoom';
+          zoomDragging = true;
+          zoomDragStartX = gesture.startX;
+          zoomSel = { x0: gesture.startX, x1: point.x };
+          try { if (typeof window.__nxHistoryHideTip === 'function') window.__nxHistoryHideTip(); } catch(_e){}
+        } else {
+          // Vertikale Bewegungen und alle Wischbewegungen in Woche/Monat/Jahr
+          // gehören dem Browser. Dort gibt es bewusst keinen Drag-Zoom.
+          gesture.mode = 'scroll';
+          zoomDragging = false;
+          zoomSel = null;
+          return;
+        }
+      }
+
+      if (gesture.mode !== 'zoom') return;
+      if (ev.cancelable) ev.preventDefault();
+      if (!zoomSel) zoomSel = { x0: gesture.startX, x1: point.x };
+      zoomSel.x1 = point.x;
+      scheduleHistoryTouchDraw();
+    }, { passive: false });
+
     canvas.addEventListener('touchend', (ev)=>{
-      if (chartMode !== 'day') return;
-      if (!zoomDragging) return;
-      if (!data){ clearSel(); return; }
-      try { ev.preventDefault(); } catch(_e){}
-      const rect = canvas.getBoundingClientRect();
-      const t = (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0] : null;
-      const x = t ? (t.clientX - rect.left) : zoomDragStartX;
-      const a = Math.min(zoomDragStartX, x);
-      const b = Math.max(zoomDragStartX, x);
-      const px = b - a;
+      const gesture = historyTouchGesture;
+      historyTouchGesture = null;
+      if (!gesture || !data) return;
+      const point = canvasPointFromEvent(canvas, ev);
+      if (point) {
+        gesture.lastX = point.x;
+        gesture.lastY = point.y;
+      }
+      const endClient = eventClientPoint(ev);
+      const dxClient = endClient ? endClient.clientX - gesture.startClientX : 0;
+      const dyClient = endClient ? endClient.clientY - gesture.startClientY : 0;
+      const movement = Math.hypot(dxClient, dyClient);
+      const durationMs = Date.now() - gesture.startedAt;
 
-      // selection too small -> treat as tap (tooltip)
-      if (px < 18){
-        clearSel();
-        zoomSuppressClickUntil = Date.now() + 350;
-        try { if (typeof window.__nxHistoryShowTipFromEvent === 'function') window.__nxHistoryShowTipFromEvent(ev); } catch(_e){}
+      // Einige Browser bündeln eine kurze Bewegung und senden kein touchmove.
+      // Deshalb wird die Richtung beim Ende nochmals belastbar klassifiziert.
+      if (gesture.mode === 'pending' && movement > TOUCH_TAP_MAX_MOVE_PX) {
+        gesture.mode = (chartMode === 'day' && Math.abs(dxClient) > Math.abs(dyClient) * 1.2)
+          ? 'zoom'
+          : 'scroll';
+      }
+
+      if (gesture.mode === 'scroll') {
+        clearSel(false);
         return;
       }
 
+      const a = Math.min(gesture.startX, gesture.lastX);
+      const b = Math.max(gesture.startX, gesture.lastX);
+      const selectedWidth = b - a;
+      const isTap = gesture.mode === 'pending'
+        && movement <= TOUCH_TAP_MAX_MOVE_PX
+        && durationMs <= TOUCH_TAP_MAX_DURATION_MS;
+
+      if (isTap) {
+        clearSel(false);
+        zoomSuppressClickUntil = Date.now() + 600;
+        try {
+          if (typeof window.__nxHistoryShowTipFromEvent === 'function') {
+            window.__nxHistoryShowTipFromEvent(ev);
+          }
+        } catch(_e){}
+        return;
+      }
+
+      if (gesture.mode !== 'zoom' || chartMode !== 'day' || selectedWidth < TOUCH_ZOOM_MIN_PX) {
+        clearSel(false);
+        return;
+      }
+
+      if (ev.cancelable) ev.preventDefault();
       const { start, end } = data;
       const fromMs = xToTs(a, start, end);
       const toMs = xToTs(b, start, end);
 
-      // push previous range for reset
+      // Vorherigen Bereich für „Zoom zurück“ sichern.
       const fromEl = document.getElementById('from');
       const toEl = document.getElementById('to');
       const prevFromMs = fromEl ? new Date(fromEl.value).getTime() : start;
       const prevToMs = toEl ? new Date(toEl.value).getTime() : end;
-      if (isFinite(prevFromMs) && isFinite(prevToMs)){
+      if (isFinite(prevFromMs) && isFinite(prevToMs)) {
         zoomStack.push({ fromMs: prevFromMs, toMs: prevToMs });
       }
 
       try { __stopAuto(); } catch(_e){}
       setInputs(fromMs, toMs);
-      zoomSuppressClickUntil = Date.now() + 400;
+      zoomSuppressClickUntil = Date.now() + 600;
       clearSel();
       try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
       load();
-    }, {passive:false});
+    }, { passive: false });
 
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchcancel' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    canvas.addEventListener('touchcancel', ()=>{ if (zoomDragging) clearSel(); });
+    canvas.addEventListener('touchcancel', ()=>{
+      const hadZoom = Boolean(historyTouchGesture && historyTouchGesture.mode === 'zoom');
+      historyTouchGesture = null;
+      if (hadZoom || zoomDragging) clearSel();
+      else clearSel(false);
+    }, { passive: true });
 
     // Optional: Ctrl/⌘ + Wheel zoom (Tag) – allows trackpad pinch (ctrlKey) without breaking normal page scroll.
     let __wheelTimer = null;
@@ -3109,6 +3373,11 @@ async function load(force = false){
     const menuBtn = document.getElementById('menuBtn');
     const menu = document.getElementById('menuDropdown');
     if (menuBtn && menu) {
+      if (menuBtn.dataset.nwMenuBound) return;
+      // 0.8.21: History-Seite markiert das Burger-Menü als gebunden, damit die
+      // nachgeladene Shell keinen zweiten Toggle-Handler setzt.
+      menuBtn.dataset.nwMenuBound = 'history';
+      menuBtn.dataset.nwAppMenu = '1';
       /**
        * Code-Teil: Arrow-Funktion `close`
        * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -3136,7 +3405,7 @@ async function load(force = false){
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      document.addEventListener('click', ()=> close());
+      document.addEventListener('click', (e)=>{ const target = e && e.target; if (!menuBtn.contains(target) && !menu.contains(target)) close(); });
     }
     const liveBtn = document.getElementById('liveTabBtn');
     if (liveBtn) liveBtn.addEventListener('click', (e)=>{ /* fallback */ if(!liveBtn.getAttribute('onclick')) { e.preventDefault(); window.location.href = './'; } });
@@ -3174,14 +3443,14 @@ async function load(force = false){
     document.querySelectorAll('[data-feature="evcs"]').forEach(function(el){
       el.classList.toggle('hidden', !showEvcsHistory);
     });
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
 
     // Speicherfarm Tab/Link nur anzeigen, wenn eine Farm wirklich konfiguriert ist.
-    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sft = document.getElementById('tabStorageFarm');
     if (sft) sft.classList.toggle('hidden', !sf);
     const sfl = document.getElementById('menuStorageFarmLink');

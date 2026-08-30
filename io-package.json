@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.216",
+    "version": "0.8.217",
     "news": {
+      "0.8.217": {
+        "de": "RC92 behebt ausschließlich die mobile Bedienung der Historienseite. Vertikales Scrollen bleibt auf Hauptchart, KPI-Karten und Preis-Chart nativ verfügbar; ein kurzer Tap zeigt auf Smartphones nun dieselben Leistungs- beziehungsweise Energiewerte wie am Desktop. Woche, Monat und Jahr zeigen pro ausgewähltem Balken kWh-Werte, die Tagesansicht kW-Werte. Tooltips bleiben nach dem Scrollen vollständig im sichtbaren Viewport, horizontales Tages-Zoomen bleibt erhalten und Canvas-Neuzeichnungen werden gebündelt. EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardware-Regelung bleiben unverändert.",
+        "en": "RC92 fixes only the mobile interaction of the History page. Vertical scrolling remains native on the main chart, KPI cards and price chart; a short tap on smartphones now shows the same power or energy values as on desktop. Week, month and year show kWh values for the selected bar, while the day view shows kW values. Tooltips remain fully visible after scrolling, horizontal day zoom is preserved and canvas redraws are coalesced. EMS, grid, charging, storage, tariff, Section 14a and hardware control remain unchanged.",
+        "nl": "RC92 corrigeert uitsluitend de mobiele bediening van de historiepagina. Verticaal scrollen blijft native op de hoofdgrafiek, KPI-kaarten en prijsgrafiek; een korte tik op smartphones toont nu dezelfde vermogens- of energiewaarden als op desktop. Week, maand en jaar tonen kWh-waarden voor de gekozen balk, de dagweergave toont kW-waarden. Tooltips blijven na scrollen volledig zichtbaar, horizontale dagzoom blijft behouden en canvas-hertekeningen worden gebundeld. EMS-, net-, laad-, opslag-, tarief-, §14a- en hardwarebesturing blijven ongewijzigd."
+      },
       "0.8.216": {
         "de": "RC91 gleicht die App-Kataloge von Browser, Adapterstart, Installer, Save und Backup vollständig ab. Energy Ledger und Mesh/Microgrid behalten ihre Installiert-/Aktiv-Zustände jetzt auch beim Speichern anderer AppCenter-Reiter; das verborgene DC-Stationsdisplay bleibt erhalten, ohne doppelte App-Karte. Zusätzlich bleibt die textstabil erzeugte main.js strikt JavaScript-kompatibel. Die produktive NVP-, Lade-, Speicher-, Tarif-, §14a- und Safety-Regelung wurde nicht verändert.",
         "en": "RC91 fully aligns the app catalogues used by the browser, adapter startup, installer, save and backup paths. Energy Ledger and Mesh/Microgrid now preserve their installed/enabled state when unrelated App Center tabs are saved; the hidden DC station display is retained without creating a duplicate app card. The text-stable generated main.js is also kept strictly JavaScript-compatible. Productive grid, charging, storage, tariff, Section 14a and safety control logic is unchanged.",

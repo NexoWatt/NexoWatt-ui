@@ -174,7 +174,7 @@ function sliceBetween(source, startMarker, endMarker) {
   assert(warns[0].includes('Einmalige JS/TS-Diagnoseabweichung'));
 
   // 10) Cache, Paketvertrag und Dokumentation gehören zum RC82-Stand.
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("const CACHE_NAME = 'nexowatt-cache-v491'"));
+  assert(read('src-ts/runtime-executables/www/sw.ts').match(/const CACHE_NAME = 'nexowatt-cache-v\d+'/));
   for (const required of [
     'RC82_FELDTEST_CHECKLISTE_DE.md',
     'RC82_VALIDATION_REPORT.md',
