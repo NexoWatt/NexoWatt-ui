@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3af3d19db3f8d4311ea11f81a4ada86f68976093bcc8438c7727c901337e4d1f
+ * Original-Hash: 16f12132106ee1eaea9deafe45fc3b84772eb201d163f931167a873ebef872ac
  */
 
 /**
@@ -36,7 +36,8 @@
  *
  * Prüft das kanonische Datenmodell, Herstellerprofil-SDK, read-only Runtime,
  * Modbus-Dekodierung, Qualitätsbehandlung, Platzhalterprofile, UI/API-Vertrag
- * und die strikte Trennung von der produktiven Asset-Steuerung.
+ * und die strikte Trennung vom Asset-Write. Seit RC93 darf ausschließlich der
+ * bestehende Grid-Constraints-/Export-Guard den validierten Envelope lesen.
  */
 
 const assert = require('node:assert/strict');
@@ -351,10 +352,13 @@ async function main() {
   assert.equal(adapter._netOperatorEnvelope.valid, true);
   assert.equal(adapter._netOperatorEnvelope.readOnly, true);
   assert.equal(adapter._netOperatorEnvelope.hardwareWrite, false);
-  assert.equal(adapter._netOperatorEnvelope.operationEngineIntegration, 'prepared-not-active');
+  assert.equal(adapter._netOperatorEnvelope.operationEngineIntegration, 'grid-export-limit-standby');
+  assert.equal(adapter._netOperatorEnvelope.externalExportLimitEligible, false);
+  assert.equal(adapter._netOperatorEnvelope.allowedExportPowerW, 75000);
+  assert.equal(adapter._netOperatorEnvelope.soleAssetWriter, 'gridConstraints.exportGuard');
   assert.equal(adapter._netOperatorEnvelope.values['grid.p.limit_kw'], 75);
   assert.equal(adapter.foreignWrites.length, 0);
-  assert.equal(adapter.states.get('netoperator.operationEngineIntegration').val, 'prepared-not-active');
+  assert.equal(adapter.states.get('netoperator.operationEngineIntegration').val, 'grid-export-limit-standby');
   assert.equal(adapter.states.get('netoperator.driver.ready').val, true);
   assert.equal(adapter.states.get('netoperator.commandPriority').val, 3);
   assert.ok(adapter.states.has('netoperator.audit.eventsJson'));
@@ -413,16 +417,17 @@ async function main() {
   assert.match(emsAppsHtml, /data-tab="netoperator"/);
   assert.match(emsAppsHtml, /netOperatorConfigSlot/);
   assert.match(appCenterSource, /writebackEnabled:\s*false/);
-  assert.match(appCenterSource, /Operation-Engine-Integration: vorbereitet, noch nicht aktiv/);
+  assert.match(appCenterSource, /vorhandene Export Guard bleibt alleiniger Asset-Writer/);
   assert.match(operatorHtml, /zertifizierten EZA-\/Parkregler/);
   assert.match(operatorHtml, /netopLastValidTelegram/);
 
-  // 13. Der read-only Envelope darf in RC50 von keinem Asset-Writer konsumiert werden.
-  const forbiddenConsumers = walk(path.join(root, 'ems'))
+  // 13. Der read-only Envelope darf ausschließlich vom bestehenden Export Guard
+  // konsumiert werden. Das Netzbetreiber-Modul selbst führt keine Hardware-Writes aus.
+  const envelopeConsumers = walk(path.join(root, 'ems'))
     .filter((file) => /\.(?:js|cjs|mjs)$/i.test(file))
     .filter((file) => !file.endsWith(path.join('ems', 'modules', 'netoperator-interface.js')))
     .filter((file) => read(path.relative(root, file)).includes('_netOperatorEnvelope'));
-  assert.deepEqual(forbiddenConsumers.map((file) => path.relative(root, file)), []);
+  assert.deepEqual(envelopeConsumers.map((file) => path.relative(root, file)), [path.join('ems', 'modules', 'grid-constraints.js')]);
 
   module.stop();
   assert.equal(adapter._netOperatorEnvelope, null);

@@ -4154,6 +4154,7 @@ class NexoWattVis extends utils.Adapter {
       installerApproved: false,
       writebackEnabled: false,
       signalMaxAgeSec: 5,
+      lastValidHoldSec: 60,
       auditLimit: 500,
       failSafePolicy: 'project-specific',
       transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 },
@@ -15296,7 +15297,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         energyLedger: (n.energyLedger && typeof n.energyLedger === 'object') ? n.energyLedger : { enabled: false },
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
         meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
-        netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
+        netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, lastValidHoldSec: 60, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
         operatingStrategies: this.nwNormalizeOperatingStrategies(n.operatingStrategies, operatingStrategiesActive),
 
         // Scheduler
@@ -21501,11 +21502,12 @@ registerEnergyOriginApi({
 });
 
 // -----------------------------------------------------------------------------
-// EOS Netzbetreiber-Schnittstelle – read-only Grundlagen-App
+// EOS Netzbetreiber-Schnittstelle – zertifizierter Regler als Führungsquelle
 // -----------------------------------------------------------------------------
 // Der zertifizierte EZA-/Parkregler bleibt die netzseitig maßgebliche Instanz.
-// RC50 liefert kanonisches Datenmodell, Treiberprüfung, Diagnose und Audit. Eine
-// Übergabe bindender Vorgaben an Asset-Writer ist ausdrücklich noch gesperrt.
+// Die Schnittstelle ist zum Regler und zu den Assets read-only. Bindende und
+// frische P-Vorgaben werden jedoch an den bestehenden Export Guard übergeben;
+// nur GridConstraints schreibt weiterhin die Anlagen-Sollwerte.
 const _nwNetOperatorLicensed = () => {
   try { return !!this._nwLicenseAllowsAppId('netOperator'); } catch (_e) { return false; }
 };
@@ -21514,6 +21516,46 @@ const _nwNetOperatorEnabled = () => {
     ? this.config.netOperatorInterface
     : {};
   return _nwNetOperatorLicensed() && (this.config.enableNetOperatorInterface === true || cfg.enabled === true);
+};
+
+const _nwNetOperatorActivation = () => {
+  const root = this && this.config && typeof this.config === 'object' ? this.config : {};
+  const cfg = root.netOperatorInterface && typeof root.netOperatorInterface === 'object' ? root.netOperatorInterface : {};
+  const app = root.emsApps && root.emsApps.apps && root.emsApps.apps.netOperator && typeof root.emsApps.apps.netOperator === 'object'
+    ? root.emsApps.apps.netOperator
+    : null;
+  const appEnabled = app ? app.installed === true && app.enabled === true : (root.enableNetOperatorInterface === true || cfg.enabled === true);
+  const gridCfg = root.gridConstraints && typeof root.gridConstraints === 'object' ? root.gridConstraints : {};
+  const exportGuardInstallerApproved = typeof gridCfg.exportLimitInstallerApproved === 'boolean'
+    ? gridCfg.exportLimitInstallerApproved === true
+    : typeof gridCfg.zeroExportInstallerApproved === 'boolean'
+      ? gridCfg.zeroExportInstallerApproved === true
+      : gridCfg.zeroExportEnabled === true;
+  const exportGuardRunMode = String(
+    gridCfg.exportLimitRunMode
+    ?? gridCfg.zeroExportRunMode
+    ?? gridCfg.exportGuardMode
+    ?? 'active',
+  ).toLowerCase();
+  const exportGuardActive = gridCfg.zeroExportEnabled === true
+    && exportGuardInstallerApproved
+    && ['active', 'on', 'write', 'productive'].includes(exportGuardRunMode);
+  const active = _nwNetOperatorLicensed()
+    && appEnabled
+    && cfg.enabled === true
+    && String(cfg.mode || '').toLowerCase() === 'active'
+    && cfg.commissioned === true
+    && cfg.installerApproved === true
+    && exportGuardActive;
+  return {
+    appEnabled,
+    exportGuardEnabled: gridCfg.zeroExportEnabled === true,
+    exportGuardInstallerApproved,
+    exportGuardRunMode,
+    exportGuardActive,
+    active,
+    operationEngineIntegration: active ? 'grid-export-limit-active' : 'grid-export-limit-standby',
+  };
 };
 
 app.get(['/netoperator', '/netoperator/'], requireCustomerWorkspace, (req, res) => {
@@ -21535,7 +21577,9 @@ app.get('/api/netoperator/status', requireCustomerWorkspace, (_req, res) => {
       mode: this.config && this.config.netOperatorInterface ? this.config.netOperatorInterface.mode || 'diagnostic' : 'off',
       readOnly: true,
       hardwareWrite: false,
-      operationEngineIntegration: 'prepared-not-active',
+      soleAssetWriter: 'gridConstraints.exportGuard',
+      externalExportLimitEligible: _nwNetOperatorActivation().active,
+      operationEngineIntegration: _nwNetOperatorActivation().operationEngineIntegration,
       snapshot: null,
       audit: [],
     });
@@ -21578,7 +21622,7 @@ app.post('/api/netoperator/test', requireInstaller, async (req, res) => {
     const supplied = req && req.body && req.body.config && typeof req.body.config === 'object' ? req.body.config : undefined;
     const safeConfig = supplied ? { ...supplied, writebackEnabled: false, mode: supplied.mode === 'off' ? 'diagnostic' : supplied.mode } : undefined;
     const result = await module.testConnection(safeConfig);
-    return res.status(result && result.ok ? 200 : 422).json({ ...result, readOnly: true, hardwareWrite: false, operationEngineIntegration: 'prepared-not-active' });
+    return res.status(result && result.ok ? 200 : 422).json({ ...result, readOnly: true, hardwareWrite: false, operationEngineIntegration: 'connection-test-only' });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(error && error.message ? error.message : error), readOnly: true, hardwareWrite: false });
   }

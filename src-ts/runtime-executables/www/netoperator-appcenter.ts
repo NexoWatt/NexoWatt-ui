@@ -65,6 +65,7 @@
       installerApproved: false,
       writebackEnabled: false,
       signalMaxAgeSec: 5,
+      lastValidHoldSec: 60,
       auditLimit: 500,
       failSafePolicy: 'project-specific',
       transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 },
@@ -80,10 +81,10 @@
     mount.innerHTML = `
       <div class="nw-card">
         <div class="nw-card__title">Netzbetreiber-Schnittstelle</div>
-        <div class="nw-card__subtitle">Anbindung eines zertifizierten EZA-/Parkreglers. Der Regler bleibt netzseitig maßgeblich; EOS liest und normalisiert die Vorgaben. Die aktive Weitergabe an Assets ist in dieser Grundlagenversion noch gesperrt.</div>
+        <div class="nw-card__subtitle">Anbindung eines zertifizierten EZA-/Parkreglers. Bei aktivem, in Betrieb genommenem und freigegebenem Modul hat dessen gültige Einspeisevorgabe Vorrang. EOS übernimmt die Grenze in den vorhandenen Export Guard; es entsteht kein zweiter Asset-Writer.</div>
         <div class="nw-config-grid" style="margin-top:16px">
           <label class="nw-field nw-field--switch"><span>Modul aktiv</span><input id="netopEnabled" type="checkbox" ${appEnabled && cfg.enabled !== false ? 'checked' : ''}></label>
-          <label class="nw-field"><span>Betriebsmodus</span><select id="netopMode"><option value="diagnostic"${cfg.mode === 'diagnostic' ? ' selected' : ''}>Diagnose / read-only</option><option value="commissioning"${cfg.mode === 'commissioning' ? ' selected' : ''}>Inbetriebnahme / read-only</option><option value="active"${cfg.mode === 'active' ? ' selected' : ''}>Aktiv vorbereitet – Asset-Integration gesperrt</option><option value="off"${cfg.mode === 'off' ? ' selected' : ''}>Aus</option></select></label>
+          <label class="nw-field"><span>Betriebsmodus</span><select id="netopMode"><option value="diagnostic"${cfg.mode === 'diagnostic' ? ' selected' : ''}>Diagnose / read-only</option><option value="commissioning"${cfg.mode === 'commissioning' ? ' selected' : ''}>Inbetriebnahme / read-only</option><option value="active"${cfg.mode === 'active' ? ' selected' : ''}>Aktiv – zertifizierter Regler führt die Einspeisegrenze</option><option value="off"${cfg.mode === 'off' ? ' selected' : ''}>Aus</option></select></label>
           <label class="nw-field"><span>Profilquelle</span><select id="netopProfileSource"><option value="builtin"${cfg.profileSource !== 'custom' ? ' selected' : ''}>Integriertes Herstellerprofil</option><option value="custom"${cfg.profileSource === 'custom' ? ' selected' : ''}>Eigenes JSON-Profil</option></select></label>
           <label class="nw-field"><span>Hersteller / Treiber</span><select id="netopDriverId">${driverOptions(String(cfg.driverId || 'generic-modbus-tcp-template'))}</select></label>
           <label class="nw-field"><span>Transport</span><select id="netopTransportType"><option value="modbus-tcp"${cfg.transport.type !== 'state-map' ? ' selected' : ''}>Modbus TCP</option><option value="state-map"${cfg.transport.type === 'state-map' ? ' selected' : ''}>EOS-Datenpunkt-Mapping</option></select></label>
@@ -92,9 +93,10 @@
           <label class="nw-field"><span>Unit-ID</span><input id="netopUnitId" type="number" min="0" max="255" value="${esc(cfg.transport.unitId ?? 1)}"></label>
           <label class="nw-field"><span>Kommunikations-Timeout</span><input id="netopTimeoutMs" type="number" min="250" max="30000" step="250" value="${esc(cfg.transport.timeoutMs ?? 2000)}"><small>ms</small></label>
           <label class="nw-field"><span>Abfrageintervall</span><input id="netopPollIntervalMs" type="number" min="250" max="60000" step="250" value="${esc(cfg.transport.pollIntervalMs ?? 1000)}"><small>ms</small></label>
-          <label class="nw-field"><span>Maximales Signalalter</span><input id="netopSignalMaxAgeSec" type="number" min="1" max="3600" value="${esc(cfg.signalMaxAgeSec ?? 5)}"><small>s</small></label>
+          <label class="nw-field"><span>Maximales Signalalter</span><input id="netopSignalMaxAgeSec" type="number" min="1" max="3600" value="${esc(cfg.signalMaxAgeSec ?? 5)}"><small>s · danach Fail-Safe</small></label>
+          <label class="nw-field"><span>Letzten gültigen Wert halten</span><input id="netopLastValidHoldSec" type="number" min="0" max="3600" value="${esc(cfg.lastValidHoldSec ?? 60)}"><small>s · nur bei Fail-Safe „letzter Wert“</small></label>
           <label class="nw-field"><span>Audit-Einträge</span><input id="netopAuditLimit" type="number" min="20" max="2000" value="${esc(cfg.auditLimit ?? 500)}"></label>
-          <label class="nw-field"><span>Fail-Safe-Vertrag</span><select id="netopFailSafePolicy"><option value="project-specific"${cfg.failSafePolicy === 'project-specific' ? ' selected' : ''}>Projekt-/Reglervorgabe</option><option value="last-valid"${cfg.failSafePolicy === 'last-valid' ? ' selected' : ''}>Letzten gültigen Wert halten</option><option value="release"${cfg.failSafePolicy === 'release' ? ' selected' : ''}>EOS-Optimierung freigeben</option><option value="block"${cfg.failSafePolicy === 'block' ? ' selected' : ''}>EOS-Optimierung sperren</option></select></label>
+          <label class="nw-field"><span>Fail-Safe-Vertrag</span><select id="netopFailSafePolicy"><option value="project-specific"${cfg.failSafePolicy === 'project-specific' ? ' selected' : ''}>Rückfallgrenze aus Netzlimits</option><option value="last-valid"${cfg.failSafePolicy === 'last-valid' ? ' selected' : ''}>Letzten gültigen Wert zeitbegrenzt halten</option><option value="release"${cfg.failSafePolicy === 'release' ? ' selected' : ''}>Auf lokale EOS-Sicherheitsobergrenze zurückfallen</option><option value="block"${cfg.failSafePolicy === 'block' ? ' selected' : ''}>Harte 0-W-Einspeisegrenze</option></select></label>
           <label class="nw-field nw-field--switch"><span>Inbetriebnahme dokumentiert</span><input id="netopCommissioned" type="checkbox" ${cfg.commissioned === true ? 'checked' : ''}></label>
           <label class="nw-field nw-field--switch"><span>Installerfreigabe</span><input id="netopInstallerApproved" type="checkbox" ${cfg.installerApproved === true ? 'checked' : ''}></label>
         </div>
@@ -102,8 +104,8 @@
           <label class="nw-field"><span>Eigenes Treiberprofil (JSON)</span><textarea id="netopCustomProfileJson" rows="16" spellcheck="false" style="width:100%;font-family:ui-monospace,monospace">${esc(cfg.customProfileJson || '')}</textarea></label>
         </div>
         <div class="nw-config-card nw-config-card--subtle" style="margin-top:16px">
-          <div class="nw-config-card__title">Sicherheitsstatus dieser Version</div>
-          <div class="nw-config-card__subtitle">Read-only: ja · Hardware-Schreibzugriff: nein · Operation-Engine-Integration: vorbereitet, noch nicht aktiv. Modbus RTU, OPC UA, IEC 60870-5-104 und IEC 61850 sind Treiberslots, aber in RC50 noch nicht implementiert.</div>
+          <div class="nw-config-card__title">Sicherheits- und Führungslogik</div>
+          <div class="nw-config-card__subtitle">Die Regler-Schnittstelle ist read-only und schreibt niemals direkt auf Wechselrichter, Speicher oder Ladepunkte. Im Aktivmodus wird ausschließlich die validierte Einspeisegrenze an die Netzlimit-App übergeben; der vorhandene Export Guard bleibt alleiniger Asset-Writer. Ohne Aktivmodus, Inbetriebnahme und Installerfreigabe regelt EOS lokal. Modbus RTU, OPC UA, IEC 60870-5-104 und IEC 61850 bleiben vorbereitete Treiberslots.</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
           <button id="netopReloadDrivers" class="nw-btn" type="button">Treiber neu laden</button>
@@ -168,6 +170,7 @@
       installerApproved: checked('netopInstallerApproved'),
       writebackEnabled: false,
       signalMaxAgeSec: Math.round(num('netopSignalMaxAgeSec', 5, 1, 3600)),
+      lastValidHoldSec: Math.round(num('netopLastValidHoldSec', 60, 0, 3600)),
       auditLimit: Math.round(num('netopAuditLimit', 500, 20, 2000)),
       failSafePolicy: ['project-specific', 'last-valid', 'release', 'block'].includes(value('netopFailSafePolicy')) ? value('netopFailSafePolicy') : 'project-specific',
       transport: {

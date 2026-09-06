@@ -16,17 +16,21 @@
   function render(payload: any): void {
     const snapshot = payload?.snapshot || null;
     const command = snapshot?.command || {};
-    text('netopStatus', payload?.enabled ? (snapshot?.valid ? 'bereit' : (snapshot?.fresh ? 'unvollständig' : 'stale / nicht bereit')) : 'deaktiviert');
+    const envelope = payload?.envelope || {};
+    const integration = String(payload?.operationEngineIntegration || envelope?.operationEngineIntegration || 'grid-export-limit-standby');
+    const controllerSelected = payload?.externalExportLimitEligible === true || envelope?.externalExportLimitEligible === true;
+    const operationalBinding = controllerSelected && envelope?.valid === true && envelope?.fresh === true && envelope?.commOk === true && command.binding === true;
+    text('netopStatus', payload?.enabled ? (integration === 'grid-export-limit-active' ? (operationalBinding ? 'Regler führt' : 'Aktiv / Rückfalllogik') : (snapshot?.valid ? 'Diagnose bereit' : (snapshot?.fresh ? 'unvollständig' : 'stale / nicht bereit'))) : 'deaktiviert');
     text('netopMode', payload?.mode || 'off');
     text('netopDriver', snapshot ? `${snapshot.driverId || '--'} · Mapping ${snapshot.mappingVersion || '--'}` : '--');
-    text('netopSource', snapshot?.source || '--');
+    text('netopSource', envelope?.source || snapshot?.source || '--');
     text('netopComm', snapshot?.commOk ? 'OK' : 'gestört');
     const lastReceivedAt = Number(payload?.lastReceivedAt || snapshot?.receivedAt || 0);
     const lastValidAt = Number(payload?.lastValidAt || 0);
     text('netopLastTelegram', lastReceivedAt > 0 ? new Date(lastReceivedAt).toLocaleString('de-DE') : '--');
     text('netopLastValidTelegram', lastValidAt > 0 ? new Date(lastValidAt).toLocaleString('de-DE') : '--');
     text('netopCommand', `${command.action || 'monitor'} · Priorität ${command.priority ?? '--'}`);
-    text('netopBinding', command.binding ? 'bindend' : 'nicht bindend');
+    text('netopBinding', operationalBinding ? 'operativ bindend' : (command.binding ? 'nur gelesen / nicht freigegeben' : 'nicht bindend'));
     text('netopEnable', valueOf(snapshot, 'grid.command.enable') === true ? 'aktiv' : valueOf(snapshot, 'grid.command.enable') === false ? 'aus' : '--');
     text('netopRelease', valueOf(snapshot, 'grid.command.release') === true ? 'freigegeben' : valueOf(snapshot, 'grid.command.release') === false ? 'gesperrt' : '--');
     text('netopTrip', valueOf(snapshot, 'grid.command.trip') === true ? 'TRIP AKTIV' : valueOf(snapshot, 'grid.command.trip') === false ? 'kein Trip' : '--');
@@ -40,12 +44,21 @@
     text('netopUActual', fmt(valueOf(snapshot, 'pcc.u.actual_v'), 'V', 1));
     text('netopControllerStatus', valueOf(snapshot, 'controller.status'));
     text('netopFault', valueOf(snapshot, 'controller.fault_code'));
+    text('netopControlSource', integration === 'grid-export-limit-active' ? (operationalBinding ? 'EZA-/Parkregler → EOS Export Guard' : 'EOS-Fail-Safe / lokale Grenze') : 'EOS Netzlimits lokal');
+    text('netopAllowedExport', Number.isFinite(Number(envelope?.allowedExportPowerW)) ? fmt(Number(envelope.allowedExportPowerW) / 1000, 'kW') : '--');
+    text('netopValidUntil', Number(envelope?.validUntil || 0) > 0 ? new Date(Number(envelope.validUntil)).toLocaleString('de-DE') : '--');
+    text('netopFailSafe', envelope?.failSafePolicy || '--');
     const banner = $('netopBindingBanner');
     if (banner) {
-      banner.className = `netop-banner ${command.binding ? 'netop-banner--binding' : 'netop-banner--normal'}`;
-      banner.textContent = command.binding
-        ? `Externe Netzbetreiber-Vorgabe ist bindend: ${command.reason || command.action || 'Vorgabe aktiv'}. EOS darf nur innerhalb dieser Grenze optimieren.`
-        : 'Keine bindende externe Vorgabe. Die Netzbetreiber-App arbeitet in RC50 ausschließlich read-only.';
+      banner.className = `netop-banner ${operationalBinding || controllerSelected ? 'netop-banner--binding' : 'netop-banner--normal'}`;
+      const allowedText = Number.isFinite(Number(envelope?.allowedExportPowerW))
+        ? ` Erlaubte Einspeisung: ${fmt(Number(envelope.allowedExportPowerW) / 1000, 'kW')}.`
+        : '';
+      banner.textContent = operationalBinding
+        ? `Zertifizierter EZA-/Parkregler ist die führende Einspeisegrenzquelle.${allowedText} EOS setzt die Vorgabe ausschließlich über den bestehenden Export Guard um.`
+        : controllerSelected
+          ? `Der zertifizierte Regler ist aktiviert, liefert aktuell aber keine gültige bindende P-Vorgabe (${envelope?.quality || 'unbekannt'}). Die in Netzlimits konfigurierte Fail-Safe-Strategie ist maßgeblich.`
+          : 'Der zertifizierte Regler ist nicht operativ freigegeben. EOS regelt die Einspeisegrenze lokal über die Netzlimit-App.';
     }
     const body = $('netopAuditRows');
     const events = Array.isArray(payload?.audit) ? payload.audit.slice().reverse() : [];

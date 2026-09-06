@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0090b4dd20d84feddddf9e98152bd2b83e5bd87c0be1776639f61c08d16c83fe
+ * Original-Hash: 645b02d680b74df31a8341b5b97a2b82ff49c45dd8c2e7de6e5b493eed6f7972
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:820f837961977c2c3b1081650d73009dc6ed2d341960f2742d2278816cb22a5e
+ * Quell-Hash: sha256:6512e79a2acba3bcdc98544ee0dc9d2ef3b7453ee82fc99fc36c7d2cf46987a7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -74,6 +74,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { isActuatorAuthorityBlockedResult } = require('../services/actuator-shadow-arbiter');
@@ -150,6 +151,22 @@ class GridConstraintsModule extends BaseModule {
         this._lastPlanningContext = null;
         this._lastDynamicResult = null;
         this._importLimitRuntime = { stage: 'normal', releaseCandidateAtMs: 0 };
+
+        // RC93: Eine einzige Führungsquelle für die Einspeisegrenze.
+        // Ein aktivierter, in Betrieb genommener und vom Installateur freigegebener
+        // EZA-/Parkregler darf die lokale EOS-Obergrenze ausschließlich verschärfen.
+        // Fällt diese Quelle aus, greift der dokumentierte Fail-Safe-Vertrag; ein
+        // paralleler zweiter PV-Regler wird ausdrücklich nicht erzeugt.
+        this._exportLimitAuthorityRuntime = {
+            lastValidAllowedExportPowerW: null,
+            lastValidEffectiveMaxFeedInW: null,
+            lastValidAt: 0,
+            lastValidUntil: 0,
+            lastCommandId: '',
+            decisionSignature: '',
+            audit: [],
+            auditHeadHash: '',
+        };
     }
 
     /**
@@ -196,12 +213,11 @@ class GridConstraintsModule extends BaseModule {
     }
 
     /**
-     * Code-Teil: _getMaxFeedInPowerW
-     * Zweck: Liefert die maximal erlaubte Einspeiseleistung am Netzverknüpfungspunkt in Watt.
-     * Zusammenhang: Diese Funktion erweitert die bisherige 0-Einspeisung ohne zweite Regelstrecke: 0 W bleibt
-     * echte Nulleinspeisung, jeder Wert >0 ist eine vom Installateur vorgegebene Exportgrenze.
+     * Lokale EOS-Sicherheitsobergrenze am Netzverknüpfungspunkt.
+     * 0 W bleibt echte Nulleinspeisung. Ein externer zertifizierter Regler darf
+     * diese Grenze dynamisch nur absenken, niemals über diesen Wert anheben.
      */
-    _getMaxFeedInPowerW(cfg) {
+    _getConfiguredMaxFeedInPowerW(cfg) {
         const candidates = [
             cfg?.exportLimitMaxFeedInW,
             cfg?.zeroExportMaxExportW,
@@ -210,10 +226,286 @@ class GridConstraintsModule extends BaseModule {
             cfg?.allowedFeedInW,
         ];
         for (const v of candidates) {
+            if (v === null || v === undefined || (typeof v === 'string' && !v.trim())) continue;
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0) return Math.round(n);
         }
         return 0;
+    }
+
+    _getFallbackExportPowerW(cfg, configuredMaxFeedInW = null) {
+        const localMaxW = configuredMaxFeedInW === null
+            ? this._getConfiguredMaxFeedInPowerW(cfg || {})
+            : Math.max(0, Math.round(Number(configuredMaxFeedInW) || 0));
+        const candidates = [cfg?.fallbackExportPowerW, cfg?.externalFallbackExportPowerW];
+        for (const value of candidates) {
+            if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) continue;
+            const n = Number(value);
+            if (Number.isFinite(n) && n >= 0) return Math.min(localMaxW, Math.round(n));
+        }
+        return localMaxW;
+    }
+
+    _getNetOperatorActivation() {
+        const config = this.adapter && this.adapter.config && typeof this.adapter.config === 'object'
+            ? this.adapter.config
+            : {};
+        const gridCfg = config.gridConstraints && typeof config.gridConstraints === 'object'
+            ? config.gridConstraints
+            : {};
+        const iface = config.netOperatorInterface && typeof config.netOperatorInterface === 'object'
+            ? config.netOperatorInterface
+            : {};
+        const app = config.emsApps && config.emsApps.apps && config.emsApps.apps.netOperator
+            ? config.emsApps.apps.netOperator
+            : null;
+        const appEnabled = app && typeof app === 'object'
+            ? app.installed === true && app.enabled === true
+            : (config.enableNetOperatorInterface === true || iface.enabled === true);
+        const exportGuardEnabled = gridCfg.zeroExportEnabled === true;
+        const exportGuardInstallerApproved = this._isExportLimitInstallerApproved(gridCfg);
+        const exportGuardRunMode = this._getExportLimitRunMode(gridCfg);
+        const expected = appEnabled
+            && iface.enabled === true
+            && String(iface.mode || '').toLowerCase() === 'active'
+            && iface.commissioned === true
+            && iface.installerApproved === true
+            && exportGuardEnabled
+            && exportGuardInstallerApproved
+            && exportGuardRunMode === 'active';
+        return {
+            expected,
+            appEnabled,
+            interfaceEnabled: iface.enabled === true,
+            mode: String(iface.mode || 'off').toLowerCase(),
+            commissioned: iface.commissioned === true,
+            installerApproved: iface.installerApproved === true,
+            exportGuardEnabled,
+            exportGuardInstallerApproved,
+            exportGuardRunMode,
+            failSafePolicy: ['project-specific', 'last-valid', 'release', 'block'].includes(String(iface.failSafePolicy || ''))
+                ? String(iface.failSafePolicy)
+                : 'project-specific',
+            lastValidHoldSec: Math.max(0, Math.min(3600, Math.round(this._num(iface.lastValidHoldSec, 60)))),
+        };
+    }
+
+    _resolveExternalAllowedExportPowerW(envelope, cfg) {
+        const command = envelope && envelope.command && typeof envelope.command === 'object' ? envelope.command : {};
+        const values = envelope && envelope.values && typeof envelope.values === 'object' ? envelope.values : {};
+/**
+ * Code-Teil: finiteOrNull
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const finiteOrNull = (value) => {
+            if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+        const action = String(command.action || 'monitor');
+        if (action === 'trip' || action === 'inhibit') {
+            return { usable: true, allowedExportPowerW: 0, setpointKind: action, reason: String(command.reason || action) };
+        }
+        if (command.binding !== true) {
+            return { usable: false, released: true, setpointKind: 'released', reason: String(command.reason || 'no-binding-command') };
+        }
+        if (action !== 'active-power-constraint') {
+            return { usable: false, noActivePowerLimit: true, setpointKind: action, reason: 'binding-command-without-active-power-limit' };
+        }
+
+        // Standardisierte W-Vorgabe des Netzbetreiber-Moduls hat Vorrang.
+        // `null`/leere Werte werden strikt abgewiesen; Number(null) darf niemals
+        // versehentlich als 0-W-Nulleinspeisung interpretiert werden.
+        const standardizedAllowedW = finiteOrNull(envelope && envelope.allowedExportPowerW);
+        if (standardizedAllowedW !== null && standardizedAllowedW >= 0) {
+            return { usable: true, allowedExportPowerW: Math.round(standardizedAllowedW), setpointKind: 'allowedExportPowerW', reason: 'certified-controller-standardized-export-limit' };
+        }
+
+        const pLimitKw = finiteOrNull(values['grid.p.limit_kw']);
+        if (pLimitKw !== null && pLimitKw >= 0) {
+            return { usable: true, allowedExportPowerW: Math.round(pLimitKw * 1000), setpointKind: 'grid.p.limit_kw', reason: 'certified-controller-p-limit' };
+        }
+        // Kanonischer Vertrag: positive Werte sind zulässige Einspeisung am NAP.
+        const pTargetKw = finiteOrNull(values['grid.p.target_kw']);
+        if (pTargetKw !== null && pTargetKw >= 0) {
+            return { usable: true, allowedExportPowerW: Math.round(pTargetKw * 1000), setpointKind: 'grid.p.target_kw', reason: 'certified-controller-p-target-positive-export' };
+        }
+        const pTargetPct = finiteOrNull(values['grid.p.target_pct']);
+        if (pTargetPct !== null && pTargetPct >= 0 && pTargetPct <= 100) {
+            const groupRatedW = this._sumRatedW(this._normalizeInvList(cfg && cfg.pvCurtailInvertersZero));
+            const ratedW = Math.max(0, Number(this._getRatedPvW(cfg || {})) || groupRatedW || 0);
+            if (ratedW > 0) {
+                return { usable: true, allowedExportPowerW: Math.round(ratedW * pTargetPct / 100), setpointKind: 'grid.p.target_pct', reason: 'certified-controller-p-target-percent' };
+            }
+            return { usable: false, invalid: true, setpointKind: 'grid.p.target_pct', reason: 'rated-pv-power-missing-for-percent-command' };
+        }
+        return { usable: false, invalid: true, setpointKind: 'active-power-constraint', reason: 'external-active-power-command-missing-or-ambiguous' };
+    }
+
+    /**
+     * Ermittelt die allein wirksame Führungsquelle für die Einspeisebegrenzung.
+     * Der zertifizierte Regler wird nur dann bindend, wenn App, Aktivmodus,
+     * Inbetriebnahme und Installerfreigabe gleichzeitig vorliegen. EOS bleibt
+     * der einzige Asset-Writer und setzt die strengere Grenze über den bestehenden
+     * Export-Guard um; die Netzbetreiber-Schnittstelle selbst bleibt read-only.
+     */
+    _resolveExportLimitAuthority(cfg, nowMs = Date.now()) {
+        const now = Math.max(0, Math.round(Number(nowMs) || Date.now()));
+        const configuredMaxFeedInW = this._getConfiguredMaxFeedInPowerW(cfg || {});
+        const fallbackExportPowerW = this._getFallbackExportPowerW(cfg || {}, configuredMaxFeedInW);
+        const activation = this._getNetOperatorActivation();
+        const envelope = this.adapter && this.adapter._netOperatorEnvelope && typeof this.adapter._netOperatorEnvelope === 'object'
+            ? this.adapter._netOperatorEnvelope
+            : null;
+        const base = {
+            schema: 'nexowatt.grid.export-limit-authority.v1',
+            timestamp: now,
+            configuredMaxFeedInW,
+            fallbackExportPowerW,
+            effectiveMaxFeedInW: configuredMaxFeedInW,
+            allowedExportPowerW: null,
+            controlSource: 'eos-local',
+            source: 'NexoWatt EOS Netzlimits',
+            quality: 'local',
+            lastUpdate: now,
+            validUntil: 0,
+            commandId: '',
+            setpointKind: 'local-static-limit',
+            reason: activation.expected ? 'certified-controller-envelope-not-ready' : 'certified-controller-not-activated',
+            externalExpected: activation.expected,
+            externalActive: false,
+            externalBinding: false,
+            failSafePolicy: activation.failSafePolicy,
+            activation,
+            localUpperBoundApplied: true,
+        };
+        if (!activation.expected) return base;
+
+        const source = String((envelope && (envelope.source || envelope.controllerSource)) || 'EZA-/Parkregler');
+        const commandId = String(envelope && envelope.command && envelope.command.commandId || '');
+        const maxAgeMs = Math.max(1000, Math.round(this._num(
+            envelope && envelope.maxAgeMs,
+            this._num(this.adapter?.config?.netOperatorInterface?.signalMaxAgeSec, 5) * 1000,
+        )));
+        const receivedAt = Math.max(0, Math.round(Number(envelope && (envelope.receivedAt || envelope.generatedAt)) || 0));
+        const declaredValidUntil = Math.max(0, Math.round(Number(envelope && envelope.validUntil) || 0));
+        const validUntil = declaredValidUntil || (receivedAt > 0 ? receivedAt + maxAgeMs : 0);
+        const envelopeEligible = !!(envelope
+            && envelope.externalExportLimitEligible === true
+            && envelope.active === true
+            && envelope.commissioned === true
+            && envelope.installerApproved === true
+            && String(envelope.operationEngineIntegration || '') === 'grid-export-limit-active');
+        const envelopeFresh = !!(envelopeEligible
+            && envelope.valid === true
+            && envelope.fresh === true
+            && envelope.commOk === true
+            && (validUntil <= 0 || now <= validUntil));
+
+        if (envelopeFresh) {
+            const resolved = this._resolveExternalAllowedExportPowerW(envelope, cfg || {});
+            if (resolved.usable) {
+                const allowedExportPowerW = Math.max(0, Math.round(Number(resolved.allowedExportPowerW) || 0));
+                const effectiveMaxFeedInW = Math.min(configuredMaxFeedInW, allowedExportPowerW);
+                this._exportLimitAuthorityRuntime.lastValidAllowedExportPowerW = allowedExportPowerW;
+                this._exportLimitAuthorityRuntime.lastValidEffectiveMaxFeedInW = effectiveMaxFeedInW;
+                this._exportLimitAuthorityRuntime.lastValidAt = receivedAt || now;
+                this._exportLimitAuthorityRuntime.lastValidUntil = validUntil;
+                this._exportLimitAuthorityRuntime.lastCommandId = commandId;
+                return {
+                    ...base,
+                    effectiveMaxFeedInW,
+                    allowedExportPowerW,
+                    controlSource: 'certified-controller',
+                    source,
+                    quality: 'good',
+                    lastUpdate: receivedAt || now,
+                    validUntil,
+                    commandId,
+                    setpointKind: resolved.setpointKind,
+                    reason: resolved.reason,
+                    externalActive: true,
+                    externalBinding: true,
+                };
+            }
+            if (resolved.released || resolved.noActivePowerLimit) {
+                return {
+                    ...base,
+                    source,
+                    quality: resolved.noActivePowerLimit ? 'good-no-active-power-limit' : 'good-released',
+                    lastUpdate: receivedAt || now,
+                    validUntil,
+                    commandId,
+                    setpointKind: resolved.setpointKind,
+                    reason: resolved.reason,
+                    externalActive: true,
+                    externalBinding: false,
+                };
+            }
+        }
+
+        const policy = activation.failSafePolicy;
+        const rt = this._exportLimitAuthorityRuntime || {};
+        const holdMs = activation.lastValidHoldSec * 1000;
+        const lastValidUsable = policy === 'last-valid'
+            && Number.isFinite(Number(rt.lastValidAllowedExportPowerW))
+            && Number(rt.lastValidAt || 0) > 0
+            && holdMs > 0
+            && now - Number(rt.lastValidAt) <= holdMs;
+        let effectiveMaxFeedInW = fallbackExportPowerW;
+        let allowedExportPowerW = null;
+        let controlSource = 'eos-local-fallback';
+        let quality = envelope ? (envelope.commOk === false ? 'communication-error' : envelope.fresh === false ? 'stale' : 'invalid') : 'missing';
+        let reason = `certified-controller-${quality}-${policy}`;
+        let setpointKind = 'fallback-export-power';
+        if (policy === 'block') {
+            effectiveMaxFeedInW = 0;
+            allowedExportPowerW = 0;
+            controlSource = 'certified-controller-failsafe';
+            quality = `${quality}-blocked`;
+            reason = 'certified-controller-failsafe-block';
+            setpointKind = 'fail-safe-block';
+        } else if (lastValidUsable) {
+            allowedExportPowerW = Math.max(0, Math.round(Number(rt.lastValidAllowedExportPowerW) || 0));
+            effectiveMaxFeedInW = Math.min(configuredMaxFeedInW, allowedExportPowerW);
+            controlSource = 'certified-controller-last-valid';
+            quality = 'held-last-valid';
+            reason = 'certified-controller-last-valid-within-hold-time';
+            setpointKind = 'last-valid';
+        } else if (policy === 'release') {
+            effectiveMaxFeedInW = configuredMaxFeedInW;
+            controlSource = 'eos-local-fallback';
+            quality = `${quality}-released-to-eos`;
+            reason = 'certified-controller-failsafe-release-to-eos';
+            setpointKind = 'local-static-limit';
+        } else if (policy === 'last-valid') {
+            reason = 'certified-controller-last-valid-unavailable-use-fallback';
+        }
+        return {
+            ...base,
+            effectiveMaxFeedInW: Math.max(0, Math.round(effectiveMaxFeedInW)),
+            allowedExportPowerW,
+            controlSource,
+            source,
+            quality,
+            lastUpdate: receivedAt || Number(rt.lastValidAt || 0),
+            validUntil,
+            commandId: commandId || String(rt.lastCommandId || ''),
+            setpointKind,
+            reason,
+        };
+    }
+
+    /** Kompatibler Zugriff für die bestehende Regelstrecke. */
+    _getMaxFeedInPowerW(cfg) {
+        return this._resolveExportLimitAuthority(cfg || {}).effectiveMaxFeedInW;
     }
 
     /**
@@ -253,13 +545,14 @@ class GridConstraintsModule extends BaseModule {
      * die bestehende PV-Curtail-Logik herunter. Damit bauen wir keinen zweiten Regler.
      */
     _buildExportLimitTarget(cfg, tariffGridImportPreferred) {
-        const maxFeedInPowerW = Math.max(0, this._getMaxFeedInPowerW(cfg));
+        const authority = this._resolveExportLimitAuthority(cfg || {});
+        const maxFeedInPowerW = Math.max(0, authority.effectiveMaxFeedInW);
         const baseBiasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
         const negativeBiasW = tariffGridImportPreferred ? Math.max(0, this._num(cfg.zeroExportNegativePriceImportBiasW, 1000)) : 0;
         const biasW = tariffGridImportPreferred ? Math.max(baseBiasW, negativeBiasW) : baseBiasW;
         const deadbandW = Math.max(0, this._num(cfg.zeroExportDeadbandW, 50));
         const targetGridW = biasW - maxFeedInPowerW;
-        return { maxFeedInPowerW, baseBiasW, biasW, deadbandW, targetGridW };
+        return { maxFeedInPowerW, baseBiasW, biasW, deadbandW, targetGridW, authority };
     }
 
     _num(v, dflt = 0) {
@@ -289,6 +582,127 @@ class GridConstraintsModule extends BaseModule {
         }
     }
 
+    _exportLimitAuditHash(event) {
+        const payload = {
+            schema: String(event && event.schema || ''),
+            timestamp: Number(event && event.timestamp || 0),
+            controlSource: String(event && event.controlSource || ''),
+            source: String(event && event.source || ''),
+            quality: String(event && event.quality || ''),
+            configuredMaxFeedInW: Number(event && event.configuredMaxFeedInW || 0),
+            allowedExportPowerW: event && event.allowedExportPowerW !== null ? Number(event.allowedExportPowerW) : null,
+            fallbackExportPowerW: Number(event && event.fallbackExportPowerW || 0),
+            effectiveMaxFeedInW: Number(event && event.effectiveMaxFeedInW || 0),
+            validUntil: Number(event && event.validUntil || 0),
+            commandId: String(event && event.commandId || ''),
+            reason: String(event && event.reason || ''),
+            previousHash: String(event && event.previousHash || ''),
+        };
+        return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    }
+
+    async _restoreExportLimitAuthorityAudit() {
+        try {
+            if (!this.adapter || typeof this.adapter.getStateAsync !== 'function') return;
+            const state = await this.adapter.getStateAsync('gridConstraints.exportLimit.authority.decisionAuditJson');
+            if (!state || typeof state.val !== 'string' || !state.val.trim()) return;
+            const parsed = JSON.parse(state.val);
+            if (!Array.isArray(parsed)) return;
+            const verified = [];
+            const tail = parsed.slice(-200);
+            // Bei begrenzter Historie kann der erste sichtbare Eintrag auf einen
+            // bereits verworfenen Vorgänger zeigen. Dieser Hash ist der Startanker
+            // des überprüften Ausschnitts und darf nicht fälschlich als Manipulation gelten.
+            let previousHash = tail.length ? String(tail[0] && tail[0].previousHash || '') : '';
+            for (const raw of tail) {
+                if (!raw || typeof raw !== 'object' || String(raw.previousHash || '') !== previousHash) break;
+                const expected = this._exportLimitAuditHash(raw);
+                if (!raw.hash || expected !== String(raw.hash)) break;
+                verified.push(raw);
+                previousHash = String(raw.hash);
+            }
+            this._exportLimitAuthorityRuntime.audit = verified;
+            this._exportLimitAuthorityRuntime.auditHeadHash = verified.length
+                ? String(verified[verified.length - 1].hash || '')
+                : '';
+            const last = verified.length ? verified[verified.length - 1] : null;
+            if (last) this._exportLimitAuthorityRuntime.decisionSignature = JSON.stringify([
+                last.controlSource, last.source, last.quality, last.allowedExportPowerW,
+                last.fallbackExportPowerW, last.effectiveMaxFeedInW, last.validUntil,
+                last.commandId, last.reason,
+            ]);
+        } catch (_e) {
+            this._exportLimitAuthorityRuntime.audit = [];
+            this._exportLimitAuthorityRuntime.auditHeadHash = '';
+            this._exportLimitAuthorityRuntime.decisionSignature = '';
+        }
+    }
+
+    _appendExportLimitAuthorityAudit(authority) {
+        const a = authority && typeof authority === 'object' ? authority : {};
+        const signature = JSON.stringify([
+            a.controlSource, a.source, a.quality, a.allowedExportPowerW,
+            a.fallbackExportPowerW, a.effectiveMaxFeedInW, a.validUntil,
+            a.commandId, a.reason,
+        ]);
+        if (signature === this._exportLimitAuthorityRuntime.decisionSignature) return null;
+        const event = {
+            schema: 'nexowatt.grid.export-limit-authority-audit.v1',
+            timestamp: Date.now(),
+            controlSource: String(a.controlSource || 'eos-local'),
+            source: String(a.source || ''),
+            quality: String(a.quality || ''),
+            configuredMaxFeedInW: Math.max(0, Math.round(Number(a.configuredMaxFeedInW) || 0)),
+            allowedExportPowerW: a.allowedExportPowerW === null || a.allowedExportPowerW === undefined ? null : Math.max(0, Math.round(Number(a.allowedExportPowerW) || 0)),
+            fallbackExportPowerW: Math.max(0, Math.round(Number(a.fallbackExportPowerW) || 0)),
+            effectiveMaxFeedInW: Math.max(0, Math.round(Number(a.effectiveMaxFeedInW) || 0)),
+            validUntil: Math.max(0, Math.round(Number(a.validUntil) || 0)),
+            commandId: String(a.commandId || ''),
+            reason: String(a.reason || ''),
+            previousHash: String(this._exportLimitAuthorityRuntime.auditHeadHash || ''),
+        };
+        event.hash = this._exportLimitAuditHash(event);
+        this._exportLimitAuthorityRuntime.audit.push(event);
+        this._exportLimitAuthorityRuntime.audit = this._exportLimitAuthorityRuntime.audit.slice(-200);
+        this._exportLimitAuthorityRuntime.auditHeadHash = event.hash;
+        this._exportLimitAuthorityRuntime.decisionSignature = signature;
+        return event;
+    }
+
+    async _publishExportLimitAuthorityStates(authority) {
+        const a = authority && typeof authority === 'object' ? authority : this._resolveExportLimitAuthority(this._cfg());
+        const event = this._appendExportLimitAuthorityAudit(a);
+/**
+ * Code-Teil: set
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const set = async (id, value) => { try { await this.adapter.setStateAsync(id, value, true); } catch (_e) {} };
+        await set('gridConstraints.exportLimit.controlSource', String(a.controlSource || 'eos-local'));
+        await set('gridConstraints.exportLimit.authority.expected', a.externalExpected === true);
+        await set('gridConstraints.exportLimit.authority.active', a.externalActive === true);
+        await set('gridConstraints.exportLimit.authority.binding', a.externalBinding === true);
+        await set('gridConstraints.exportLimit.authority.allowedExportPowerW', a.allowedExportPowerW === null || a.allowedExportPowerW === undefined ? -1 : Math.max(0, Math.round(Number(a.allowedExportPowerW) || 0)));
+        await set('gridConstraints.exportLimit.authority.fallbackExportPowerW', Math.max(0, Math.round(Number(a.fallbackExportPowerW) || 0)));
+        await set('gridConstraints.exportLimit.authority.validUntil', Math.max(0, Math.round(Number(a.validUntil) || 0)));
+        await set('gridConstraints.exportLimit.authority.source', String(a.source || ''));
+        await set('gridConstraints.exportLimit.authority.quality', String(a.quality || ''));
+        await set('gridConstraints.exportLimit.authority.lastUpdate', Math.max(0, Math.round(Number(a.lastUpdate) || 0)));
+        await set('gridConstraints.exportLimit.authority.commandId', String(a.commandId || ''));
+        await set('gridConstraints.exportLimit.authority.failSafePolicy', String(a.failSafePolicy || 'project-specific'));
+        await set('gridConstraints.exportLimit.authority.reason', String(a.reason || ''));
+        await set('gridConstraints.exportLimit.authority.decisionJson', JSON.stringify(a));
+        await set('gridConstraints.exportLimit.authority.decisionAuditJson', JSON.stringify(this._exportLimitAuthorityRuntime.audit || []));
+        await set('gridConstraints.exportLimit.authority.auditHeadHash', String(this._exportLimitAuthorityRuntime.auditHeadHash || ''));
+        if (event) await set('gridConstraints.exportLimit.authority.lastAuditEventJson', JSON.stringify(event));
+    }
+
     async init() {
         if (!this._isEnabled()) return;
 
@@ -299,7 +713,7 @@ class GridConstraintsModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['control', 'importLimits', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
+        for (const ch of ['control', 'importLimits', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.authority', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
             await this.adapter.setObjectNotExistsAsync(`gridConstraints.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -413,6 +827,23 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.unusedPvPowerW', 'Unused PV power due to Export Guard (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.displayJson', 'Export Guard display JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.summaryJson', 'Export Guard summary JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.controlSource', 'Wirksame Führungsquelle der Einspeisegrenze', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.expected', 'Zertifizierter Regler wird erwartet', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.authority.active', 'Zertifizierter Regler ist wirksame Quelle', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.authority.binding', 'Externe Wirkleistungsvorgabe ist bindend', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.authority.allowedExportPowerW', 'Extern erlaubte Einspeiseleistung; -1 = keine P-Vorgabe', 'number', 'value.power');
+        await mk('gridConstraints.exportLimit.authority.fallbackExportPowerW', 'EOS-Rückfallgrenze bei Reglerausfall', 'number', 'value.power');
+        await mk('gridConstraints.exportLimit.authority.validUntil', 'Externe Vorgabe gültig bis', 'number', 'value.time');
+        await mk('gridConstraints.exportLimit.authority.source', 'Quelle der wirksamen Vorgabe', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.quality', 'Qualität der Vorgabe', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.lastUpdate', 'Letzte Aktualisierung der Vorgabe', 'number', 'value.time');
+        await mk('gridConstraints.exportLimit.authority.commandId', 'Externe Command-ID', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.failSafePolicy', 'Fail-Safe-Vertrag', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.reason', 'Begründung der Quellenwahl', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.decisionJson', 'Vollständige Führungsquellenentscheidung JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.authority.decisionAuditJson', 'Verkettetes Führungsquellen-Audit JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.authority.auditHeadHash', 'Hash des letzten Audit-Eintrags', 'string', 'text');
+        await mk('gridConstraints.exportLimit.authority.lastAuditEventJson', 'Letztes Führungsquellen-Auditereignis JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkPriorityOrderJson', '0-export sink priority order JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkPriorityPlanJson', '0-export sink priority plan JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.nextSinkAction', 'Next 0-export sink action', 'string', 'text');
@@ -476,6 +907,8 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.pvCurtail.evuStagePct', 'EVU stage (%)', 'number', 'value');
         await mk('gridConstraints.pvCurtail.evuRelays', 'EVU relays (60/30/0)', 'string', 'text');
         await mk('gridConstraints.pvCurtail.estimatedCurtailmentW', 'Estimated curtailment (W)', 'number', 'value.power');
+
+        await this._restoreExportLimitAuthorityAudit();
 
         // Datapoint mapping
         const cfg = this._cfg();
@@ -1492,7 +1925,7 @@ class GridConstraintsModule extends BaseModule {
         const plan = sinkPriority || {};
         const av = availability && availability.sinks ? availability.sinks : {};
         if (!Array.isArray(plan.steps)) return plan;
-        const order = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const order = ['chargingStations', 'flexLoads', 'storageCharge', 'meshMicrogrid', 'inverterCurtailment'];
         const requiredW = Math.max(0, Math.round(Number(plan.requestedReductionW || plan.exportOverLimitW || 0)));
         if (requiredW <= 0) return plan;
         const next = order.find((id) => {
@@ -1538,17 +1971,17 @@ class GridConstraintsModule extends BaseModule {
         const diagnosticCurtailmentW = Math.max(0, Math.round(Number(estimatedCurtailmentW) || 0));
         const order = [
             'localConsumption',
-            'storageCharge',
             'chargingStations',
             'flexLoads',
+            'storageCharge',
             'meshMicrogrid',
             'inverterCurtailment',
         ];
         const labels = {
             localConsumption: '1 Verbrauch zuerst / Eigenverbrauch am Netzpunkt',
-            storageCharge: '2 Speicher laden',
-            chargingStations: '3 Ladepunkte / Wallboxen / DC-Stationen',
-            flexLoads: '4 flexible Verbraucher / Heizstab / Wärmelast',
+            chargingStations: '2 freigegebene Ladepunkte / Wallboxen / DC-Stationen',
+            flexLoads: '3 freigegebene flexible Verbraucher / Heizstab / Wärmelast',
+            storageCharge: '4 verbleibenden PV-Überschuss in den Speicher laden',
             meshMicrogrid: '5 Mesh/Microgrid-Zielgruppen / Nachbar-Verbund',
             inverterCurtailment: '6 Wechselrichter abregeln als letzte Stufe',
         };
@@ -1580,9 +2013,9 @@ class GridConstraintsModule extends BaseModule {
         };
         const nextAction = requiredW <= 0
             ? 'observe'
-            : (mapped.storageCharge && usableByRuntime('storageCharge') ? 'storageCharge'
-                : mapped.chargingStations && usableByRuntime('chargingStations') ? 'chargingStations'
-                    : mapped.flexLoads && usableByRuntime('flexLoads') ? 'flexLoads'
+            : (mapped.chargingStations && usableByRuntime('chargingStations') ? 'chargingStations'
+                : mapped.flexLoads && usableByRuntime('flexLoads') ? 'flexLoads'
+                    : mapped.storageCharge && usableByRuntime('storageCharge') ? 'storageCharge'
                         : mapped.meshMicrogrid && usableByRuntime('meshMicrogrid') ? 'meshMicrogrid'
                             : mapped.inverterCurtailment ? 'inverterCurtailment'
                                 : 'mappingRequired');
@@ -1601,7 +2034,7 @@ class GridConstraintsModule extends BaseModule {
             note: id === 'localConsumption'
                 ? 'Wirkt automatisch als natürliche Senke. Dieser Schritt wird nicht aktiv geschaltet.'
                 : id === 'inverterCurtailment'
-                    ? 'Letzte Stufe: WR/PV-Abregelung nur für Restleistung nach Verbrauch, Speicher und steuerbaren Senken.'
+                    ? 'Letzte Stufe: WR/PV-Abregelung nur für Restleistung nach Verbrauch, freigegebenen flexiblen Lasten, Speicher und Mesh/Microgrid.'
                     : 'Neutraler Command-State/Mapping kann diese Senke aktivieren. Die konkrete Hardwaresteuerung bleibt bei lokaler Bridge/Adapter.',
         }));
         const commandEnvelope = {
@@ -1621,7 +2054,7 @@ class GridConstraintsModule extends BaseModule {
                 label: s.label,
                 requestedPowerW: s.requestedPowerW,
                 commandStateId: s.commandStateId,
-                reason: '0-Einspeisung: Verbrauch zuerst, dann Speicher, dann Ladepunkte/flexible Senken, WR-Abregelung zuletzt.',
+                reason: '0-Einspeisung: Verbrauch und freigegebene flexible Lasten zuerst, dann Speicherladung, WR-Abregelung nur für den Rest.',
                 directHardwareWrite: false,
                 neutralCommandOnly: true,
             })),
@@ -1639,7 +2072,7 @@ class GridConstraintsModule extends BaseModule {
             steps,
             nextAction,
             commandEnvelope,
-            summary: 'Reihenfolge: Verbrauch zuerst, Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.',
+            summary: 'Reihenfolge: Verbrauch zuerst, freigegebene Ladepunkte und flexible Verbraucher, dann Speicher laden, Mesh/Microgrid, WR-Abregelung zuletzt.',
         };
     }
 
@@ -1893,8 +2326,8 @@ class GridConstraintsModule extends BaseModule {
         const meshMapped = hasText(cfg && cfg.zeroExportMeshCommandStateId);
         const neutralSinkMapped = storageMapped || chargingMapped || flexMapped || meshMapped;
         const sinkSteps = Array.isArray(sink.steps) ? sink.steps : [];
-        const sinkOrder = sinkSteps.length ? sinkSteps.map(s => s.id) : ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const expectedOrder = ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const sinkOrder = sinkSteps.length ? sinkSteps.map(s => s.id) : ['localConsumption', 'chargingStations', 'flexLoads', 'storageCharge', 'meshMicrogrid', 'inverterCurtailment'];
+        const expectedOrder = ['localConsumption', 'chargingStations', 'flexLoads', 'storageCharge', 'meshMicrogrid', 'inverterCurtailment'];
         const sinkOrderOk = expectedOrder.every((id, idx) => sinkOrder[idx] === id);
         const diagnostic = c.diagnosticOnly === true || String(c.runMode || '') === 'diagnostic';
         const active = String(c.runMode || '') === 'active';
@@ -1922,10 +2355,10 @@ class GridConstraintsModule extends BaseModule {
         add('grid_meter_fresh', 'Smartmeter / Netzpunkt plausibel', gridFresh, true, 'Netzpunkt-/Smartmeter-Mapping prüfen. Vorzeichen: Bezug positiv, Einspeisung negativ.');
         add('run_mode_safe', 'Betriebsart Diagnose oder Aktiv', diagnostic || active, true, 'Neue Anlagen zuerst im Diagnose/Testmodus prüfen, danach Aktivmodus freigeben.', c.runMode || '');
         add('wr_write_capable', 'WR-/PV-Write-Datenpunkte vorhanden', !!write.writable, true, write.nextStep || 'WR-Gruppe oder PV-Curtail-Write-Datenpunkt zuordnen.');
-        add('sink_order', 'Senkenreihenfolge korrekt', sinkOrderOk, true, 'Reihenfolge muss Verbrauch → Speicher → Ladepunkte → flexible Verbraucher → Mesh/Microgrid → WR-Abregelung sein.', sinkOrder);
-        add('storage_sink', 'Speicher-Lade-Command-State optional vorhanden', storageMapped, false, 'Für saubere 0-Einspeisung Speicher als erste steuerbare Senke zuordnen.', cfg && cfg.zeroExportStorageChargeCommandStateId || '');
-        add('charging_sink', 'Ladepunkt-Command-State optional vorhanden', chargingMapped, false, 'Ladepunkt-/DC-Station-Bridge als zweite steuerbare Senke zuordnen.', cfg && cfg.zeroExportChargingCommandStateId || '');
-        add('flex_sink', 'Flexible Verbraucher optional vorhanden', flexMapped, false, 'Heizstab/Wärmepumpe/Relaisverbraucher optional als dritte steuerbare Senke zuordnen.', cfg && cfg.zeroExportFlexLoadCommandStateId || '');
+        add('sink_order', 'Senkenreihenfolge korrekt', sinkOrderOk, true, 'Reihenfolge muss Verbrauch → freigegebene Ladepunkte → flexible Verbraucher → Speicher → Mesh/Microgrid → WR-Abregelung sein.', sinkOrder);
+        add('storage_sink', 'Speicher-Lade-Command-State optional vorhanden', storageMapped, false, 'Speicher als dritte steuerbare Senke nach freigegebenen Ladepunkten und flexiblen Verbrauchern zuordnen.', cfg && cfg.zeroExportStorageChargeCommandStateId || '');
+        add('charging_sink', 'Ladepunkt-Command-State optional vorhanden', chargingMapped, false, 'Ladepunkt-/DC-Station-Bridge als erste steuerbare Senke nach dem natürlichen Verbrauch zuordnen.', cfg && cfg.zeroExportChargingCommandStateId || '');
+        add('flex_sink', 'Flexible Verbraucher optional vorhanden', flexMapped, false, 'Heizstab/Wärmepumpe/Relaisverbraucher als zweite steuerbare Senke nach den Ladepunkten zuordnen.', cfg && cfg.zeroExportFlexLoadCommandStateId || '');
         add('mesh_sink', 'Mesh/Microgrid optional vorhanden', meshMapped, false, 'Mesh/Microgrid-Zielgruppen optional nach lokalen Senken nutzen.', cfg && cfg.zeroExportMeshCommandStateId || '');
         add('neutral_sink_or_wr', 'Mindestens WR-Write oder neutrale Senke vorhanden', !!write.writable || neutralSinkMapped, true, 'Ohne WR-Write und ohne neutrale Senken kann nur angezeigt, aber nicht geregelt werden.');
         add('sink_command_pipeline', 'Senken-Command-Pipeline plausibel', sinkWriteOk, false, 'Im Diagnosemodus wird nur Vorschau angezeigt; im Aktivmodus Schreibstatus prüfen.', sinkWrite.status || '');
@@ -1945,7 +2378,7 @@ class GridConstraintsModule extends BaseModule {
             ? blockers[0].nextStep
             : diagnostic
                 ? 'Diagnose/Testmodus prüfen: Sollwert-Vorschau, Senkenreihenfolge, WR-Writefähigkeit und ACKs beobachten. Danach bewusst auf Aktiv stellen.'
-                : '0-Einspeise-Kaskade ist bereit. Verbrauch zuerst, dann Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.';
+                : '0-Einspeise-Kaskade ist bereit. Verbrauch und freigegebene flexible Lasten zuerst, dann Speicher, Mesh/Microgrid und WR-Abregelung nur für den Rest.';
         const writeTestPreview = {
             schema: 'nexowatt.zero-export-commissioning.write-test-preview.v1',
             diagnosticOnly: !!diagnostic,
@@ -1964,11 +2397,11 @@ class GridConstraintsModule extends BaseModule {
             schema: 'nexowatt.zero-export-commissioning.sink-status.v1',
             order: expectedOrder,
             localConsumption: { available: true, active: true, note: 'Verbrauch wirkt immer zuerst als natürliche Senke am Netzpunkt.' },
-            storageCharge: { mapped: storageMapped, commandStateId: cfg && cfg.zeroExportStorageChargeCommandStateId || '', priority: 2 },
-            chargingStations: { mapped: chargingMapped, commandStateId: cfg && cfg.zeroExportChargingCommandStateId || '', priority: 3 },
-            flexLoads: { mapped: flexMapped, commandStateId: cfg && cfg.zeroExportFlexLoadCommandStateId || '', priority: 4 },
+            chargingStations: { mapped: chargingMapped, commandStateId: cfg && cfg.zeroExportChargingCommandStateId || '', priority: 2 },
+            flexLoads: { mapped: flexMapped, commandStateId: cfg && cfg.zeroExportFlexLoadCommandStateId || '', priority: 3 },
+            storageCharge: { mapped: storageMapped, commandStateId: cfg && cfg.zeroExportStorageChargeCommandStateId || '', priority: 4 },
             meshMicrogrid: { mapped: meshMapped, commandStateId: cfg && cfg.zeroExportMeshCommandStateId || '', priority: 5 },
-            inverterCurtailment: { mapped: !!write.writable, priority: 6, note: 'Letzte Stufe nach Verbrauch, Speicher, Ladepunkten, flexiblen Verbrauchern und Mesh/Microgrid.' },
+            inverterCurtailment: { mapped: !!write.writable, priority: 6, note: 'Letzte Stufe nach Verbrauch, freigegebenen Ladepunkten/flexiblen Verbrauchern, Speicher und Mesh/Microgrid.' },
         };
         return {
             schema: 'nexowatt.zero-export-commissioning.v1',
@@ -2021,7 +2454,11 @@ class GridConstraintsModule extends BaseModule {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
         const set = async (id, val) => { try { await this.adapter.setStateAsync(id, val, true); } catch (_e) {} };
-        const effectiveMaxW = Math.max(0, Math.round(Number(maxFeedInPowerW) || 0));
+        const authority = coordination && coordination.authority && typeof coordination.authority === 'object'
+            ? coordination.authority
+            : this._resolveExportLimitAuthority(cfg || {});
+        const configuredMaxW = Math.max(0, Math.round(Number(authority.configuredMaxFeedInW) || 0));
+        const effectiveMaxW = Math.max(0, Math.round(Number(authority.effectiveMaxFeedInW ?? maxFeedInPowerW) || 0));
         const currentExportW = Math.max(0, Math.round(Number(exportW) || 0));
         const coordinated = !!(coordination && coordination.coordinated === true);
         const controlExportW = coordination && Number.isFinite(Number(coordination.controlExportW))
@@ -2089,9 +2526,13 @@ class GridConstraintsModule extends BaseModule {
                     ? 'Diagnose/Testmodus aktiv: NexoWatt berechnet die Einspeisebegrenzung, schreibt aber keine WR-/PV-Setpoints.'
                     : !write.writable
                         ? 'Export Guard ist aktiv, aber es fehlen WR-/PV-Write-Datenpunkte. Es kann nicht geregelt werden.'
-                        : negativePriceActive
-                            ? 'Negativer Preis erkannt: Export Guard nutzt die konfigurierte Negative-Preis-Strategie.'
-                            : 'Export Guard ist aktiv und schreibfähig.';
+                        : authority.controlSource === 'certified-controller'
+                            ? `Zertifizierter EZA-/Parkregler ist führend. EOS setzt die strengere externe Grenze von ${effectiveMaxW} W über den bestehenden Export Guard um.`
+                            : authority.externalExpected
+                                ? `Externer Regler ist vorgesehen, aktuell greift ${authority.controlSource} mit ${effectiveMaxW} W (${authority.reason}).`
+                                : negativePriceActive
+                                    ? 'Negativer Preis erkannt: Export Guard nutzt die konfigurierte Negative-Preis-Strategie.'
+                                    : 'EOS regelt die Einspeisegrenze lokal und bleibt einziger Asset-Writer.';
         const checklist = {
             schema: 'nexowatt.grid.export-guard.installer-checklist.v1',
             runMode,
@@ -2104,7 +2545,9 @@ class GridConstraintsModule extends BaseModule {
             controlExportW,
             controlOverLimitW,
             coordinated,
+            configuredMaxFeedInW: configuredMaxW,
             effectiveMaxFeedInW: effectiveMaxW,
+            exportLimitAuthority: authority,
             exportOverLimitW: overLimitW,
             plannedAction,
             negativePriceActive: !!negativePriceActive,
@@ -2118,8 +2561,10 @@ class GridConstraintsModule extends BaseModule {
             schema: 'nexowatt.grid.export-limit.diagnostics.v1',
             enabled: !!enabled,
             installerApproved: !!approved,
-            configuredMaxFeedInW: effectiveMaxW,
+            configuredMaxFeedInW: configuredMaxW,
             effectiveMaxFeedInW: effectiveMaxW,
+            controlSource: String(authority.controlSource || 'eos-local'),
+            exportLimitAuthority: authority,
             currentExportW,
             controlExportW,
             controlOverLimitW,
@@ -2174,9 +2619,10 @@ class GridConstraintsModule extends BaseModule {
         });
         summary.commissioning = commissioning;
         checklist.commissioning = commissioning.report || {};
+        await this._publishExportLimitAuthorityStates(authority);
         await set('gridConstraints.exportLimit.enabled', !!enabled);
         await set('gridConstraints.exportLimit.installerApproved', !!approved);
-        await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
+        await set('gridConstraints.exportLimit.configuredMaxFeedInW', configuredMaxW);
         await set('gridConstraints.exportLimit.effectiveMaxFeedInW', effectiveMaxW);
         await set('gridConstraints.exportLimit.currentExportW', currentExportW);
         await set('gridConstraints.exportLimit.controlExportW', controlExportW);
@@ -2514,6 +2960,7 @@ class GridConstraintsModule extends BaseModule {
             {
                 coordinated: true,
                 controlExportW: Math.max(0, -controlGridW),
+                authority: exportTargetDiag.authority,
             }
         );
 

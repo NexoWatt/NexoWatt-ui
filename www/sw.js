@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:137d35b78089f2de48865a01740626db86c6259bb9e97374ce865bb4161cdbf4
+ * Quell-Hash: sha256:62b4175a0d0ca098381826465451c317190e059d4049e2a72a90f044cccc86d7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,8 +42,8 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-// RC92: Mobile History touch/tooltip patch; force existing PWA clients to refresh.
-const CACHE_NAME = 'nexowatt-cache-v492';
+// 1.0.0 Stable: force all existing PWA clients onto the official stable shell.
+const CACHE_NAME = 'nexowatt-cache-v500';
 
 const OFFLINE_URLS = [
   './',

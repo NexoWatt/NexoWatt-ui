@@ -17,6 +17,6 @@ assertMatch('src-ts/runtime-executables/ems/modules/grid-constraints.ts', /_getM
 assertMatch('src-ts/runtime-executables/ems/modules/grid-constraints.ts', /targetGridW\s*=\s*biasW\s*-\s*maxFeedInPowerW/, 'Regelziel nutzt erlaubte Einspeiseleistung statt nur 0 W');
 assertMatch('src-ts/runtime-executables/ems/modules/grid-constraints.ts', /feedInLimitW',\s*maxFeedInPowerW/, 'Einzel-WR Feed-in-Limit schreibt die Installergrenze');
 assertMatch('src-ts/runtime-executables/www/ems-apps.ts', /Installateurfreigabe Einspeisebegrenzung/, 'App-Center hat Freigabe-Schalter');
-assertMatch('src-ts/runtime-executables/www/ems-apps.ts', /Maximale Einspeiseleistung/, 'App-Center hat maximale Einspeiseleistung');
+assertMatch('src-ts/runtime-executables/www/ems-apps.ts', /(?:Lokale Sicherheitsobergrenze Einspeisung|Maximale Einspeiseleistung)/, 'App-Center hat maximale Einspeiseleistung');
 assertMatch('src-ts/runtime-executables/www/ems-apps.ts', /Export Guard für DE\/NL/, 'UI-Hinweis beschreibt DE/NL Export Guard');
 console.log('[grid-export-guard] Alle Prüfungen bestanden.');

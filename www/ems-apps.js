@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:982ff9b8eb5ac33dbb398201dd22726e94a3ec4070571e8c7d5c610dbe5e62e4
+ * Quell-Hash: sha256:4e9c69435a6161e835beb69de22375e5b94fbcb9a9f97bfdf4e6c85ebe0cba1f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -7485,13 +7485,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (typeof gc.zeroExportInstallerApproved !== 'boolean') gc.zeroExportInstallerApproved = !!gc.zeroExportEnabled;
     const maxExport = Number(gc.zeroExportMaxExportW ?? gc.maxFeedInPowerW ?? gc.maxExportW ?? 0);
     gc.zeroExportMaxExportW = (Number.isFinite(maxExport) && maxExport >= 0) ? Math.round(maxExport) : 0;
+    const fallbackExport = Number(gc.fallbackExportPowerW ?? gc.externalFallbackExportPowerW ?? gc.zeroExportMaxExportW);
+    gc.fallbackExportPowerW = (Number.isFinite(fallbackExport) && fallbackExport >= 0)
+      ? Math.min(gc.zeroExportMaxExportW, Math.round(fallbackExport))
+      : gc.zeroExportMaxExportW;
     // 0.8.30: Diagnose/Testmodus schützt die Erstinbetriebnahme. Bei „diagnostic"
     // berechnet der EMS-Kern alle Export-Guard-Werte, schreibt aber keine WR-Setpoints.
     if (typeof gc.exportLimitRunMode !== 'string') gc.exportLimitRunMode = 'active';
     if (!['diagnostic', 'active'].includes(String(gc.exportLimitRunMode))) gc.exportLimitRunMode = 'active';
-    // 0.8.51: Reihenfolge für echte 0‑Einspeisung. Verbrauch ist immer natürliche
-    // erste Senke, danach Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid
-    // und erst zuletzt WR-Abregelung. Optionale Command-States bleiben neutral und
+    // Stable 1.0.0: Reihenfolge für echte 0‑Einspeisung. Verbrauch ist immer natürliche
+    // erste Senke, danach freigegebene Ladepunkte/flexible Verbraucher, anschließend
+    // Speicher und Mesh/Microgrid; erst der verbleibende Rest wird am WR abgeregelt.
+    // Optionale Command-States bleiben neutral und
     // herstelleroffen; keine direkten Hardware-Rohbefehle im App-Center.
     if (typeof gc.zeroExportStorageChargeCommandStateId !== 'string') gc.zeroExportStorageChargeCommandStateId = '';
     if (typeof gc.zeroExportChargingCommandStateId !== 'string') gc.zeroExportChargingCommandStateId = '';
@@ -7873,7 +7878,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           const approved = !!readVal(data, 'gridConstraints.exportLimit.installerApproved');
           const runMode = String(readVal(data, 'gridConstraints.exportLimit.runMode') || gc.exportLimitRunMode || 'active');
           const currentExport = readVal(data, 'gridConstraints.exportLimit.currentExportW');
+          const configuredLimit = readVal(data, 'gridConstraints.exportLimit.configuredMaxFeedInW');
           const limit = readVal(data, 'gridConstraints.exportLimit.effectiveMaxFeedInW');
+          const controlSource = String(readVal(data, 'gridConstraints.exportLimit.controlSource') || 'eos-local');
+          const externalExpected = !!readVal(data, 'gridConstraints.exportLimit.authority.expected');
+          const externalActive = !!readVal(data, 'gridConstraints.exportLimit.authority.active');
+          const externalBinding = !!readVal(data, 'gridConstraints.exportLimit.authority.binding');
+          const externalAllowedRaw = Number(readVal(data, 'gridConstraints.exportLimit.authority.allowedExportPowerW'));
+          const externalAllowed = Number.isFinite(externalAllowedRaw) && externalAllowedRaw >= 0 ? externalAllowedRaw : null;
+          const fallbackLimit = readVal(data, 'gridConstraints.exportLimit.authority.fallbackExportPowerW');
+          const authorityValidUntil = Number(readVal(data, 'gridConstraints.exportLimit.authority.validUntil') || 0);
+          const authoritySource = String(readVal(data, 'gridConstraints.exportLimit.authority.source') || '—');
+          const authorityQuality = String(readVal(data, 'gridConstraints.exportLimit.authority.quality') || '—');
+          const authorityReason = String(readVal(data, 'gridConstraints.exportLimit.authority.reason') || '—');
+          const authorityFailSafe = String(readVal(data, 'gridConstraints.exportLimit.authority.failSafePolicy') || '—');
           const over = readVal(data, 'gridConstraints.exportLimit.exportOverLimitW');
           const remaining = readVal(data, 'gridConstraints.exportLimit.remainingFeedInW');
           const usage = Number(readVal(data, 'gridConstraints.exportLimit.usagePercent'));
@@ -7910,8 +7928,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             ['Status', status],
             ['Betriebsart', runMode === 'diagnostic' ? 'Diagnose/Testmodus – keine WR-Schreibbefehle' : 'Aktiv – WR-Schreibbefehle erlaubt'],
             ['Installateurfreigabe', approved ? 'Ja' : 'Nein'],
+            ['Wirksame Führungsquelle', controlSource === 'certified-controller' ? 'Zertifizierter EZA-/Parkregler' : controlSource === 'certified-controller-last-valid' ? 'Letzte gültige Regler-Vorgabe' : controlSource === 'certified-controller-failsafe' ? 'Regler-Fail-Safe (0 W)' : controlSource === 'eos-local-fallback' ? 'EOS Rückfallgrenze' : 'EOS Netzlimits lokal'],
+            ['Zertifizierter Regler erwartet', externalExpected ? 'Ja' : 'Nein'],
+            ['Externe Vorgabe aktiv / bindend', `${externalActive ? 'Ja' : 'Nein'} / ${externalBinding ? 'Ja' : 'Nein'}`],
+            ['Regler-/Vorgabenquelle', authoritySource],
+            ['Vorgabenqualität', authorityQuality],
+            ['Externe Einspeisegrenze', externalAllowed === null ? '—' : fmtW(externalAllowed)],
+            ['Lokale Sicherheitsobergrenze', fmtW(configuredLimit)],
+            ['Rückfallgrenze', fmtW(fallbackLimit)],
+            ['Wirksames Einspeiselimit', fmtW(limit)],
+            ['Vorgabe gültig bis', authorityValidUntil > 0 ? new Date(authorityValidUntil).toLocaleString('de-DE') : '—'],
+            ['Fail-Safe-Vertrag', authorityFailSafe],
+            ['Quellenentscheidung', authorityReason],
             ['Aktuelle Einspeisung', fmtW(currentExport)],
-            ['Erlaubtes Limit', fmtW(limit)],
             ['Überschreitung', fmtW(over)],
             ['Rest bis Limit', fmtW(remaining)],
             ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
@@ -8149,10 +8178,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           { v: 'diagnostic', t: 'Diagnose/Testmodus – nur berechnen, nicht schreiben' },
           { v: 'active', t: 'Aktiv – WR-/PV-Setpoints schreiben' },
         ], (v) => { gc.exportLimitRunMode = (v === 'diagnostic') ? 'diagnostic' : 'active'; }));
-        zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = echte Nulleinspeisung'));
+        zeroEl.appendChild(mkNum('Lokale Sicherheitsobergrenze Einspeisung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => {
+          const previousMaxW = Math.max(0, Math.round(Number(gc.zeroExportMaxExportW) || 0));
+          const previousFallbackW = Math.max(0, Math.round(Number(gc.fallbackExportPowerW) || 0));
+          gc.zeroExportMaxExportW = Math.max(0, Math.round(n));
+          gc.fallbackExportPowerW = previousFallbackW === previousMaxW
+            ? gc.zeroExportMaxExportW
+            : Math.min(gc.zeroExportMaxExportW, previousFallbackW);
+        }, 'W', '0 = echte Nulleinspeisung; ein externer Regler darf diesen Wert nur verschärfen'));
+        zeroEl.appendChild(mkNum('Rückfallgrenze bei Reglerausfall', 'gc_fallbackExportPowerW', Number(gc.fallbackExportPowerW ?? gc.zeroExportMaxExportW) || 0, (n) => { gc.fallbackExportPowerW = Math.min(gc.zeroExportMaxExportW, Math.max(0, Math.round(n))); }, 'W', 'gilt beim Fail-Safe „Rückfallgrenze aus Netzlimits“'));
         zeroEl.appendChild(mkNum('Ziel‑Netzbezug / Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
-        zeroEl.appendChild(mkHint('RC79‑Reihenfolge: 1 reale lokale Verbraucher, 2 freigegebene Speicherladung, 3 Ladepunkte/flexible Lasten, 4 erst den verbleibenden PV‑Überschuss abregeln. PV‑Abregelung und Speicherentladung dürfen nicht gleichzeitig bestehen.'));
+        zeroEl.appendChild(mkHint('Reihenfolge: 1 reale lokale Verbraucher, 2 freigegebene Ladepunkte und flexible Verbraucher, 3 verfügbaren Rest in den Speicher laden, 4 optional Mesh/Microgrid, 5 nur den danach verbleibenden PV‑Überschuss abregeln. PV‑Abregelung und Speicherentladung dürfen nicht gleichzeitig bestehen.'));
+        zeroEl.appendChild(mkHint('Ist die Netzbetreiber-/EZA-Regler-App aktiv, in Betrieb genommen und vom Installateur freigegeben, hat ihre frische bindende Einspeisevorgabe Vorrang. Die lokale Sicherheitsobergrenze bleibt als maximale Obergrenze bestehen. Ohne diese vollständige Freigabe regelt EOS allein.'));
         zeroEl.appendChild(mkDpField('Speicher-Lade-Command-State optional', 'gc_zeroExportStorageChargeCommandStateId', gc.zeroExportStorageChargeCommandStateId || '', (v) => { gc.zeroExportStorageChargeCommandStateId = v; }, 'Neutraler JSON-Command-State, z.B. 0_userdata.0.nexowatt.zero.storage.command'));
         zeroEl.appendChild(mkDpField('Ladepunkt-Command-State optional', 'gc_zeroExportChargingCommandStateId', gc.zeroExportChargingCommandStateId || '', (v) => { gc.zeroExportChargingCommandStateId = v; }, 'Neutraler JSON-Command-State für Wallbox/DC-Ladepunkte'));
         zeroEl.appendChild(mkDpField('Flexible Verbraucher Command-State optional', 'gc_zeroExportFlexLoadCommandStateId', gc.zeroExportFlexLoadCommandStateId || '', (v) => { gc.zeroExportFlexLoadCommandStateId = v; }, 'Heizstab/Wärmepumpe/flexible Last – neutraler JSON-Command-State'));
@@ -12964,8 +13002,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       patch.energyLedger.origin = window.NexoWattEnergyOriginAppCenter.collect(ledgerOriginExisting, patch.energyLedger.enabled, _licenseEdition());
     }
 
-    // EOS Netzbetreiber-Schnittstelle: read-only Treiber-/Transportgrundlage.
-    // Die aktive Operation-Engine-Übergabe und Hardware-Writebacks bleiben in RC50 gesperrt.
+    // EOS Netzbetreiber-Schnittstelle: Der Reglerzugriff bleibt strikt read-only.
+    // Nach vollständiger Aktivierung stellt das Modul nur einen validierten Envelope
+    // bereit; der bestehende Export Guard bleibt der einzige Anlagen-Sollwertschreiber.
     const netOperatorAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.netOperator ? patch.emsApps.apps.netOperator : null;
     const netOperatorEnabled = !!(netOperatorAppState && netOperatorAppState.installed && netOperatorAppState.enabled);
     patch.netOperatorInterface = window.NexoWattNetOperatorAppCenter

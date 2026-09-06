@@ -13,7 +13,7 @@ if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_buildZeroExportCommissioningAssistant');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.checklistJson');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.writeTestPreviewJson');
-must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','Verbrauch → Speicher → Ladepunkte');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','Verbrauch → freigegebene Ladepunkte → flexible Verbraucher → Speicher');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','keine zweite Regelung');
 must('src-ts/runtime-executables/www/ems-apps.ts','commissioning.reportJson');
 must('src-ts/runtime-executables/www/ems-apps.ts','0‑Einspeise Inbetriebnahme-Checkliste');

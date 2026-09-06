@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 561383c7d338258fb7c9762200daabef948ca993ec6c1a30d5933e9ad62f6ca9
+ * Original-Hash: cfd36d6249a4d9fcc14859f1d77144d69994658631ea77520555ea50b16f5344
  */
 
 /**
@@ -93,8 +93,43 @@ const mustNotContain = (rel, needle, message) => {
 };
 
 const pkg = JSON.parse(read('package.json'));
-const versionParts = String(pkg.version || '').split('.').map(Number);
-if (versionParts.length !== 3 || versionParts.some(part => !Number.isFinite(part)) || versionParts[0] !== 0 || versionParts[1] !== 8 || versionParts[2] < 191) {
+/**
+ * Code-Teil: parseSemver
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const parseSemver = value => {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(String(value || '').trim());
+  return match ? match.slice(1).map(Number) : null;
+};
+/**
+ * Code-Teil: isVersionAtLeast
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const isVersionAtLeast = (actualValue, minimumValue) => {
+  const actual = parseSemver(actualValue);
+  const minimum = parseSemver(minimumValue);
+  if (!actual || !minimum) return false;
+  for (let index = 0; index < 3; index += 1) {
+    if (actual[index] === minimum[index]) continue;
+    return actual[index] > minimum[index];
+  }
+  return true;
+};
+if (!isVersionAtLeast(pkg.version, '0.8.191')) {
   fail(`Paketversion muss mindestens 0.8.191 sein, ist aber ${pkg.version || 'unbekannt'}`);
 }
 

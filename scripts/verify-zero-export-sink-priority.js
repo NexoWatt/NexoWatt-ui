@@ -12,9 +12,11 @@ if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo
 }
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_zeroExportSinkPriorityPlan');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','localConsumption');
-must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','storageCharge');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','chargingStations');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','flexLoads');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','storageCharge');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','inverterCurtailment');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts',"'localConsumption',\n            'chargingStations',\n            'flexLoads',\n            'storageCharge',\n            'meshMicrogrid',\n            'inverterCurtailment'");
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.sinkPriorityPlanJson');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','sink_priority_command_ready');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','setForeignStateAsync(stateId');
@@ -28,4 +30,4 @@ must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportChargingCommandStat
 must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportFlexLoadCommandStateId');
 must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportMeshCommandStateId');
 forbid('src-ts/runtime-executables/ems/modules/grid-constraints.ts','new ZeroExportController');
-console.log('OK: 0-Einspeise Senkenreihenfolge ist Verbrauch → Speicher → Ladepunkte → flexible Verbraucher → Mesh/Microgrid → WR-Abregelung und baut keine zweite Regelung.');
+console.log('OK: 0-Einspeise Senkenreihenfolge ist Verbrauch → freigegebene Ladepunkte → flexible Verbraucher → Speicher → Mesh/Microgrid → WR-Abregelung und baut keine zweite Regelung.');

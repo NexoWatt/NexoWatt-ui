@@ -77,7 +77,8 @@ for (const entry of manifest.files) {
 }
 
 const lifecycle = String(pkg.scripts?.prepublishOnly || '');
-if (lifecycle !== 'npm run release:check-version-free && npm run publish:check') {
+const expectedLifecycle = 'npm run release:check-version-free && npm run publish:check && npm run test:stable-release && node scripts/verify-publish.js && npm run test:package-runtime-start-smoke';
+if (lifecycle !== expectedLifecycle) {
   fail(`Unerwarteter prepublishOnly-Vertrag: ${lifecycle || '<leer>'}`);
 }
 if (pkg.scripts?.['publish:check'] !== 'node scripts/verify-release-artifact.js') {

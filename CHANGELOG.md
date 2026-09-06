@@ -1,3 +1,17 @@
+## 1.0.0 - 2026-09-06
+
+- **Official Stable:** NexoWatt EOS 1.0.0 ist der erste offiziell für Verkauf und produktiven Betrieb freigegebene Stable-Stand.
+- Die Stable-Version übernimmt den abschließend validierten RC93-Funktionsstand unverändert. Bei der Promotion wurden ausschließlich Versions-, Release-, Dokumentations- und sichtbare Stable-Kennzeichnungen angepasst; die produktive EMS-Regellogik blieb unverändert.
+- Die Netzlimit-App begrenzt die maximale Nettoeinspeisung am NVP weiterhin auch ohne EZA-/Parkregler. `0 W` steht für echte Nulleinspeisung; positive Werte bilden eine feste maximale Einspeiseleistung in Watt ab.
+- Ein zertifizierter EZA-/Parkregler wird nur bei vollständig aktivierter App und Schnittstelle, bestätigter Inbetriebnahme, gesetzten Installateurfreigaben, aktivem Export Guard und gültiger Wirkleistungsvorgabe zur bevorzugten Führungsquelle. Andernfalls regelt EOS selbst.
+- Der vorhandene `GridConstraints Export Guard` bleibt der einzige produktive Asset-Writer. Die Netzbetreiber-Schnittstelle stellt ausschließlich einen validierten Operations-Envelope bereit und schreibt nicht direkt auf Wechselrichter, Speicher, Ladepunkte oder Verbraucher.
+- Die wirksame Einspeisegrenze bleibt der strengere Wert aus lokaler Sicherheitsobergrenze und gültiger externer Vorgabe. Externe Werte können die lokale Grenze niemals erhöhen.
+- `allowedExportPowerW`, `fallbackExportPowerW`, `lastUpdate`, `validUntil`, `source`, `quality`, `commandId`, Fail-Safe und begrenzte Haltezeit bleiben der standardisierte Vertrag. Fehlende oder ungültige Werte werden nie versehentlich als `0 W` behandelt.
+- Die Senkenpriorität bleibt: reale lokale Verbraucher, freigegebene Ladepunkte, freigegebene flexible Verbraucher, zulässige Speicherladung, optional Mesh/Microgrid und erst anschließend Wechselrichter-Abregelung.
+- Führungsquelle, konfigurierte, externe und wirksame Grenze, Gültigkeit, Qualität und Rückfallgrund werden diagnostisch veröffentlicht; die Entscheidungshistorie bleibt SHA-256-hashverkettet und beim Wiederanlauf verifiziert.
+- Der Stable-Release-Gate prüft nun zusätzlich Versionsgleichlauf, Stable-Kennzeichnungen, Release-Dokumentation, PWA-Cache-Bump und das Fehlen sichtbarer Candidate-Texte.
+- Die Software-Freigabe ersetzt keine projektspezifische Inbetriebnahme oder Zertifizierung. Parkregler- und reale Einspeisebegrenzung sind je Kundenanlage im Diagnosemodus zu prüfen und anschließend kontrolliert zu aktivieren.
+
 ## 0.8.217 - 2026-08-29
 
 - RC92 korrigiert ausschließlich die mobile Bedienung der Historienseite; sämtliche EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardwareentscheidungen bleiben gegenüber RC91 unverändert.

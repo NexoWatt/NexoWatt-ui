@@ -1,5 +1,5 @@
 @echo off
-echo NexoWatt EOS 0.8.203 RC78 wird geprueft und auf npm veroeffentlicht ...
+echo NexoWatt EOS 1.0.0 Stable wird geprueft und auf npm veroeffentlicht ...
 npm publish
 if errorlevel 1 (
   echo.
@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo NexoWatt EOS 0.8.203 wurde erfolgreich veroeffentlicht.
+echo NexoWatt EOS 1.0.0 Stable wurde erfolgreich veroeffentlicht.
 pause

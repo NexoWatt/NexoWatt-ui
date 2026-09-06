@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:d25f1cf7913cbc83357e93591733179c8c4f865daca8a725d88b69fe4ee48526
+ * Quell-Hash: sha256:a8b3490e6d29ab6e9804baa593570618ed14610ebaaef5d8cc3833e041b5c8df
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -434,8 +434,10 @@ class ModuleManager {
             enabledFn: () => true,
         });
         // Netzbetreiber-Schnittstelle hinter dem zertifizierten EZA-/Parkregler.
-        // RC50 ist absichtlich read-only: kanonisches Datenmodell, Treiberdiagnose
-        // und Audit werden vorbereitet; die Operation-Engine-/Asset-Übergabe bleibt gesperrt.
+        // Sie liest und normalisiert ausschließlich die Regler-Vorgaben. Bei aktivem,
+        // in Betrieb genommenem und freigegebenem Regler konsumiert GridConstraints
+        // den validierten Envelope als Führungsgrenze. Dieses Modul schreibt selbst
+        // weder Wechselrichter noch Speicher oder Ladepunkte.
         this.modules.push({
             key: 'netOperatorInterface',
             instance: new NetOperatorInterfaceModule(this.adapter, this.dp),

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c596d89a15477103a2f629cfcf878e8b4035a09d64e46390a2fa1ba5b9e20e0a
+ * Original-Hash: 2a34fbd8270999d501932c41a472bffb216e62b290f9a908f19b69f617d4f970
  */
 
 /**
@@ -75,9 +75,11 @@ if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo
 }
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_zeroExportSinkPriorityPlan');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','localConsumption');
-must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','storageCharge');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','chargingStations');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','flexLoads');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','storageCharge');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','inverterCurtailment');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts',"'localConsumption',\n            'chargingStations',\n            'flexLoads',\n            'storageCharge',\n            'meshMicrogrid',\n            'inverterCurtailment'");
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.sinkPriorityPlanJson');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','sink_priority_command_ready');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','setForeignStateAsync(stateId');
@@ -91,4 +93,4 @@ must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportChargingCommandStat
 must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportFlexLoadCommandStateId');
 must('src-ts/runtime-executables/www/ems-apps.ts','zeroExportMeshCommandStateId');
 forbid('src-ts/runtime-executables/ems/modules/grid-constraints.ts','new ZeroExportController');
-console.log('OK: 0-Einspeise Senkenreihenfolge ist Verbrauch → Speicher → Ladepunkte → flexible Verbraucher → Mesh/Microgrid → WR-Abregelung und baut keine zweite Regelung.');
+console.log('OK: 0-Einspeise Senkenreihenfolge ist Verbrauch → freigegebene Ladepunkte → flexible Verbraucher → Speicher → Mesh/Microgrid → WR-Abregelung und baut keine zweite Regelung.');

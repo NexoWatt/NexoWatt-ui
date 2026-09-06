@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/netoperator-canonical-model.ts
- * Quell-Hash: sha256:7697e00a578f3825cd95eca4e2e4e425394db5e00393b9f89abfb5e0b8b496ac
+ * Quell-Hash: sha256:003dc2612a7534b5a1f4a7a1b1809019cb94cc925f2a9a926b17984ba21999b5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -29,9 +29,9 @@ exports.CANONICAL_FIELDS = Object.freeze({
     'grid.command.enable': { key: 'grid.command.enable', type: 'boolean', access: 'read', priority: 2, label: 'Externe Vorgaben aktiv', required: true },
     'grid.command.trip': { key: 'grid.command.trip', type: 'boolean', access: 'read', priority: 1, label: 'Harte Abschaltung / Trip', required: true },
     'grid.command.release': { key: 'grid.command.release', type: 'boolean', access: 'read', priority: 2, label: 'Freigabe der Anlage', required: true },
-    'grid.p.limit_kw': { key: 'grid.p.limit_kw', type: 'number', access: 'read', unit: 'kW', priority: 3, label: 'Maximal zulässige Wirkleistung am NAP' },
-    'grid.p.target_kw': { key: 'grid.p.target_kw', type: 'number', access: 'read', unit: 'kW', priority: 3, label: 'Wirkleistungs-Sollwert am NAP' },
-    'grid.p.target_pct': { key: 'grid.p.target_pct', type: 'number', access: 'read', unit: '%', priority: 3, label: 'Wirkleistungs-Sollwert in Prozent' },
+    'grid.p.limit_kw': { key: 'grid.p.limit_kw', type: 'number', access: 'read', unit: 'kW', priority: 3, label: 'Maximal zulässige Einspeiseleistung am NAP (nicht-negative kW)' },
+    'grid.p.target_kw': { key: 'grid.p.target_kw', type: 'number', access: 'read', unit: 'kW', priority: 3, label: 'Einspeise-Sollwert am NAP (positive kW = Einspeisung)' },
+    'grid.p.target_pct': { key: 'grid.p.target_pct', type: 'number', access: 'read', unit: '%', priority: 3, label: 'Zulässige Einspeisung in Prozent der installierten PV-Leistung' },
     'grid.q.target_kvar': { key: 'grid.q.target_kvar', type: 'number', access: 'read', unit: 'kvar', priority: 4, label: 'Blindleistungs-Sollwert' },
     'grid.cosphi.target': { key: 'grid.cosphi.target', type: 'number', access: 'read', priority: 4, label: 'cos phi Sollwert' },
     'grid.mode.p': { key: 'grid.mode.p', type: 'enum', access: 'read', priority: 3, label: 'Aktiver P-Regelmodus' },

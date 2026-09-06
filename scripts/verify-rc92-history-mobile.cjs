@@ -44,7 +44,8 @@ for (const token of [
 }
 assert(runtime.includes('AUTO-GENERATED RUNTIME FILE'), 'history.js ist kein generiertes Runtime-Artefakt');
 assert(runtime.includes('Quelle: src-ts/runtime-executables/www/history.ts'), 'history.js verweist nicht auf die kanonische TS-Quelle');
-assert(serviceWorkerSource.includes("nexowatt-cache-v492"), 'Service-Worker-Cache wurde für RC92 nicht erhöht');
+const cacheVersionMatch = serviceWorkerSource.match(/nexowatt-cache-v(\d+)/);
+assert(cacheVersionMatch && Number(cacheVersionMatch[1]) >= 492, 'Service-Worker-Cache muss mindestens RC92/v492 entsprechen');
 
 const CHROMIUM = [process.env.CHROMIUM_BIN, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome']
   .find((candidate) => candidate && fs.existsSync(candidate));

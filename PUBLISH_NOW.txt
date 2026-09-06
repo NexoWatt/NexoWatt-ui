@@ -1,24 +1,29 @@
-NexoWatt UI 0.8.217 RC92 – History Mobile Touch Stable Candidate
+NexoWatt UI 1.0.0 – OFFICIAL STABLE RELEASE
 
-Veröffentlichen ausschließlich aus diesem frisch entpackten Repository-ZIP:
+Veröffentlichen ausschließlich aus diesem frisch entpackten vollständigen Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 0.8.217 auf npm noch frei ist,
-- ob alle npm-Paketdateien exakt dem zuletzt erzeugten Release-Artefakt entsprechen,
-- ob package.json, package-lock.json, io-package.json und Webmanifest dieselbe Version führen,
+- ob Version 1.0.0 in der Ziel-Registry noch frei ist,
+- ob alle npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
+- ob package.json, package-lock.json, io-package.json, Webmanifest und Release-Manifest dieselbe Version führen,
+- ob die Stable-Release-Kennzeichnungen konsistent sind,
 - ob Runtime-Dateien und TypeScript-Quellen synchron sind.
 
-RC92 ist ein isolierter Frontend-Patch für die Historienseite:
-- flüssiges vertikales Scrollen auf Smartphones,
-- Tap zeigt Tagesleistung beziehungsweise Zeitraumenergie wie am Laptop,
-- Woche/Monat/Jahr zeigen kWh pro ausgewähltem Balken,
-- Tooltip bleibt im sichtbaren Smartphone-Viewport,
-- horizontaler Tages-Zoom bleibt erhalten,
-- keine Änderung an EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- oder Hardware-Regelung.
+Freigabestatus:
+- erste offizielle NexoWatt-EOS-Stable-Version für Verkauf und produktiven Betrieb,
+- Funktionsstand identisch zur abschließend geprüften RC93-Baseline,
+- keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- oder Hardware-Regellogik durch die Stable-Promotion,
+- lokale Einspeisebegrenzung bleibt auch ohne Parkregler nutzbar,
+- zertifizierter EZA-/Parkregler wird nur bei vollständiger Aktivierung, Inbetriebnahme, Installateurfreigabe und gültiger Vorgabe bevorzugt,
+- GridConstraints Export Guard bleibt einziger produktiver Asset-Writer,
+- lokale Sicherheitsobergrenze, TTL, Qualität, Rückfall und Audit bleiben wirksam.
 
-Wichtig:
+Wichtig für jede Kundenanlage:
 - Alten Projektordner vollständig löschen oder umbenennen.
 - Dieses ZIP in einen neuen, leeren Ordner entpacken.
-- Keine Dateien aus einem älteren RC-Ordner hinein kopieren.
+- Keine Dateien aus einem älteren RC- oder Stable-Ordner hinein kopieren.
+- Parkregler- und Einspeisebegrenzung zunächst im Diagnosemodus in Betrieb nehmen.
+- NVP-Vorzeichen, Messwertfrische, WR-/Regler-Schreibfähigkeit, ACK/Rückmeldung und Fallback dokumentieren.
+- Die Software-Stable-Freigabe ersetzt keine projektspezifische Netzbetreiber-, Zertifizierer- oder Herstellerabnahme.

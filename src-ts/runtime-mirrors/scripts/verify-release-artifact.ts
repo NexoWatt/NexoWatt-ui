@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ce55b14d2114e5e3f59bd01bcc6c3b700f6714a8c7b1576e7a51e3e1b4428ab9
+ * Original-Hash: 4a11b304ecc8b26117b9ce3b160fc629a500295f51eb64cdbca041fd5c4eec64
  */
 
 /**
@@ -151,7 +151,8 @@ for (const entry of manifest.files) {
 }
 
 const lifecycle = String(pkg.scripts?.prepublishOnly || '');
-if (lifecycle !== 'npm run release:check-version-free && npm run publish:check') {
+const expectedLifecycle = 'npm run release:check-version-free && npm run publish:check && npm run test:stable-release && node scripts/verify-publish.js && npm run test:package-runtime-start-smoke';
+if (lifecycle !== expectedLifecycle) {
   fail(`Unerwarteter prepublishOnly-Vertrag: ${lifecycle || '<leer>'}`);
 }
 if (pkg.scripts?.['publish:check'] !== 'node scripts/verify-release-artifact.js') {

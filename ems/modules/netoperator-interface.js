@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/netoperator-interface.ts
- * Quell-Hash: sha256:318faf6b634943879bb70d85e617e7de1d0579474b96c75e9f1272485e0a4d4a
+ * Quell-Hash: sha256:a1e06a03718fd671cf02e29b9fc15415663cefdf6cf60eed44e9529122611c4f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -73,6 +73,116 @@ class NetOperatorInterfaceModule {
         const cfg = this.adapter && this.adapter.config && this.adapter.config.netOperatorInterface;
         return cfg && typeof cfg === 'object' ? cfg : {};
     }
+    /**
+     * Der zertifizierte Regler wird nur dann zur führenden Export-Grenzquelle,
+     * wenn App, Modul, Aktivmodus, Inbetriebnahme und Installerfreigabe gemeinsam
+     * aktiv sind. Die Schnittstelle selbst bleibt read-only zum Regler; nur der
+     * bestehende Grid-Constraints-/Export-Guard schreibt Anlagen-Sollwerte.
+     */
+    activation(cfg = this.config()) {
+        const root = this.adapter && this.adapter.config && typeof this.adapter.config === 'object' ? this.adapter.config : {};
+        const app = root?.emsApps?.apps?.netOperator;
+        const gridCfg = root?.gridConstraints && typeof root.gridConstraints === 'object' ? root.gridConstraints : {};
+        const appEnabled = app && typeof app === 'object'
+            ? app.installed === true && app.enabled === true
+            : (root.enableNetOperatorInterface === true || cfg.enabled === true);
+        const exportGuardInstallerApproved = typeof gridCfg.exportLimitInstallerApproved === 'boolean'
+            ? gridCfg.exportLimitInstallerApproved === true
+            : typeof gridCfg.zeroExportInstallerApproved === 'boolean'
+                ? gridCfg.zeroExportInstallerApproved === true
+                : gridCfg.zeroExportEnabled === true;
+        const exportGuardRunMode = safeText(gridCfg.exportLimitRunMode
+            ?? gridCfg.zeroExportRunMode
+            ?? gridCfg.exportGuardMode
+            ?? 'active').toLowerCase();
+        const exportGuardActive = gridCfg.zeroExportEnabled === true
+            && exportGuardInstallerApproved
+            && ['active', 'on', 'write', 'productive'].includes(exportGuardRunMode);
+        const active = appEnabled
+            && cfg.enabled === true
+            && safeText(cfg.mode).toLowerCase() === 'active'
+            && cfg.commissioned === true
+            && cfg.installerApproved === true
+            && exportGuardActive;
+        return {
+            appEnabled,
+            interfaceEnabled: cfg.enabled === true,
+            mode: safeText(cfg.mode || 'off').toLowerCase(),
+            commissioned: cfg.commissioned === true,
+            installerApproved: cfg.installerApproved === true,
+            exportGuardEnabled: gridCfg.zeroExportEnabled === true,
+            exportGuardInstallerApproved,
+            exportGuardRunMode,
+            exportGuardActive,
+            active,
+            operationEngineIntegration: active ? 'grid-export-limit-active' : 'grid-export-limit-standby',
+        };
+    }
+    strictNonNegative(value) {
+        if (value === null || value === undefined || (typeof value === 'string' && !value.trim()))
+            return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    }
+    allowedExportPowerW(snapshot) {
+        const command = snapshot && snapshot.command ? snapshot.command : null;
+        if (!snapshot || snapshot.valid !== true || !command)
+            return null;
+        if (command.action === 'trip' || command.action === 'inhibit')
+            return 0;
+        if (command.binding !== true || command.action !== 'active-power-constraint')
+            return null;
+        const pLimitKw = this.strictNonNegative((0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'grid.p.limit_kw'));
+        if (pLimitKw !== null)
+            return Math.round(pLimitKw * 1000);
+        // Kanonischer Vertrag: positive P-Zielwerte bedeuten Einspeisung am NAP.
+        const pTargetKw = this.strictNonNegative((0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'grid.p.target_kw'));
+        if (pTargetKw !== null)
+            return Math.round(pTargetKw * 1000);
+        const pTargetPct = this.strictNonNegative((0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'grid.p.target_pct'));
+        if (pTargetPct !== null && pTargetPct <= 100) {
+            const gridCfg = this.adapter?.config?.gridConstraints || {};
+            const ratedCandidates = [gridCfg.pvRatedPowerW, gridCfg.pvInstalledPowerW, gridCfg.installedPvPowerW];
+            for (const value of ratedCandidates) {
+                const ratedPowerW = this.strictNonNegative(value);
+                if (ratedPowerW !== null && ratedPowerW > 0)
+                    return Math.round(ratedPowerW * pTargetPct / 100);
+            }
+        }
+        return null;
+    }
+    fallbackExportPowerW() {
+        const cfg = this.adapter?.config?.gridConstraints || {};
+        const localCandidates = [cfg.exportLimitMaxFeedInW, cfg.zeroExportMaxExportW, cfg.maxFeedInPowerW, cfg.maxExportW, cfg.allowedFeedInW];
+        let localMaxW = 0;
+        for (const value of localCandidates) {
+            const parsed = this.strictNonNegative(value);
+            if (parsed !== null) {
+                localMaxW = Math.round(parsed);
+                break;
+            }
+        }
+        const fallbackCandidates = [cfg.fallbackExportPowerW, cfg.externalFallbackExportPowerW];
+        for (const value of fallbackCandidates) {
+            const parsed = this.strictNonNegative(value);
+            if (parsed !== null)
+                return Math.min(localMaxW, Math.round(parsed));
+        }
+        return localMaxW;
+    }
+    envelopeQuality(snapshot) {
+        if (!snapshot || snapshot.commOk !== true)
+            return 'communication-error';
+        if (snapshot.fresh !== true)
+            return 'stale';
+        if (snapshot.valid !== true)
+            return 'invalid';
+        if (snapshot.command?.binding !== true)
+            return 'good-released';
+        if (snapshot.command?.action === 'reactive-power-constraint')
+            return 'good-no-active-power-limit';
+        return 'good';
+    }
     async ensureObject(id, name, type, role = 'state', unit = '') {
         const common = { name, type, role, read: true, write: false };
         if (unit)
@@ -116,7 +226,14 @@ class NetOperatorInterfaceModule {
         await this.ensureObject('netoperator.readOnly', 'Read-only / keine Asset-Schreibbefehle', 'boolean', 'indicator');
         await this.ensureObject('netoperator.operationEngineIntegration', 'Operation-Engine-Integration', 'string', 'text');
         await this.ensureObject('netoperator.failSafePolicy', 'Dokumentierter Fail-Safe-Vertrag', 'string', 'text');
-        await this.ensureObject('netoperator.commandBinding', 'Externe Vorgabe bindend', 'boolean', 'indicator');
+        await this.ensureObject('netoperator.externalExportLimitEligible', 'Zertifizierter Regler als Export-Grenzquelle freigegeben', 'boolean', 'indicator');
+        await this.ensureObject('netoperator.allowedExportPowerW', 'Standardisierte extern erlaubte Einspeiseleistung', 'number', 'value.power', 'W');
+        await this.ensureObject('netoperator.fallbackExportPowerW', 'Rückfallgrenze der Netzlimit-App', 'number', 'value.power', 'W');
+        await this.ensureObject('netoperator.validUntil', 'Externe Vorgabe gültig bis', 'number', 'value.time', 'ms');
+        await this.ensureObject('netoperator.source', 'Standardisierte Vorgabenquelle', 'string', 'text');
+        await this.ensureObject('netoperator.quality', 'Standardisierte Vorgabenqualität', 'string', 'text');
+        await this.ensureObject('netoperator.lastUpdate', 'Standardisierte letzte Aktualisierung', 'number', 'value.time', 'ms');
+        await this.ensureObject('netoperator.commandBinding', 'Externe Vorgabe operativ bindend', 'boolean', 'indicator');
         await this.ensureObject('netoperator.commandPriority', 'Aktive Priorität', 'number', 'value');
         await this.ensureObject('netoperator.commandAction', 'Aktive Vorgabe', 'string', 'text');
         await this.ensureObject('netoperator.commandReason', 'Begründung', 'string', 'text');
@@ -169,16 +286,22 @@ class NetOperatorInterfaceModule {
         await this.adapter.setStateAsync('netoperator.enabled', false, true);
         await this.adapter.setStateAsync('netoperator.status', 'disabled', true);
         await this.adapter.setStateAsync('netoperator.readOnly', true, true);
-        await this.adapter.setStateAsync('netoperator.operationEngineIntegration', 'prepared-not-active', true);
+        await this.adapter.setStateAsync('netoperator.operationEngineIntegration', 'disabled', true);
+        await this.adapter.setStateAsync('netoperator.externalExportLimitEligible', false, true);
+        await this.adapter.setStateAsync('netoperator.allowedExportPowerW', -1, true);
+        await this.adapter.setStateAsync('netoperator.validUntil', 0, true);
+        await this.adapter.setStateAsync('netoperator.quality', 'disabled', true);
     }
     appendAudit(snapshot) {
         const command = snapshot.command;
+        const allowedExportPowerW = this.allowedExportPowerW(snapshot);
         const current = {
             commandId: command.commandId,
             priority: command.priority,
             action: command.action,
             binding: command.binding,
             reason: command.reason,
+            allowedExportPowerW,
             values: {
                 enable: (0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'grid.command.enable'),
                 trip: (0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'grid.command.trip'),
@@ -192,6 +315,7 @@ class NetOperatorInterfaceModule {
         };
         if (this.lastCommand && deepEqual(this.lastCommand, current))
             return;
+        const activation = this.activation();
         const event = {
             schema: 'nexowatt.netoperator-audit.v1',
             timestamp: Date.now(),
@@ -200,10 +324,15 @@ class NetOperatorInterfaceModule {
             mappingVersion: snapshot.mappingVersion,
             previous: this.lastCommand,
             current,
-            reaction: 'canonical-envelope-updated',
-            result: snapshot.valid ? 'accepted-diagnostic' : 'rejected-invalid-or-stale',
+            reaction: activation.active ? 'export-limit-envelope-updated' : 'canonical-envelope-updated',
+            result: !snapshot.valid
+                ? 'rejected-invalid-or-stale'
+                : activation.active
+                    ? (snapshot.command.binding ? (allowedExportPowerW !== null || ['trip', 'inhibit'].includes(snapshot.command.action) ? 'accepted-for-export-guard' : 'accepted-no-active-power-limit') : 'released-to-local-eos-limit')
+                    : 'accepted-diagnostic',
+            operationEngineIntegration: activation.operationEngineIntegration,
         };
-        this.lastCommand = current;
+        this.lastCommand = event.current;
         this.audit.push(event);
         const limit = Math.max(20, Math.min(2000, Math.round(finite(this.config().auditLimit, 500))));
         this.audit = this.audit.slice(-limit);
@@ -295,28 +424,65 @@ class NetOperatorInterfaceModule {
             this.lastReceivedAt = snapshot.receivedAt;
         if (snapshot.valid)
             this.lastValidAt = snapshot.receivedAt;
+        const cfg = this.config();
+        const activation = this.activation(cfg);
+        const maxAgeMs = this.maxAgeMs(cfg, extra.profile);
+        const controllerTimestamp = (0, netoperator_canonical_model_1.strictTimestamp)((0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'controller.timestamp')) || snapshot.receivedAt;
+        const lastUpdate = Math.max(0, Math.round(controllerTimestamp || snapshot.receivedAt || snapshot.generatedAt || Date.now()));
+        const validUntil = lastUpdate + maxAgeMs;
+        const source = safeText((0, netoperator_canonical_model_1.canonicalValue)(snapshot, 'controller.source') || snapshot.source || 'EZA-/Parkregler');
+        const quality = this.envelopeQuality(snapshot);
+        const allowedExportPowerW = this.allowedExportPowerW(snapshot);
+        const fallbackExportPowerW = this.fallbackExportPowerW();
+        const externalExportLimitEligible = activation.active;
+        const operationalExportBinding = externalExportLimitEligible
+            && snapshot.valid === true
+            && snapshot.command.binding === true
+            && (allowedExportPowerW !== null || ['trip', 'inhibit'].includes(snapshot.command.action));
         this.adapter._netOperatorEnvelope = {
-            schema: 'nexowatt.netoperator-operation-envelope.v1',
+            schema: 'nexowatt.netoperator-operation-envelope.v2',
             generatedAt: snapshot.generatedAt,
+            receivedAt: snapshot.receivedAt,
+            lastUpdate,
+            validUntil,
+            maxAgeMs,
+            source,
+            quality,
             valid: snapshot.valid,
             fresh: snapshot.fresh,
             commOk: snapshot.commOk,
             command: snapshot.command,
             values: Object.fromEntries(Object.entries(snapshot.values).map(([key, value]) => [key, value && value.valid ? value.value : null])),
+            allowedExportPowerW,
+            fallbackExportPowerW,
             certifiedControllerAuthority: true,
+            externalExportLimitEligible,
+            appEnabled: activation.appEnabled,
+            active: activation.active,
+            commissioned: activation.commissioned,
+            installerApproved: activation.installerApproved,
             readOnly: true,
             hardwareWrite: false,
-            operationEngineIntegration: 'prepared-not-active',
-            failSafePolicy: safeText(this.config().failSafePolicy || 'project-specific'),
+            soleAssetWriter: 'gridConstraints.exportGuard',
+            operationEngineIntegration: activation.operationEngineIntegration,
+            failSafePolicy: safeText(cfg.failSafePolicy || 'project-specific'),
+            lastValidHoldSec: Math.max(0, Math.min(3600, Math.round(finite(cfg.lastValidHoldSec, 60)))),
         };
         await this.adapter.setStateAsync('netoperator.enabled', true, true);
         await this.adapter.setStateAsync('netoperator.status', extra.status, true);
-        await this.adapter.setStateAsync('netoperator.mode', safeText(this.config().mode || 'diagnostic'), true);
+        await this.adapter.setStateAsync('netoperator.mode', safeText(cfg.mode || 'diagnostic'), true);
         await this.adapter.setStateAsync('netoperator.transport', extra.transportType || '', true);
         await this.adapter.setStateAsync('netoperator.readOnly', true, true);
-        await this.adapter.setStateAsync('netoperator.operationEngineIntegration', 'prepared-not-active', true);
-        await this.adapter.setStateAsync('netoperator.failSafePolicy', safeText(this.config().failSafePolicy || 'project-specific'), true);
-        await this.adapter.setStateAsync('netoperator.commandBinding', snapshot.valid && snapshot.command.binding, true);
+        await this.adapter.setStateAsync('netoperator.operationEngineIntegration', activation.operationEngineIntegration, true);
+        await this.adapter.setStateAsync('netoperator.failSafePolicy', safeText(cfg.failSafePolicy || 'project-specific'), true);
+        await this.adapter.setStateAsync('netoperator.externalExportLimitEligible', externalExportLimitEligible, true);
+        await this.adapter.setStateAsync('netoperator.allowedExportPowerW', allowedExportPowerW === null ? -1 : allowedExportPowerW, true);
+        await this.adapter.setStateAsync('netoperator.fallbackExportPowerW', fallbackExportPowerW, true);
+        await this.adapter.setStateAsync('netoperator.validUntil', validUntil, true);
+        await this.adapter.setStateAsync('netoperator.source', source, true);
+        await this.adapter.setStateAsync('netoperator.quality', quality, true);
+        await this.adapter.setStateAsync('netoperator.lastUpdate', lastUpdate, true);
+        await this.adapter.setStateAsync('netoperator.commandBinding', operationalExportBinding, true);
         await this.adapter.setStateAsync('netoperator.commandPriority', snapshot.command.priority, true);
         await this.adapter.setStateAsync('netoperator.commandAction', snapshot.command.action, true);
         await this.adapter.setStateAsync('netoperator.commandReason', snapshot.valid ? snapshot.command.reason : `invalid:${snapshot.errors.join(',')}`, true);
@@ -343,8 +509,9 @@ class NetOperatorInterfaceModule {
             }]))), true);
         // Ungültige/stale Werte werden niemals als physikalische 0 bzw. false
         // veröffentlicht. Der letzte gültige Roh-State bleibt stehen; Qualität und
-        // Frische liegen separat im Snapshot. Eine spätere Operation Engine darf
-        // ausschließlich den validierten Envelope verwenden.
+        // Frische liegen separat im Snapshot. Der Export Guard darf ausschließlich
+        // den validierten, aktiv freigegebenen Envelope verwenden; direkte Asset-
+        // Schreibbefehle bleiben in diesem Modul verboten.
         for (const [key, definition] of Object.entries(netoperator_canonical_model_1.CANONICAL_FIELDS)) {
             if (definition.access !== 'read')
                 continue;
@@ -442,7 +609,7 @@ class NetOperatorInterfaceModule {
             : !snapshot.fresh
                 ? 'stale'
                 : snapshot.valid
-                    ? (cfg.mode === 'active' && cfg.commissioned === true && cfg.installerApproved === true ? 'ready-active-integration-locked' : 'ready-diagnostic')
+                    ? (this.activation(cfg).active ? 'ready-active-grid-export-limit' : 'ready-diagnostic')
                     : 'invalid-canonical-data';
         await this.publish(snapshot, {
             status,
@@ -465,8 +632,11 @@ class NetOperatorInterfaceModule {
             mode: this.config().mode || 'off',
             readOnly: true,
             hardwareWrite: false,
+            soleAssetWriter: 'gridConstraints.exportGuard',
             certifiedControllerAuthority: true,
-            operationEngineIntegration: 'prepared-not-active',
+            externalExportLimitEligible: this.activation().active,
+            operationEngineIntegration: this.activation().operationEngineIntegration,
+            envelope: this.adapter?._netOperatorEnvelope || null,
             lastReceivedAt: this.lastReceivedAt,
             lastValidAt: this.lastValidAt,
             snapshot: this.lastSnapshot,
@@ -492,7 +662,10 @@ class NetOperatorInterfaceModule {
             audit: this.audit.slice(-200),
             readOnly: true,
             hardwareWrite: false,
-            operationEngineIntegration: 'prepared-not-active',
+            soleAssetWriter: 'gridConstraints.exportGuard',
+            externalExportLimitEligible: this.activation().active,
+            operationEngineIntegration: this.activation().operationEngineIntegration,
+            envelope: this.adapter?._netOperatorEnvelope || null,
         };
     }
     async testConnection(configOverride) {

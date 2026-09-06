@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ebdfa5d445f761d2e7c802d40237103000901973222b36b783565ee4070be35e
+ * Original-Hash: 3aa735621e55aae4e7b74f9f48d90818183da319a5a3c9bf4ac73676ef193130
  */
 
 /**
@@ -76,7 +76,7 @@ if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_buildZeroExportCommissioningAssistant');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.checklistJson');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.writeTestPreviewJson');
-must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','Verbrauch → Speicher → Ladepunkte');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','Verbrauch → freigegebene Ladepunkte → flexible Verbraucher → Speicher');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','keine zweite Regelung');
 must('src-ts/runtime-executables/www/ems-apps.ts','commissioning.reportJson');
 must('src-ts/runtime-executables/www/ems-apps.ts','0‑Einspeise Inbetriebnahme-Checkliste');

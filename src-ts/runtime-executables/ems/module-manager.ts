@@ -467,8 +467,10 @@ class ModuleManager {
         });
 
         // Netzbetreiber-Schnittstelle hinter dem zertifizierten EZA-/Parkregler.
-        // RC50 ist absichtlich read-only: kanonisches Datenmodell, Treiberdiagnose
-        // und Audit werden vorbereitet; die Operation-Engine-/Asset-Übergabe bleibt gesperrt.
+        // Sie liest und normalisiert ausschließlich die Regler-Vorgaben. Bei aktivem,
+        // in Betrieb genommenem und freigegebenem Regler konsumiert GridConstraints
+        // den validierten Envelope als Führungsgrenze. Dieses Modul schreibt selbst
+        // weder Wechselrichter noch Speicher oder Ladepunkte.
         this.modules.push({
             key: 'netOperatorInterface',
             instance: new NetOperatorInterfaceModule(this.adapter, this.dp),
