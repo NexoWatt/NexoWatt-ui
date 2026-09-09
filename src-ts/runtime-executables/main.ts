@@ -15674,6 +15674,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -15862,6 +15869,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());

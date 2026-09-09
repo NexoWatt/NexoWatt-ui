@@ -2,7 +2,7 @@
 
 NexoWatt EOS is the local platform for energy, charging and building control, including the responsive customer cockpit and installer workspace.
 
-**Current stable release:** `1.0.2` (2026-09-09)
+**Current stable release:** `1.0.3` (2026-09-09)
 
 It provides live energy-flow visualization, historical analysis, SmartHome visualization, installer-controlled EMS applications, and selected customer controls for desktop, tablet, and smartphone use.
 

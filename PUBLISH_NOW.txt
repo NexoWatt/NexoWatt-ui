@@ -1,35 +1,33 @@
-NexoWatt UI 1.0.2 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.3 – OFFICIAL STABLE RELEASE
 
 Veröffentlichen ausschließlich aus diesem frisch entpackten vollständigen Repository-ZIP:
 
-npm publish
+npm publish --tag latest
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 1.0.2 in der Ziel-Registry noch frei ist,
+- ob Version 1.0.3 in der Ziel-Registry noch frei ist,
 - ob alle npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
 - ob package.json, package-lock.json, io-package.json, Webmanifest und Release-Manifest dieselbe Version führen,
-- ob die Stable-Release-Kennzeichnungen konsistent sind,
 - ob Runtime-Dateien und TypeScript-Quellen synchron sind,
-- ob der 25-Sekunden-Feldfall bei frischem Scheduler-Heartbeat online bleibt,
-- ob ein über 30 Sekunden laufender EMS-Zyklus als Warnung und nicht als Adapter-Offlinezustand erscheint,
-- ob info.connection=false weiterhin sofort als echter Offlinezustand gilt,
-- ob die Speicher-/SSE-Härtung aus 1.0.1 unverändert aktiv bleibt.
+- ob eine gültige Home-Admin-Sitzung den AppCenter nach fachlichen Lizenz-403-Antworten offen hält,
+- ob alte Pro-Konfigurationsflags unter Home keine Pro-only API-Aufrufe auslösen,
+- ob ein echter Sessionverlust oder eine fehlende Seitenberechtigung den AppCenter weiterhin sicher sperrt,
+- ob die 1.0.2-Liveness-/Heartbeat-Korrektur und die 1.0.1-Speicher-/SSE-Härtung unverändert aktiv bleiben.
 
 Freigabestatus:
-- offizieller Stable-Patch für die Erreichbarkeits- und Frischebewertung der EOS-Übersicht,
-- info.connection wird unabhängig alle vier Sekunden anhand des tatsächlich lauschenden HTTP-Servers bestätigt,
-- der EMS-Scheduler veröffentlicht ein eigenständiges Vier-Sekunden-Lebenszeichen,
-- der Diagnose-Publisher aktualisiert unabhängig vom vollständigen Diagnosezyklus seine Liveness-Daten,
-- legitime 20–30-Sekunden-Regelzyklen führen nicht mehr zu „Offline / veraltet“,
-- echte Adapter-/HTTP-Ausfälle sowie festhängende Regelzyklen bleiben eindeutig sichtbar,
+- offizieller Stable-Patch für Home-Lizenz und AppCenter-Authentifizierung,
+- fachliche API-Antworten wie eos_required, license_required oder readOnly werden nicht als verlorene Anmeldung behandelt,
+- Auth-Status und Seiten-Capability bleiben die verbindliche Quelle für die Login-Sperre,
+- Pro-only Apps werden unter Home vor der UI-Ausgabe deaktiviert und nicht initialisiert,
+- gespeicherte Pro-Konfiguration bleibt intern erhalten; sie kann die Home-Oberfläche nicht mehr verriegeln,
 - keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a-, Netzlimit-, Export-Guard- oder Hardware-Regellogik.
 
 Wichtig für die Aktualisierung:
 - Alten Projektordner vollständig löschen oder umbenennen.
 - Dieses ZIP in einen neuen, leeren Ordner entpacken.
-- Keine Dateien aus 1.0.1 oder einem RC-Ordner hinein kopieren.
+- Keine Dateien aus 1.0.2 oder einem RC-Ordner hinein kopieren.
 - Nach der Installation den Adapter vollständig neu starten.
 - Browser einmal mit Strg+F5 neu laden.
-- Die EOS-Übersicht mindestens 30 Minuten geöffnet beobachten.
-- Bei laufender Anlage darf die Anzeige nicht mehr zyklisch zwischen online und „Offline / veraltet“ wechseln.
-- Ein absichtlich gestoppter nexowatt-ui-Adapter muss nach Ablauf des Frischefensters zuverlässig offline erscheinen.
+- Home-Lizenz aktivieren, als Admin anmelden und den AppCenter mehrfach öffnen.
+- Der AppCenter muss nach erfolgreicher Anmeldung dauerhaft offen bleiben.
+- Nach echtem Logout oder abgelaufener Session muss die geschützte Seite wieder zuverlässig sperren.

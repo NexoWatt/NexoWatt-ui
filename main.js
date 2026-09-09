@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:5312b4a46ed165db44cff80876611e300c118455ac78dcd0f9ce4f62d7b2c9b6
+ * Quell-Hash: sha256:0041ec5c13a845ae5e3a5ed645a5ab4f61cafdfe26c805084268d08e3fd5687d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15690,6 +15690,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -15878,6 +15885,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());

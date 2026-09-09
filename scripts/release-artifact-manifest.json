@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -317,6 +317,11 @@
       "path": "docs/STABLE_1_0_2_RELEASE_DE.md",
       "size": 4521,
       "sha256": "5d754852d4fb343314e28618bfe378ca7273c439e2ac1c11dba9453eebd88d74"
+    },
+    {
+      "path": "docs/STABLE_1_0_3_RELEASE_DE.md",
+      "size": 4829,
+      "sha256": "ebfba0a37e0a4edcc8b7e46861834788aba1c0b0a05d8e721d99def2b893ceca"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -765,8 +770,8 @@
     },
     {
       "path": "io-package.json",
-      "size": 24504,
-      "sha256": "5e6be99a703efe7d6017717591567e7f80e14ef0b4d217db74f8449ad629dc15"
+      "size": 24608,
+      "sha256": "5cb9d71a7848185765bf62838d4349acf5b18d4ea1cd4e71c8499cfed484cfa8"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -1020,8 +1025,8 @@
     },
     {
       "path": "main.js",
-      "size": 1742239,
-      "sha256": "cde497d708626750fd015f16c724f8977a4a5604c8f78e305153afc645914f4b"
+      "size": 1743149,
+      "sha256": "5b438d954ae1c2fd3c790c3e1108fd1fe1b6d804a8aa8cf923a7c1586171a834"
     },
     {
       "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
@@ -1056,7 +1061,7 @@
     {
       "path": "README.md",
       "size": 2485,
-      "sha256": "683e297bae6df70ed3256f497362a6679dd66d65de56eeda5a60c0aa51a58ab8"
+      "sha256": "bf20216b26424d863e2b0fe2720620e58c07c124b696daacf7504cc1beb51330"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
@@ -1104,14 +1109,19 @@
       "sha256": "da1be3009b4e5d992c240473277dd188e23012985f19f08227025e65d214211f"
     },
     {
-      "path": "scripts/verify-stable-release.cjs",
-      "size": 10219,
-      "sha256": "b430392542be1751f5e4bd9202f28475fdb129ea21083eea8c9505a6b3c94323"
+      "path": "scripts/verify-stable-1.0.2-health-heartbeat.cjs",
+      "size": 12122,
+      "sha256": "02d43e7faa0777370b5556a3c487f6e2affa25460e81515880211f6eb5f036e9"
     },
     {
-      "path": "scripts/verify-stable-1.0.2-health-heartbeat.cjs",
-      "size": 11635,
-      "sha256": "c849d79748a01f21d82cfb470d8d7ae087c2c942accf1adf317cb85cc617e5f6"
+      "path": "scripts/verify-stable-1.0.3-home-appcenter-access.cjs",
+      "size": 17227,
+      "sha256": "6c6e0d8ea005af8e89fbcc730a52816c69a5975698c78649b06d5622756fbd87"
+    },
+    {
+      "path": "scripts/verify-stable-release.cjs",
+      "size": 12774,
+      "sha256": "e75e6ffefa7e048ae7ce5ceb63c4100a3ad8ec2a44a9a8446d20302dcf25672b"
     },
     {
       "path": "www/admin-guard.js",
@@ -1215,8 +1225,8 @@
     },
     {
       "path": "www/auth.js",
-      "size": 31839,
-      "sha256": "e24bf0ba5c052aa808b56da3fe267ed5655b359f109d377fe092e8948d8a4d08"
+      "size": 33149,
+      "sha256": "574ad6553c642005d7e0bf8541909fb3f06639cb84ec1e5aaffc8187e44f733b"
     },
     {
       "path": "www/charging-diagnostics-appcenter.js",
@@ -1260,8 +1270,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 939636,
-      "sha256": "6049492543293d2bbb37b8b7772f6007c19ae85e1e6efd80f7cc24294c8e25fc"
+      "size": 940307,
+      "sha256": "9b63233f0e8d5f47a7ae5430ad9af698415cc5a02808d91bfbf4f42818b81dc8"
     },
     {
       "path": "www/energy-ledger.html",
@@ -1391,7 +1401,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1088,
-      "sha256": "908d2843488a09be3027f9da20504982f186ef14b30b8d916da9602906a6e177"
+      "sha256": "777725d6306b1f8eb53766ae56b2ac1a5adbcc5bfef44aa4088c6a43a20c402d"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1405,8 +1415,8 @@
     },
     {
       "path": "www/netoperator-appcenter.js",
-      "size": 15424,
-      "sha256": "33c75b1e250e2d6872bcf1d5e84304f8ca1fb1cdcba764850f06db4266ce795b"
+      "size": 16151,
+      "sha256": "6b9e552f50c0402d86f72d6d06d6d55a4a32508488289c8a486bc9ff1c9b1d05"
     },
     {
       "path": "www/netoperator.html",
@@ -1566,7 +1576,7 @@
     {
       "path": "www/sw.js",
       "size": 5007,
-      "sha256": "95755d9fc51e138d6fb921a8153ccf4dabdaf6a7d4b433eafbd31d2e8fc35393"
+      "sha256": "0d8285898a3d28a193d3e1b3a7bc9bcf5e59377f557bfa0fba9aa5c80c844877"
     },
     {
       "path": "www/tariff-report.html",

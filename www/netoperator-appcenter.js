@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/netoperator-appcenter.ts
- * Quell-Hash: sha256:914f7d9a055fefceaca9fe34222f6b6ca1255b0b55880a1ae53816c0ba928101
+ * Quell-Hash: sha256:582c24a0291427a938d058e1b95fab318eb3dc677569a424582a00b16654a334
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -89,9 +89,21 @@
             return;
         const cfg = { ...defaultConfig(), ...(config || {}) };
         cfg.transport = { ...defaultConfig().transport, ...(config?.transport || {}) };
+        const eos = String(getEdition() || '').toLowerCase() === 'eos';
+        // 1.0.3: Das Treiberverzeichnis ist Pro-only. Bei Home darf diese Komponente
+        // auch dann keinen API-Aufruf starten, wenn ein alter Pro-Konfigurationsstand
+        // `installed=true` enthält. So entsteht weder ein erwartbarer 403 noch ein
+        // irreführender Auth-Dialog im bereits autorisierten App-Center.
+        if (!eos) {
+            mount.innerHTML = `
+        <div class="nw-card">
+          <div class="nw-card__title">Netzbetreiber-Schnittstelle</div>
+          <div class="nw-card__subtitle">Diese Funktion ist in NexoWatt EOS Pro verfügbar. Die lokale Netzlimit- und Einspeisebegrenzung der Home-Version bleibt davon unabhängig aktiv.</div>
+        </div>`;
+            return;
+        }
         if (!driverRows.length)
             await loadDrivers();
-        const eos = String(getEdition() || '').toLowerCase() === 'eos';
         mount.innerHTML = `
       <div class="nw-card">
         <div class="nw-card__title">Netzbetreiber-Schnittstelle</div>

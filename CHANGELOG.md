@@ -1,3 +1,15 @@
+## 1.0.3 - 2026-09-09
+
+- **Official Stable Patch:** Behebt die sofortige erneute Sperre des geschützten AppCenters nach erfolgreicher Admin-Anmeldung mit aktiver EOS-Home-Lizenz.
+- Ursache war eine Vermischung von Authentifizierungsfehlern und fachlichen API-Antworten: Der globale Fetch-Handler deutete jeden HTTP-Status 401 oder 403 als verlorene Anmeldung. Erwartbare Pro-Lizenzsperren wie `eos_required` konnten deshalb den bereits autorisierten Home-Admin erneut auf den Login-Sperrbildschirm setzen.
+- Die Login-Sperre richtet sich jetzt ausschließlich nach dem anschließend bestätigten Auth-Status und der für die aktuelle Seite erforderlichen Capability. Bleiben Admin-Session und `appcenter.open` gültig, wird eine fachliche 403-Antwort unverändert an die aufrufende Komponente zurückgegeben, ohne Overlay oder Seitenverriegelung.
+- Ein echter Sessionverlust, ein nicht erreichbarer Auth-Status oder eine fehlende Seiten-Capability sperrt weiterhin fail-closed. Der Schutz wurde nicht abgeschwächt.
+- Alte Pro-Konfigurationen werden in der an die Home-Oberfläche gelieferten Kopie über die bestehende Lizenznormalisierung deaktiviert. Netzbetreiber-, Mesh-/Microgrid- und Betriebsstrategien-Komponenten werden unter Home nicht initialisiert; insbesondere wird `/api/netoperator/drivers` nicht mehr angefordert.
+- Die Netzbetreiber-Komponente besitzt zusätzlich einen eigenen Editions-Guard vor dem Laden des Pro-Treiberverzeichnisses. Damit bleibt der AppCenter selbst bei versehentlichem Direktaufruf robust.
+- Neuer Chromium-Regressionsverbund reproduziert den Feldfehler mit gültigem Home-Admin, gespeicherten Pro-Flags und `403 eos_required`, prüft den dauerhaft offenen AppCenter sowie den weiterhin wirksamen Sperrfall bei echtem `401` und bestätigtem Sessionverlust.
+- PWA-Cache auf `nexowatt-cache-v503` angehoben, damit die korrigierten Auth- und AppCenter-Skripte nach dem Update zuverlässig geladen werden.
+- EMS-, NVP-, Lade-, Speicher-, Netzlimit-, Nulleinspeise-, §14a-, Tarif-, Export-Guard-, Parkregler- und Hardware-Regelung bleiben unverändert.
+
 ## 1.0.2 - 2026-09-09
 
 - **Official Stable Patch:** NexoWatt EOS 1.0.2 korrigiert die weiterhin auftretende zyklische „Offline / Veraltet“-Anzeige der EOS-Übersicht. Ursache war ein zweiter, vom RC88-/SSE-Thema unabhängiger Timing-Konflikt: EOS Admin bewertet Liveness nach ungefähr 20 Sekunden, während `info.connection` bisher nur alle 30 Sekunden bestätigt wurde und ein vollständiger EMS-/Diagnosezyklus legitimerweise länger als 20 Sekunden laufen konnte.

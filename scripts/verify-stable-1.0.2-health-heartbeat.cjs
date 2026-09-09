@@ -14,6 +14,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+
+function versionAtLeast(actual, minimum) {
+  const parse = (value) => String(value || '').split('.').map((part) => Number(part) || 0);
+  const a = parse(actual);
+  const b = parse(minimum);
+  for (let index = 0; index < Math.max(a.length, b.length, 3); index += 1) {
+    if ((a[index] || 0) > (b[index] || 0)) return true;
+    if ((a[index] || 0) < (b[index] || 0)) return false;
+  }
+  return true;
+}
 const pkg = require(path.join(root, 'package.json'));
 const {
   AdminOverviewPublisher,
@@ -227,7 +238,7 @@ async function verifyEngineHeartbeat() {
 }
 
 async function main() {
-  assert.equal(pkg.version, '1.0.2', 'regression contract must run for Stable 1.0.2');
+  assert.equal(versionAtLeast(pkg.version, '1.0.2'), true, '1.0.2 health regression requires Stable 1.0.2 or newer');
   await verifyPublisherHeartbeat();
   await verifyEngineHeartbeat();
 
@@ -250,8 +261,8 @@ async function main() {
   assert(heartbeatBlock.includes('}, 4000);'), 'info.connection heartbeat must be four seconds');
   assert(!heartbeatBlock.includes('}, 30000);'), '30-second info.connection heartbeat must be removed');
 
-  console.log('[Stable 1.0.2] OK: 25-s field cycle remains online; scheduler stall and genuine offline state stay distinguishable.');
-  console.log('[Stable 1.0.2] OK: independent 4-s adapter, scheduler and overview heartbeat lifecycle verified.');
+  console.log(`[Stable 1.0.2 baseline on ${pkg.version}] OK: 25-s field cycle remains online; scheduler stall and genuine offline state stay distinguishable.`);
+  console.log(`[Stable 1.0.2 baseline on ${pkg.version}] OK: independent 4-s adapter, scheduler and overview heartbeat lifecycle verified.`);
 }
 
 main().catch((error) => {

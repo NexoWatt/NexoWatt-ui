@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:e340dda3ae74754c014e12ec81d42120db57d8cd48f0f8f8b354321b6445129d
+ * Quell-Hash: sha256:824e4620ae465e5f00e6c24f47f6da19643e1d769547be0bb5d0fd5993f99be4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -670,13 +670,30 @@
         || url.indexOf('/api/strict-auth/') === 0
         || url.indexOf('/api/installer/') === 0;
       if (!isAuthEndpoint && (r.status === 401 || r.status === 403)) {
-        // Refresh state and then prompt
+        // 1.0.3: HTTP 403 bedeutet nicht automatisch, dass die EOS-Sitzung verloren
+        // gegangen ist. Home-Lizenzen erhalten für Pro-only APIs absichtlich einen
+        // fachlichen 403 (z. B. `eos_required`). Der alte globale Handler deutete
+        // jeden solchen Status als Rollenverlust, ersetzte das bereits autorisierte
+        // App-Center durch den Sperrbildschirm und öffnete den Login erneut.
+        //
+        // Deshalb ist der anschließend gelesene Auth-Status die einzige Quelle für
+        // die Login-Sperre: Nur eine wirklich fehlende Session oder eine fehlende
+        // Seiten-Capability darf die Seite verriegeln. Ein fachlicher API-Fehler bleibt
+        // der aufrufenden Komponente über die unveränderte Response sichtbar.
         await refreshStatus();
-        if (state.enabled && state.protectWrites) {
-          const protectedPage = isProtectedPage();
-          const message = r.status === 401
-            ? 'Bitte anmelden, um diese geschützte Seite zu bedienen.'
-            : 'Keine Berechtigung. Bitte mit der erforderlichen EOS-Rolle anmelden.';
+        const protectedPage = isProtectedPage();
+        const pageCapability = requiredPageCapability();
+        const sessionMissing = !state.authed;
+        const pageCapabilityMissing = !!(pageCapability && !hasCapability(state.capabilities, pageCapability));
+        const authStatusUnavailable = state.statusError === true;
+        const mustPromptForAuthentication = authStatusUnavailable || sessionMissing || pageCapabilityMissing;
+
+        if (mustPromptForAuthentication && (protectedPage || (state.enabled && state.protectWrites))) {
+          const message = authStatusUnavailable
+            ? 'Berechtigungsprüfung nicht erreichbar. Bitte Verbindung prüfen und erneut anmelden.'
+            : (sessionMissing
+              ? 'Bitte anmelden, um diese geschützte Seite zu bedienen.'
+              : 'Keine Berechtigung. Bitte mit der erforderlichen EOS-Rolle anmelden.');
           if (protectedPage) renderPageLock(message);
           showOverlay(message, protectedPage ? { mandatory: true, reason: message } : {});
         }

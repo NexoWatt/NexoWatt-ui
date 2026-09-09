@@ -46,6 +46,7 @@ for (const required of [
   stableDocPath,
   'scripts/verify-stable-release.cjs',
   'scripts/verify-stable-1.0.2-health-heartbeat.cjs',
+  'scripts/verify-stable-1.0.3-home-appcenter-access.cjs',
 ]) {
   if (!files.includes(required)) fail(`Stable-Paketdatei fehlt in package.json files: ${required}`);
   if (!fs.existsSync(path.join(root, required))) fail(`Stable-Paketdatei fehlt im Repository: ${required}`);
@@ -59,6 +60,12 @@ if (pkg.scripts?.['test:stable-1.0.2-health'] !== 'node scripts/verify-stable-1.
 }
 if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-1.0.2-health')) {
   fail('test:stable-1.0.2-health ist nicht Bestandteil von test:all.');
+}
+if (pkg.scripts?.['test:stable-1.0.3-home-appcenter'] !== 'node scripts/verify-stable-1.0.3-home-appcenter-access.cjs') {
+  fail('test:stable-1.0.3-home-appcenter ist nicht korrekt registriert.');
+}
+if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-1.0.3-home-appcenter')) {
+  fail('test:stable-1.0.3-home-appcenter ist nicht Bestandteil von test:all.');
 }
 if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-release')) {
   fail('test:stable-release ist nicht Bestandteil von test:all.');
@@ -102,7 +109,7 @@ for (const relativePath of ['src-ts/runtime-executables/www/ems-apps.ts', 'src-t
 }
 for (const relativePath of ['src-ts/runtime-executables/www/sw.ts', 'src-ts/runtime-mirrors/www/sw.ts', 'www/sw.js']) {
   const text = read(relativePath);
-  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v500';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
+  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v503';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
 }
 
 
@@ -163,6 +170,47 @@ for (const token of ['25_000', '35_000', "offlineValues['info.connection'] = fal
   if (!healthRegression.includes(token)) fail(`1.0.2-Feldregression unvollständig: ${token}`);
 }
 
+
+// Stable 1.0.3: a valid Home admin session must not be invalidated by
+// business-level 403 responses from Pro-only APIs. Genuine session/capability
+// loss remains fail-closed.
+const authSource = read('src-ts/runtime-executables/www/auth.ts');
+const appCenterSource = read('src-ts/runtime-executables/www/ems-apps.ts');
+const netOperatorSource = read('src-ts/runtime-executables/www/netoperator-appcenter.ts');
+const homeAppCenterRegression = read('scripts/verify-stable-1.0.3-home-appcenter-access.cjs');
+for (const token of [
+  'const mustPromptForAuthentication = authStatusUnavailable || sessionMissing || pageCapabilityMissing',
+  'Ein fachlicher API-Fehler bleibt',
+]) {
+  if (!authSource.includes(token)) fail(`1.0.3-Auth-Vertrag fehlt: ${token}`);
+}
+for (const token of [
+  "_isAppLicensed('netOperator') && (() =>",
+  "_isAppLicensed('operatingStrategies') && (() =>",
+  "if (_isAppLicensed('netOperator') && window.NexoWattNetOperatorAppCenter)",
+  "if (_isAppLicensed('operatingStrategies') && window.NexoWattOperatingStrategiesAppCenter)",
+]) {
+  if (!appCenterSource.includes(token)) fail(`1.0.3-Home-AppCenter-Guard fehlt: ${token}`);
+}
+const editionCheck = netOperatorSource.indexOf("const eos = String(getEdition() || '').toLowerCase() === 'eos';");
+const homeReturn = netOperatorSource.indexOf('if (!eos) {', editionCheck);
+const driverLoad = netOperatorSource.indexOf('if (!driverRows.length) await loadDrivers();', editionCheck);
+if (!(editionCheck >= 0 && homeReturn > editionCheck && driverLoad > homeReturn)) {
+  fail('Netzbetreiber-Treiber werden weiterhin vor dem Home-Editions-Guard geladen.');
+}
+for (const token of [
+  "error: 'eos_required'",
+  "fetch('/api/pro-only-fixture')",
+  "fetch('/api/protected-fixture')",
+  '/api/netoperator/drivers',
+  'genuine lost session',
+]) {
+  if (!homeAppCenterRegression.includes(token)) fail(`1.0.3-Home-Feldregression unvollständig: ${token}`);
+}
+if (!mainSource.includes('cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps)')) {
+  fail('Home-Konfigurationskopie wird nicht über die Lizenznormalisierung maskiert.');
+}
+
 const rc66Verifier = read('scripts/verify-rc66-station-display-stable.js');
 if (!rc66Verifier.includes("isVersionAtLeast(pkg.version, '0.8.191')")) {
   fail('RC66-Prüfer besitzt keinen SemVer-festen Mindestversionsvergleich.');
@@ -172,4 +220,4 @@ if (/versionParts\[0\]\s*!==\s*0/.test(rc66Verifier)) {
 }
 
 console.log(`[stable-release] OK: ${pkg.name}@${version} ist konsistent als Official Stable versiegelt.`);
-console.log('[stable-release] OK: 1.0.2-Liveness-/Tick-Patch, 1.0.1-Memory-/SSE-Härtung und RC93-Regelungsbaseline sind synchron.');
+console.log('[stable-release] OK: 1.0.3-Home-AppCenter-Auth, 1.0.2-Liveness, 1.0.1-Memory/SSE und RC93-Regelungsbaseline sind synchron.');

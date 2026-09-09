@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: cde497d708626750fd015f16c724f8977a4a5604c8f78e305153afc645914f4b
+ * Original-Hash: 5b438d954ae1c2fd3c790c3e1108fd1fe1b6d804a8aa8cf923a7c1586171a834
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.
@@ -16109,6 +16109,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -16297,6 +16304,13 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
         let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut = _nwMaskTariffProviderForUi(cfgOut);
+        // 1.0.3: Nur die an die UI gelieferte Kopie wird auf die aktuelle Edition
+        // begrenzt. Alte Pro-Konfigurationen bleiben intern erhalten, dürfen bei einer
+        // Home-Lizenz aber weder als installiert erscheinen noch Pro-only Komponenten
+        // und deren APIs aktivieren.
+        if (cfgOut.emsApps && typeof cfgOut.emsApps === 'object') {
+          cfgOut.emsApps = this._nwApplyLicenseLimitsToEmsApps(cfgOut.emsApps);
+        }
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());

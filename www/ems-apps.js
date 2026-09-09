@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:4e9c69435a6161e835beb69de22375e5b94fbcb9a9f97bfdf4e6c85ebe0cba1f
+ * Quell-Hash: sha256:6c0787cbba3c201cc4900898749e9430912568df617ade55d4d215b3fbdba88d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2505,7 +2505,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
      *   wenn die Funktions-App installiert ist. Dadurch stehen im Apps-Reiter
      *   keine tiefen Modul-Einstellungen mehr.
      */
-    const isMeshInstalled = (() => {
+    const isMeshInstalled = _isAppLicensed('meshMicrogrid') && (() => {
       const cb = document.getElementById('app_meshMicrogrid_installed');
       if (cb) return !!cb.checked;
       const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.meshMicrogrid
@@ -2513,7 +2513,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         : null;
       return !!(app && app.installed);
     })();
-    const isOperatingStrategiesInstalled = (() => {
+    const isOperatingStrategiesInstalled = _isAppLicensed('operatingStrategies') && (() => {
       const cb = document.getElementById('app_operatingStrategies_installed');
       if (cb) return !!cb.checked;
       const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.operatingStrategies
@@ -2521,7 +2521,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         : null;
       return !!(app && app.installed);
     })();
-    const isNetOperatorInstalled = (() => {
+    const isNetOperatorInstalled = _isAppLicensed('netOperator') && (() => {
       const cb = document.getElementById('app_netOperator_installed');
       if (cb) return !!cb.checked;
       const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.netOperator
@@ -11165,8 +11165,23 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     try { buildAppsUI(); } catch (_eBuildApps) {}
     setAppsFromConfig(currentConfig);
     try { if (window.NexoWattEnergyOriginAppCenter) window.NexoWattEnergyOriginAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eLedgerUi) {}
-    try { if (window.NexoWattNetOperatorAppCenter) window.NexoWattNetOperatorAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eNetOperatorUi) {}
-    try { if (window.NexoWattOperatingStrategiesAppCenter) window.NexoWattOperatingStrategiesAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eOperatingStrategiesUi) {}
+    // 1.0.3: Pro-only Komponenten werden unter Home nicht initialisiert. Alte, vor
+    // dem Lizenzwechsel gespeicherte `installed=true`-Flags dürfen dadurch weder
+    // versteckte Pro-API-Aufrufe noch einen globalen Auth-Dialog auslösen.
+    try {
+      if (_isAppLicensed('netOperator') && window.NexoWattNetOperatorAppCenter) {
+        window.NexoWattNetOperatorAppCenter.apply(currentConfig, _licenseEdition());
+      } else if (els.netOperatorMount) {
+        els.netOperatorMount.innerHTML = '';
+      }
+    } catch (_eNetOperatorUi) {}
+    try {
+      if (_isAppLicensed('operatingStrategies') && window.NexoWattOperatingStrategiesAppCenter) {
+        window.NexoWattOperatingStrategiesAppCenter.apply(currentConfig, _licenseEdition());
+      } else if (els.operatingStrategiesMount) {
+        els.operatingStrategiesMount.innerHTML = '';
+      }
+    } catch (_eOperatingStrategiesUi) {}
 
     // Plant params
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
