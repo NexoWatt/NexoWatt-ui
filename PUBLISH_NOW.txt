@@ -1,29 +1,30 @@
-NexoWatt UI 1.0.0 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.1 – OFFICIAL STABLE RELEASE
 
 Veröffentlichen ausschließlich aus diesem frisch entpackten vollständigen Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 1.0.0 in der Ziel-Registry noch frei ist,
+- ob Version 1.0.1 in der Ziel-Registry noch frei ist,
 - ob alle npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
 - ob package.json, package-lock.json, io-package.json, Webmanifest und Release-Manifest dieselbe Version führen,
 - ob die Stable-Release-Kennzeichnungen konsistent sind,
-- ob Runtime-Dateien und TypeScript-Quellen synchron sind.
+- ob Runtime-Dateien und TypeScript-Quellen synchron sind,
+- ob der konkrete 11,1-%-Heap-Feldfall keine falsche Warnung oder SSE-Trennung mehr auslöst,
+- ob normale SSE-Entlastung ohne globale Reconnect-Sperre arbeitet und die kritische Sperre höchstens zehn Sekunden beträgt.
 
 Freigabestatus:
-- erste offizielle NexoWatt-EOS-Stable-Version für Verkauf und produktiven Betrieb,
-- Funktionsstand identisch zur abschließend geprüften RC93-Baseline,
-- keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- oder Hardware-Regellogik durch die Stable-Promotion,
-- lokale Einspeisebegrenzung bleibt auch ohne Parkregler nutzbar,
-- zertifizierter EZA-/Parkregler wird nur bei vollständiger Aktivierung, Inbetriebnahme, Installateurfreigabe und gültiger Vorgabe bevorzugt,
-- GridConstraints Export Guard bleibt einziger produktiver Asset-Writer,
-- lokale Sicherheitsobergrenze, TTL, Qualität, Rückfall und Audit bleiben wirksam.
+- offizieller Stable-Patch für Speicherdiagnose, SSE-Livekanal und die dadurch gespeiste EOS-Übersicht,
+- schnelles Heap-Wachstum bei niedriger absoluter Auslastung bleibt Diagnosewert und ist allein kein Speicherdruck,
+- gesunde SSE-Verbindungen mit kleinen Puffern und frischen Initialsnapshots bleiben erhalten,
+- wirklich blockierte beziehungsweise stark gepufferte Clients werden weiterhin begrenzt entfernt,
+- die OOM-Notbremse und alle harten SSE-Grenzen bleiben aktiv,
+- keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a-, Netzlimit-, Export-Guard- oder Hardware-Regellogik.
 
-Wichtig für jede Kundenanlage:
+Wichtig für die Aktualisierung:
 - Alten Projektordner vollständig löschen oder umbenennen.
 - Dieses ZIP in einen neuen, leeren Ordner entpacken.
-- Keine Dateien aus einem älteren RC- oder Stable-Ordner hinein kopieren.
-- Parkregler- und Einspeisebegrenzung zunächst im Diagnosemodus in Betrieb nehmen.
-- NVP-Vorzeichen, Messwertfrische, WR-/Regler-Schreibfähigkeit, ACK/Rückmeldung und Fallback dokumentieren.
-- Die Software-Stable-Freigabe ersetzt keine projektspezifische Netzbetreiber-, Zertifizierer- oder Herstellerabnahme.
+- Keine Dateien aus 1.0.0 oder einem RC-Ordner hinein kopieren.
+- Nach der Installation den Adapter vollständig neu starten und die EOS-Übersicht mindestens 30 Minuten geöffnet beobachten.
+- Im normalen Betrieb dürfen bei niedriger Heap-Auslastung keine wiederkehrenden `[memory-guard]`-Warnungen und keine dadurch ausgelösten SSE-Trennungen erscheinen.
+- Eine echte Warnung ab 65 % Heap sowie selektive Entlastung ab 75 % bleiben beabsichtigte Schutzfunktionen.

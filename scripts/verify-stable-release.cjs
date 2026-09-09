@@ -18,6 +18,7 @@ const ioPackage = readJson('io-package.json');
 const webManifest = readJson('www/manifest.webmanifest');
 const releaseManifest = readJson('scripts/release-artifact-manifest.json');
 const version = String(pkg.version || '');
+const stableDocPath = `docs/STABLE_${version.replace(/\./g, '_')}_RELEASE_DE.md`;
 
 if (!/^[1-9]\d*\.\d+\.\d+$/.test(version)) {
   fail(`Version ist keine stabile SemVer ab 1.0.0: ${version || '<leer>'}`);
@@ -41,7 +42,7 @@ if (newsVersions[0] !== version) fail(`Aktuelle Stable-Version ${version} ist ni
 if (newsVersions.length > 7) fail(`io-package.json enthält ${newsVersions.length} News-Einträge; maximal 7 sind zulässig.`);
 
 const files = Array.isArray(pkg.files) ? pkg.files : [];
-for (const required of ['docs/STABLE_1_0_0_RELEASE_DE.md', 'scripts/verify-stable-release.cjs']) {
+for (const required of [stableDocPath, 'scripts/verify-stable-release.cjs']) {
   if (!files.includes(required)) fail(`Stable-Paketdatei fehlt in package.json files: ${required}`);
   if (!fs.existsSync(path.join(root, required))) fail(`Stable-Paketdatei fehlt im Repository: ${required}`);
   if (!releaseManifest.files.some((entry) => entry.path === required)) fail(`Stable-Paketdatei fehlt im Release-Manifest: ${required}`);
@@ -78,7 +79,7 @@ if (/0\.8\.203/.test(publishCmd)) fail('PUBLISH_NPM.cmd enthält noch die veralt
 
 const readme = read('README.md');
 if (!readme.includes(`**Current stable release:** \`${version}\``)) fail('README enthält nicht die aktuelle Stable-Version.');
-const stableDoc = read('docs/STABLE_1_0_0_RELEASE_DE.md');
+const stableDoc = read(stableDocPath);
 if (!stableDoc.includes(`NexoWatt EOS ${version}`) || !/offizielle Stable-Version/i.test(stableDoc)) {
   fail('Stable-Release-Dokumentation ist unvollständig.');
 }
@@ -94,6 +95,32 @@ for (const relativePath of ['src-ts/runtime-executables/www/sw.ts', 'src-ts/runt
   if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v500';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
 }
 
+
+const hardeningSource = read('src-ts/runtime-executables/ems/rc85-runtime-hardening.ts');
+const sseSource = read('src-ts/runtime-executables/lib/sse-runtime-guard.ts');
+const mainSource = read('src-ts/runtime-executables/main.ts');
+if (!hardeningSource.includes('rc88ClassifyHeapPressure')) {
+  fail('Ratio-basierte Heap-Klassifizierung für den 1.0.1-Stable-Patch fehlt.');
+}
+if (hardeningSource.includes('ratio >= warnRatio || fastGrowth') || hardeningSource.includes('ratio >= pressureRatio || fastGrowth')) {
+  fail('Schnelles Heap-Wachstum löst weiterhin allein Warnung oder Druckentlastung aus.');
+}
+if (!hardeningSource.includes('[memory-guard]') || hardeningSource.includes('[RC88 heap]') || mainSource.includes('[RC88 heap]')) {
+  fail('Versionsneutrale Memory-Guard-Logkennzeichnung ist nicht vollständig umgesetzt.');
+}
+if (!sseSource.includes('freshSnapshotBackpressure') || !sseSource.includes('stronglyBuffered')) {
+  fail('Selektive SSE-Druckentlastung für Initialsnapshot und echte Pufferlast fehlt.');
+}
+if (!sseSource.includes('criticalReconnectCooldownMs') || !sseSource.includes('10_000, 1_000, 10_000')) {
+  fail('Kritische SSE-Reconnect-Sperre ist nicht auf höchstens zehn Sekunden begrenzt.');
+}
+if (sseSource.includes("Date.now() + (closeAll ? 60_000 : 30_000)")) {
+  fail('Alte globale 30/60-Sekunden-SSE-Reconnect-Sperre ist noch vorhanden.');
+}
+if (!sseSource.includes('[sse-guard]')) {
+  fail('Versionsneutrale SSE-Guard-Logkennzeichnung fehlt.');
+}
+
 const rc66Verifier = read('scripts/verify-rc66-station-display-stable.js');
 if (!rc66Verifier.includes("isVersionAtLeast(pkg.version, '0.8.191')")) {
   fail('RC66-Prüfer besitzt keinen SemVer-festen Mindestversionsvergleich.');
@@ -103,4 +130,4 @@ if (/versionParts\[0\]\s*!==\s*0/.test(rc66Verifier)) {
 }
 
 console.log(`[stable-release] OK: ${pkg.name}@${version} ist konsistent als Official Stable versiegelt.`);
-console.log('[stable-release] OK: Funktionsbaseline bleibt RC93; Release-, PWA- und sichtbare Stable-Kennzeichnungen sind synchron.');
+console.log('[stable-release] OK: 1.0.1-Memory-/SSE-Patch, RC93-Regelungsbaseline und Release-Kennzeichnungen sind synchron.');

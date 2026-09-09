@@ -1,3 +1,14 @@
+## 1.0.1 - 2026-09-09
+
+- **Official Stable Patch:** NexoWatt EOS 1.0.1 korrigiert ausschließlich die Speicherdiagnose und den SSE-Livekanal, die auf laufenden Anlagen zu kurzzeitigen falschen „Offline / Veraltet“-Anzeigen führen konnten.
+- Ein Heap-Wachstum von mindestens 128 MiB innerhalb des Diagnosefensters ist weiterhin sichtbar, löst bei niedriger absoluter Heap-Auslastung aber keine Warnung und keine Druckentlastung mehr aus. Maßgeblich sind jetzt ausschließlich die realen Heap-Schwellen von 65 % für Warnung, 75 % für selektive Entlastung, 86 % für die anhaltende Restart-Schwelle und 92 % für die Notbremse.
+- Der im Feld beobachtete Zustand `233 MiB / 2096 MiB`, `11,1 % Heap` und `+141 MiB in zehn Minuten` wird ausdrücklich als normaler Warm-up-/Cache-Aufbau klassifiziert: schnelle Zunahme ja, Speicherdruck nein, keine SSE-Trennung.
+- Normale Speicherdruckbehandlung trennt nur noch tatsächlich backpressure-blockierte oder stark gepufferte SSE-Clients. Ein üblicher Socketpuffer von 32 KiB und ein frisch verbundener Client mit einem initialen Snapshot bis 1 MiB bleiben verbunden und können regulär über `drain` weiterlaufen.
+- Normale Druckentlastung setzt keine globale EventSource-Reconnect-Sperre mehr. Bei einer wirklich kritischen Speichersituation bleibt die Schutzabschaltung aktiv; deren Reconnect-Sperre ist auf höchstens zehn Sekunden begrenzt und liegt damit unter dem 20-Sekunden-Frischefenster der EOS-Übersicht.
+- Die betrieblichen Logpräfixe heißen nun `[memory-guard]` und `[sse-guard]` statt `[RC88 heap]` beziehungsweise `[RC88 SSE]`. RC-Bezeichnungen bleiben nur in historischen Dokumenten, Tests und internen Kompatibilitätsmarkern erhalten.
+- Die Regressionstests prüfen den konkreten Feldfall, gesunde SSE-Puffer, Initialsnapshot-Grace, sofortige Wiederverbindung nach normaler Entlastung, die kritische Zehn-Sekunden-Grenze sowie weiterhin eine Million verworfene Backpressure-Updates ohne ungebundenes Heap-Wachstum.
+- Keine Änderung an EMS-Regelalgorithmen oder Hardware-Writer: NVP, Lade- und Lastmanagement, Speicherregelung, Netzlimit/Nulleinspeisung, Export Guard, §14a, Tarife und EZA-/Parkregler-Priorität bleiben unverändert gegenüber 1.0.0.
+
 ## 1.0.0 - 2026-09-06
 
 - **Official Stable:** NexoWatt EOS 1.0.0 ist der erste offiziell für Verkauf und produktiven Betrieb freigegebene Stable-Stand.

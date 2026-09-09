@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:8c67f3101d516466acdf2615b1730c27bfcb938a9e39a04e7cf8c8b96b4cb714
+ * Quell-Hash: sha256:8c40b483bb1e0112dfd2678210829177ff7b391fc86e3f9fb64b34c225c37d08
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -451,7 +451,7 @@ class NexoWattVis extends utils.Adapter {
       if (!timer) resolve(false);
     });
   }
-  /** RC88: bounded runtime diagnostics for heap-pressure analysis. */
+  /** Memory guard: bounded runtime diagnostics for heap-pressure analysis. */
   _nwGetMemoryDiagnostics() {
     let sse = null;
     try { sse = this._nwSseGuard && this._nwSseGuard.getStats ? this._nwSseGuard.getStats() : null; } catch (_e) {}
@@ -467,7 +467,7 @@ class NexoWattVis extends utils.Adapter {
     };
   }
 
-  /** RC88: release buffered live clients without touching EMS control. */
+  /** Memory guard: release only unhealthy live clients without touching EMS control. */
   _nwHandleHeapPressure(sample) {
     let removed = 0;
     try {
@@ -482,18 +482,18 @@ class NexoWattVis extends utils.Adapter {
     try { this._ssePendingPayload = {}; } catch (_e) {}
     try {
       if (removed > 0) {
-        this.log.warn(`[RC88 heap] ${removed} SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
+        this.log.warn(`[memory-guard] ${removed} unhealthy SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
       }
     } catch (_e) {}
     return { removed };
   }
 
-  /** RC88: final cleanup before the emergency restart safety net. */
+  /** Memory guard: final cleanup before the emergency restart safety net. */
   _nwPrepareControlledRestart(sample) {
     try { this._nwCloseSseClients(); } catch (_e) {}
     try { this._ssePendingPayload = {}; } catch (_e) {}
     try {
-      this.log.error(`[RC88 heap] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
+      this.log.error(`[memory-guard] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
     } catch (_e) {}
   }
 

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6b67bddfb6ab8214734745a615debd3fd30460ade8524fbec17017903abdf778
+ * Original-Hash: c958398eda7938a4fed99db7da523330e2626e3fa264649a527ec01b72675263
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/lib/sse-runtime-guard.ts
- * Quell-Hash: sha256:54ed55fe3300a7475654b75e021936bed3ce4c4be7abde2932953b0731e8fa28
+ * Quell-Hash: sha256:64cf70fc7a912a8d7f0d1fc38faa25371d87a078d9bdd550555ff766d779b8aa
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -65,6 +65,10 @@ class SseRuntimeGuard {
         this.backpressureTimeoutMs = this._clamp(options.backpressureTimeoutMs, 8000, 1000, 60000);
         this.heartbeatMs = this._clamp(options.heartbeatMs, 15000, 5000, 60000);
         this.maxFrameBytes = this._clamp(options.maxFrameBytes, 8 * 1024 * 1024, 256 * 1024, 32 * 1024 * 1024);
+        this.pressureBufferBytes = this._clamp(options.pressureBufferBytes, Math.max(256 * 1024, Math.round(this.maxBufferedBytes / 2)), 64 * 1024, this.maxBufferedBytes);
+        // Keep a real critical-pressure reconnect pause safely below the admin
+        // overview's 20-second freshness window. Normal pressure sets no lockout.
+        this.criticalReconnectCooldownMs = this._clamp(options.criticalReconnectCooldownMs, 10000, 1000, 10000);
         this.getSnapshotChunk = typeof options.getSnapshotChunk === 'function' ? options.getSnapshotChunk : null;
         this.clients = new Set();
         this._seq = 0;
@@ -105,7 +109,7 @@ class SseRuntimeGuard {
             this._lastWarnAt.delete(oldest);
         }
         try {
-            this.log.warn?.(`[RC88 SSE] ${message}`);
+            this.log.warn?.(`[sse-guard] ${message}`);
         }
         catch (_error) { }
     }
@@ -197,6 +201,7 @@ class SseRuntimeGuard {
             lastWriteAt: now,
             lastSuccessfulWriteAt: now,
             backpressuredAt: 0,
+            backpressureKind: '',
             needsResync: false,
             drainBound: false,
             closed: false,
@@ -261,6 +266,7 @@ class SseRuntimeGuard {
             if (this._isDead(client) || !this.clients.has(client))
                 return;
             client.backpressuredAt = 0;
+            client.backpressureKind = '';
             if (client.needsResync) {
                 client.needsResync = false;
                 this._resync(client);
@@ -322,6 +328,7 @@ class SseRuntimeGuard {
             const accepted = client.res.write(text);
             if (accepted === false) {
                 client.backpressuredAt = now;
+                client.backpressureKind = String(meta.kind || 'unknown');
                 client.needsResync = meta.kind === 'update' || client.needsResync;
                 this._stats.backpressureEvents += 1;
                 this._bindDrain(client);
@@ -385,12 +392,21 @@ class SseRuntimeGuard {
     mitigatePressure(level = 'pressure') {
         let closed = 0;
         const closeAll = level === 'critical';
-        // RC88_PRESSURE_RECONNECT_COOLDOWN: EventSource reconnects automatically.
-        // Briefly reject reconnects while the heap is being relieved, otherwise a
-        // reconnect storm can immediately recreate the sockets just closed.
-        this._pressureUntil = Math.max(this._pressureUntil, Date.now() + (closeAll ? 60000 : 30000));
+        const now = Date.now();
+        // EventSource reconnects automatically. Only a genuinely critical heap
+        // situation needs a short global pause; normal pressure must not create a
+        // 30-second data gap that makes an otherwise healthy plant look offline.
+        if (closeAll) {
+            this._pressureUntil = Math.max(this._pressureUntil, now + this.criticalReconnectCooldownMs);
+        }
         for (const client of Array.from(this.clients)) {
-            const unhealthy = client.backpressuredAt > 0 || this._writableBytes(client) > 0;
+            const writableBytes = this._writableBytes(client);
+            const freshSnapshotBackpressure = client.backpressuredAt > 0
+                && /^(?:init|resync)$/.test(String(client.backpressureKind || ''))
+                && now - client.backpressuredAt < this.backpressureTimeoutMs;
+            const blocked = client.backpressuredAt > 0 && !freshSnapshotBackpressure;
+            const stronglyBuffered = writableBytes >= this.pressureBufferBytes;
+            const unhealthy = blocked || stronglyBuffered;
             if (closeAll || unhealthy) {
                 this.close(client, closeAll ? 'critical-memory-pressure' : 'memory-pressure');
                 closed += 1;
@@ -454,6 +470,8 @@ class SseRuntimeGuard {
             oldestClientAgeMs,
             maxClients: this.maxClients,
             maxBufferedBytes: this.maxBufferedBytes,
+            pressureBufferBytes: this.pressureBufferBytes,
+            criticalReconnectCooldownMs: this.criticalReconnectCooldownMs,
             pressureCooldownMs: Math.max(0, this._pressureUntil - now),
             ...this._stats,
         };

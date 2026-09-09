@@ -526,6 +526,50 @@ function clampRatio(value: unknown, fallback: number, min: number, max: number):
     return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 }
 
+export interface RC88HeapPressureClassification {
+    ratio: number;
+    growthBytes: number;
+    fastGrowth: boolean;
+    warn: boolean;
+    pressure: boolean;
+    restart: boolean;
+    emergency: boolean;
+}
+
+/**
+ * Classifies one heap sample without side effects.
+ *
+ * A rapid ten-minute increase remains useful telemetry, but is deliberately not
+ * a pressure signal on its own. V8 may grow a young process, caches and compiled
+ * code quickly while the absolute heap ratio is still low. Treating that normal
+ * warm-up as pressure used to close healthy SSE clients and made the overview
+ * appear stale although the adapter and EMS loop were running normally.
+ */
+export function rc88ClassifyHeapPressure(input: {
+    ratio: unknown;
+    growthBytes: unknown;
+    warnRatio: unknown;
+    pressureRatio: unknown;
+    restartRatio: unknown;
+    emergencyRatio: unknown;
+}): RC88HeapPressureClassification {
+    const ratio = Math.max(0, Number(input.ratio) || 0);
+    const growthBytes = Number(input.growthBytes) || 0;
+    const warnRatio = clampRatio(input.warnRatio, 0.65, 0.4, 0.9);
+    const pressureRatio = clampRatio(input.pressureRatio, 0.75, warnRatio, 0.92);
+    const restartRatio = clampRatio(input.restartRatio, 0.86, pressureRatio, 0.95);
+    const emergencyRatio = clampRatio(input.emergencyRatio, 0.92, restartRatio, 0.98);
+    return {
+        ratio,
+        growthBytes,
+        fastGrowth: growthBytes >= 128 * 1048576,
+        warn: ratio >= warnRatio,
+        pressure: ratio >= pressureRatio,
+        restart: ratio >= restartRatio,
+        emergency: ratio >= emergencyRatio,
+    };
+}
+
 function safeDiagnosticsJson(): string {
     try {
         const diagnostics = heapMonitorOptions.getDiagnostics?.();
@@ -541,7 +585,7 @@ function scheduleControlledRestart(sample: RC88HeapSample, reason: string): void
     heapRestartScheduled = true;
     try { heapMonitorOptions.onBeforeRestart?.(sample); } catch (_error) {}
     heapMonitorLog.error?.(
-        `[RC88 heap] ${reason}; controlled adapter restart requested before V8 OOM. `
+        `[memory-guard] ${reason}; controlled adapter restart requested before V8 OOM. `
         + `heap=${(sample.heapUsed / 1048576).toFixed(0)}/${(sample.heapLimit / 1048576).toFixed(0)} MiB `
         + `rss=${(sample.rss / 1048576).toFixed(0)} MiB diagnostics=${safeDiagnosticsJson()}`,
     );
@@ -575,26 +619,33 @@ function runHeapMonitorSample(): void {
     const restartRatio = clampRatio(heapMonitorOptions.restartRatio, 0.86, pressureRatio, 0.95);
     const emergencyRatio = clampRatio(heapMonitorOptions.emergencyRatio, 0.92, restartRatio, 0.98);
     const sustainedSamples = Math.max(1, Math.min(5, Math.round(Number(heapMonitorOptions.sustainedSamples) || 2)));
-    const fastGrowth = growthBytes >= 128 * 1048576;
+    const classification = rc88ClassifyHeapPressure({
+        ratio,
+        growthBytes,
+        warnRatio,
+        pressureRatio,
+        restartRatio,
+        emergencyRatio,
+    });
 
-    if ((ratio >= warnRatio || fastGrowth) && now - lastHeapWarnAt >= 5 * 60_000) {
+    if (classification.warn && now - lastHeapWarnAt >= 5 * 60_000) {
         lastHeapWarnAt = now;
         heapMonitorLog.warn?.(
-            `[RC88 heap] ${(memory.heapUsed / 1048576).toFixed(0)} MiB / ${(heapLimit / 1048576).toFixed(0)} MiB `
+            `[memory-guard] ${(memory.heapUsed / 1048576).toFixed(0)} MiB / ${(heapLimit / 1048576).toFixed(0)} MiB `
             + `(${(ratio * 100).toFixed(1)}%), rss ${(memory.rss / 1048576).toFixed(0)} MiB, `
             + `10-min growth ${(growthBytes / 1048576).toFixed(0)} MiB; diagnostics=${safeDiagnosticsJson()}`,
         );
     }
 
-    if ((ratio >= pressureRatio || fastGrowth) && now - lastPressureActionAt >= 30_000) {
+    if (classification.pressure && now - lastPressureActionAt >= 30_000) {
         lastPressureActionAt = now;
         try { heapMonitorOptions.onPressure?.(sample); } catch (error) {
-            heapMonitorLog.warn?.(`[RC88 heap] pressure mitigation failed: ${error instanceof Error ? error.message : String(error)}`);
+            heapMonitorLog.warn?.(`[memory-guard] pressure mitigation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
-    criticalHeapSamples = ratio >= restartRatio ? criticalHeapSamples + 1 : 0;
-    if (ratio >= emergencyRatio) {
+    criticalHeapSamples = classification.restart ? criticalHeapSamples + 1 : 0;
+    if (classification.emergency) {
         scheduleControlledRestart(sample, `emergency heap pressure ${(ratio * 100).toFixed(1)}%`);
     } else if (criticalHeapSamples >= sustainedSamples) {
         scheduleControlledRestart(sample, `sustained heap pressure ${(ratio * 100).toFixed(1)}% for ${criticalHeapSamples} samples`);

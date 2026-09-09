@@ -151,8 +151,43 @@ async function testSseBackpressure() {
   const largeInitialFrame = `data: ${'x'.repeat(1024 * 1024)}\n\n`;
   assert.equal(largeGuard.write(largeClient, largeInitialFrame, { kind: 'init' }), false);
   assert.equal(largeClient.closed, false, '1 MiB initial snapshot must be allowed to drain');
+  assert.equal(largeGuard.mitigatePressure('pressure'), 0,
+    'normal heap pressure must not close a fresh initialization snapshot');
+  assert.equal(largeGuard.getStats().clients, 1);
+  assert.equal(largeGuard.getStats().pressureCooldownMs, 0,
+    'normal heap pressure must not block EventSource reconnects');
   largeRes.drain();
   largeGuard.closeAll('test-finished');
+
+  // Small ordinary socket buffers are normal and must not be interpreted as a
+  // blocked browser. The former > 0 byte check closed healthy clients here.
+  const healthyGuard = new SseRuntimeGuard({ heartbeatMs: 60_000 });
+  const healthyReq = new FakeRequest();
+  const healthyRes = new FakeResponse(healthyReq);
+  const healthyClient = healthyGuard.addClient({ req: healthyReq, res: healthyRes });
+  healthyRes.writableLength = 32 * 1024;
+  healthyRes.socket.writableLength = healthyRes.writableLength;
+  assert.equal(healthyGuard.mitigatePressure('pressure'), 0);
+  assert.equal(healthyClient.closed, false, '32 KiB writable buffer must remain connected');
+  assert.equal(healthyGuard.getStats().pressureCooldownMs, 0);
+  healthyGuard.closeAll('test-finished');
+
+  // A genuinely blocked update client is still removed, but another browser
+  // may reconnect immediately because normal pressure has no global cooldown.
+  const blockedGuard = new SseRuntimeGuard({ heartbeatMs: 60_000 });
+  const blockedReq = new FakeRequest();
+  const blockedRes = new FakeResponse(blockedReq);
+  const blockedClient = blockedGuard.addClient({ req: blockedReq, res: blockedRes });
+  blockedRes.blocked = true;
+  assert.equal(blockedGuard.write(blockedClient, 'data: blocked-update\n\n', { kind: 'update' }), false);
+  assert.equal(blockedGuard.mitigatePressure('pressure'), 1);
+  assert.equal(blockedClient.closed, true);
+  assert.equal(blockedGuard.getStats().pressureCooldownMs, 0);
+  const replacementReq = new FakeRequest();
+  const replacementRes = new FakeResponse(replacementReq);
+  assert(blockedGuard.addClient({ req: replacementReq, res: replacementRes }),
+    'normal pressure must permit immediate SSE recovery');
+  blockedGuard.closeAll('test-finished');
 
   // Client count is a hard bound. An old half-open connection is destroyed
   // instead of letting reconnecting browsers grow the live-client set forever.
@@ -167,9 +202,41 @@ async function testSseBackpressure() {
   bounded.mitigatePressure('critical');
   const pressureReq = new FakeRequest();
   const pressureRes = new FakeResponse(pressureReq);
-  assert.equal(bounded.addClient({ req: pressureReq, res: pressureRes }), null, 'SSE reconnects must be rejected during pressure cooldown');
-  assert(bounded.getStats().pressureCooldownMs > 0);
+  assert.equal(bounded.addClient({ req: pressureReq, res: pressureRes }), null, 'SSE reconnects must be rejected during critical pressure cooldown');
+  const criticalCooldownMs = bounded.getStats().pressureCooldownMs;
+  assert(criticalCooldownMs > 0 && criticalCooldownMs <= 10_000,
+    `critical reconnect cooldown must stay within 10 seconds, got ${criticalCooldownMs}`);
   bounded.closeAll('test-finished');
+}
+
+function testHeapPressureClassification() {
+  assert.equal(typeof hardening.rc88ClassifyHeapPressure, 'function', 'heap classifier export missing');
+  const fieldSample = hardening.rc88ClassifyHeapPressure({
+    ratio: 0.111,
+    growthBytes: 141 * 1048576,
+    warnRatio: 0.65,
+    pressureRatio: 0.75,
+    restartRatio: 0.86,
+    emergencyRatio: 0.92,
+  });
+  assert.equal(fieldSample.fastGrowth, true, 'field sample must retain rapid growth as telemetry');
+  assert.equal(fieldSample.warn, false, '11.1% heap must not emit a memory warning');
+  assert.equal(fieldSample.pressure, false, '11.1% heap must not close SSE clients');
+  assert.equal(fieldSample.restart, false);
+  assert.equal(fieldSample.emergency, false);
+
+  const realPressure = hardening.rc88ClassifyHeapPressure({
+    ratio: 0.76,
+    growthBytes: 0,
+    warnRatio: 0.65,
+    pressureRatio: 0.75,
+    restartRatio: 0.86,
+    emergencyRatio: 0.92,
+  });
+  assert.equal(realPressure.fastGrowth, false);
+  assert.equal(realPressure.warn, true);
+  assert.equal(realPressure.pressure, true);
+  assert.equal(realPressure.restart, false);
 }
 
 async function testWatchdogDeduplication() {
@@ -213,6 +280,7 @@ async function testWatchdogDeduplication() {
 
 async function main() {
   await testSseBackpressure();
+  testHeapPressureClassification();
   await testWatchdogDeduplication();
 
   // Repository checks prefer the canonical TS sources. The same test is also
@@ -224,6 +292,7 @@ async function main() {
   };
   const mainTs = readSourceOrRuntime('src-ts/runtime-executables/main.ts', 'main.js');
   const hardeningTs = readSourceOrRuntime('src-ts/runtime-executables/ems/rc85-runtime-hardening.ts', 'ems/rc85-runtime-hardening.js');
+  const sseTs = readSourceOrRuntime('src-ts/runtime-executables/lib/sse-runtime-guard.ts', 'lib/sse-runtime-guard.js');
   const managerTs = readSourceOrRuntime('src-ts/runtime-executables/ems/module-manager.ts', 'ems/module-manager.js');
   const engineTs = readSourceOrRuntime('src-ts/runtime-executables/ems/engine.ts', 'ems/engine.js');
   const mainRuntime = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
@@ -236,6 +305,15 @@ async function main() {
   assert(hardeningTs.includes('RC88_LIGHTWEIGHT_QUARANTINE'));
   assert(!hardeningTs.includes('promise: Promise<unknown>'), 'watchdog map must not strongly retain unresolved Promise chains');
   assert(hardeningTs.includes('controlled adapter restart requested before V8 OOM'));
+  assert(hardeningTs.includes('rc88ClassifyHeapPressure'));
+  assert(hardeningTs.includes('[memory-guard]'));
+  assert(!hardeningTs.includes('ratio >= warnRatio || fastGrowth'), 'rapid growth must not trigger warnings by itself');
+  assert(!hardeningTs.includes('ratio >= pressureRatio || fastGrowth'), 'rapid growth must not trigger pressure mitigation by itself');
+  assert(!hardeningTs.includes('[RC88 heap]'), 'legacy RC warning prefix must not remain in operational logs');
+  assert(sseTs.includes('freshSnapshotBackpressure'));
+  assert(sseTs.includes('criticalReconnectCooldownMs'));
+  assert(sseTs.includes('[sse-guard]'));
+  assert(!sseTs.includes("Date.now() + (closeAll ? 60_000 : 30_000)"), 'legacy 30/60 second reconnect lockout remains');
   assert(hardeningTs.includes('process.exit(11)'), 'controlled restart must use the ioBroker adapter termination code');
   assert(managerTs.includes('RC88_MEMORY_GUARD'));
   assert(!engineTs.includes('startRc85HeapMonitor(console)'), 'heap monitor must start only after the real adapter is available');
@@ -244,7 +322,7 @@ async function main() {
   const io = require(path.join(root, 'io-package.json'));
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(io.common.version, pkg.version);
-  console.log('[RC88] SSE backpressure (1,000,000 blocked updates), orphan-operation deduplication and early heap guard passed');
+  console.log('[RC88/1.0.1] SSE backpressure, healthy-client retention, 10-second critical recovery and ratio-based heap guard passed');
 }
 
 main().catch((error) => {

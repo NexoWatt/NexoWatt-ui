@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: b0f155de6cc91fc003d75b1b1cfc13bb60da88e49fc916df12348e3218594e12
+ * Original-Hash: bbee87c9d4112c9fb256f951b22f7ec9598dffa07b6d304fd43ebab483952b2f
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.
@@ -870,7 +870,7 @@ class NexoWattVis extends utils.Adapter {
       if (!timer) resolve(false);
     });
   }
-  /** RC88: bounded runtime diagnostics for heap-pressure analysis. */
+  /** Memory guard: bounded runtime diagnostics for heap-pressure analysis. */
   _nwGetMemoryDiagnostics() {
     let sse = null;
     try { sse = this._nwSseGuard && this._nwSseGuard.getStats ? this._nwSseGuard.getStats() : null; } catch (_e) {}
@@ -886,7 +886,7 @@ class NexoWattVis extends utils.Adapter {
     };
   }
 
-  /** RC88: release buffered live clients without touching EMS control. */
+  /** Memory guard: release only unhealthy live clients without touching EMS control. */
   _nwHandleHeapPressure(sample) {
     let removed = 0;
     try {
@@ -901,18 +901,18 @@ class NexoWattVis extends utils.Adapter {
     try { this._ssePendingPayload = {}; } catch (_e) {}
     try {
       if (removed > 0) {
-        this.log.warn(`[RC88 heap] ${removed} SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
+        this.log.warn(`[memory-guard] ${removed} unhealthy SSE client(s) closed to release buffered live data; heap=${Math.round(Number(sample?.ratio || 0) * 1000) / 10}%`);
       }
     } catch (_e) {}
     return { removed };
   }
 
-  /** RC88: final cleanup before the emergency restart safety net. */
+  /** Memory guard: final cleanup before the emergency restart safety net. */
   _nwPrepareControlledRestart(sample) {
     try { this._nwCloseSseClients(); } catch (_e) {}
     try { this._ssePendingPayload = {}; } catch (_e) {}
     try {
-      this.log.error(`[RC88 heap] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
+      this.log.error(`[memory-guard] preparing controlled restart at ${Math.round(Number(sample?.ratio || 0) * 1000) / 10}% heap usage`);
     } catch (_e) {}
   }
 

@@ -42,7 +42,7 @@ write() meldet Backpressure
 - Heartbeat alle 15 Sekunden;
 - Trennung bei Request-, Response- oder Socketfehler;
 - vollständige Listener- und Clientbereinigung beim Adapter-Unload;
-- kurze Reconnect-Sperre bei Heap-Druck, damit EventSource-Verbindungen nicht sofort als Reconnect-Sturm zurückkehren.
+- keine globale Reconnect-Sperre bei normalem Heap-Druck; bei wirklich kritischem Heap-Druck maximal zehn Sekunden Sperre.
 
 Die Werte besitzen konservative interne Grenzen. Nicht mehr lesende Browser, VPN-Tunnel oder Reverse-Proxys können daher keinen unbegrenzt wachsenden Sendepuffer im Adapter erzeugen.
 
@@ -71,9 +71,9 @@ Die Heapüberwachung ist an die reale Adapterinstanz gebunden und läuft alle 30
 
 | Stufe | Standardreaktion |
 |---|---|
-| ab 65 % Heap oder sehr schnellem Wachstum | gedrosselte Diagnosewarnung |
-| ab 75 % | Backpressure-/Puffer-Clients schließen und disponiblen SSE-Patch verwerfen |
-| ab 82 % | alle SSE-Verbindungen trennen; Browser verbinden sich automatisch neu |
+| ab 65 % Heap | gedrosselte Diagnosewarnung; schneller Wachstumstrend bleibt nur Telemetrie |
+| ab 75 % | nur wirklich blockierte oder stark gepufferte Clients schließen; keine globale Reconnect-Sperre |
+| ab 82 % | alle SSE-Verbindungen trennen; kritische Reconnect-Sperre maximal zehn Sekunden |
 | ab 86 % über zwei Messungen | kontrollierter Adapterneustart als letzte Notbremse |
 | ab 92 % | sofortige kontrollierte Notbremse vor V8-`SIGABRT` |
 
@@ -111,3 +111,8 @@ Geändert werden ausschließlich der LIVE-Transport, der asynchrone Watchdog-Lif
 - Der EMS-Regeltick läuft für die übrigen Module weiter.
 - Bei einem seltenen Heapdruckereignis bleibt die Regelung während der ersten Druckentlastung unverändert; nur LIVE-Browser verbinden sich neu.
 - Ein V8-Hartabsturz bei rund 2 GiB soll durch die frühe Entlastung beziehungsweise die letzte kontrollierte Notbremse vermieden werden.
+
+
+## Stable-Patch 1.0.1
+
+Der Feldfall mit 11,1 % Heap und 141 MiB Wachstum in zehn Minuten darf keine Druckentlastung mehr auslösen. Ein 32-KiB-Socketpuffer und ein frischer 1-MiB-Initialsnapshot gelten nicht als ungesunde Verbindung. Die automatisierten Tests sichern diese Fälle sowie die weiterhin wirksame Trennung echter Backpressure-Clients ab.
