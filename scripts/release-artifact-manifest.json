@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -314,6 +314,11 @@
       "sha256": "83b4ba95800a354ed260aae6b3d2bb61b34893bfe3d3078cdc43c9d32bba2c88"
     },
     {
+      "path": "docs/STABLE_1_0_2_RELEASE_DE.md",
+      "size": 4521,
+      "sha256": "5d754852d4fb343314e28618bfe378ca7273c439e2ac1c11dba9453eebd88d74"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 18385,
       "sha256": "53e3db9e469d76b194d8a8393d90dc6c7fba1c7a35919614235f37c1b9b58fbd"
@@ -350,8 +355,8 @@
     },
     {
       "path": "ems/engine.js",
-      "size": 78234,
-      "sha256": "59121fb5457d1e2b035362db38b7fb0fcabc436ea9e8aa5aa5fa05991b922932"
+      "size": 82898,
+      "sha256": "18dcf3e5d3d7fd7cb4e659fd95e5981072c0969f7976e13da1c359622d2847cc"
     },
     {
       "path": "ems/evcs-control-mapping.js",
@@ -605,8 +610,8 @@
     },
     {
       "path": "ems/services/admin-overview-publisher.js",
-      "size": 64174,
-      "sha256": "045caf47e2416e35abdd46972846765d83d6da397d563534ed2337ae101fdcf9"
+      "size": 74717,
+      "sha256": "7b3180b7f34c41964903c908493336c227758543a7e3e6652d64dc046586b0cd"
     },
     {
       "path": "ems/services/charging-management-audit.js",
@@ -760,8 +765,8 @@
     },
     {
       "path": "io-package.json",
-      "size": 24273,
-      "sha256": "3313ec403a2df0c71c707e8e44f3994ceb4e43fe05f61fd3e4b1b149081f31d6"
+      "size": 24504,
+      "sha256": "5e6be99a703efe7d6017717591567e7f80e14ef0b4d217db74f8449ad629dc15"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -1015,8 +1020,8 @@
     },
     {
       "path": "main.js",
-      "size": 1742061,
-      "sha256": "bbee87c9d4112c9fb256f951b22f7ec9598dffa07b6d304fd43ebab483952b2f"
+      "size": 1742239,
+      "sha256": "cde497d708626750fd015f16c724f8977a4a5604c8f78e305153afc645914f4b"
     },
     {
       "path": "RC82_FELDTEST_CHECKLISTE_DE.md",
@@ -1051,7 +1056,7 @@
     {
       "path": "README.md",
       "size": 2485,
-      "sha256": "f535a5640ffa585ce3e75d3a217ae2840bfb627d8c95c6df38c9948fa73ca8b1"
+      "sha256": "683e297bae6df70ed3256f497362a6679dd66d65de56eeda5a60c0aa51a58ab8"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
@@ -1085,8 +1090,8 @@
     },
     {
       "path": "scripts/verify-rc89-admin-overview-health.cjs",
-      "size": 9037,
-      "sha256": "f248a61bd6e4658d0352380fb7af889cecbc0ed879bf9130bf9e9ae3111d31fc"
+      "size": 9094,
+      "sha256": "eda3721a747f40778b40d0465c9f15583cd197da8ac73d5b81c345c5727e7e65"
     },
     {
       "path": "scripts/verify-rc92-history-mobile.cjs",
@@ -1100,8 +1105,13 @@
     },
     {
       "path": "scripts/verify-stable-release.cjs",
-      "size": 7803,
-      "sha256": "af88da5a07e460c9a9c918e037946327208f095a9c88ab8b519173531966d5d9"
+      "size": 10219,
+      "sha256": "b430392542be1751f5e4bd9202f28475fdb129ea21083eea8c9505a6b3c94323"
+    },
+    {
+      "path": "scripts/verify-stable-1.0.2-health-heartbeat.cjs",
+      "size": 11635,
+      "sha256": "c849d79748a01f21d82cfb470d8d7ae087c2c942accf1adf317cb85cc617e5f6"
     },
     {
       "path": "www/admin-guard.js",
@@ -1381,7 +1391,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1088,
-      "sha256": "26a1fb3dadc530c8acc3d45a1ca23e82f7775af5de377e1b464d789ef2226ca3"
+      "sha256": "908d2843488a09be3027f9da20504982f186ef14b30b8d916da9602906a6e177"
     },
     {
       "path": "www/mesh-microgrid.html",

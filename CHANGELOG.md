@@ -1,3 +1,14 @@
+## 1.0.2 - 2026-09-09
+
+- **Official Stable Patch:** NexoWatt EOS 1.0.2 korrigiert die weiterhin auftretende zyklische „Offline / Veraltet“-Anzeige der EOS-Übersicht. Ursache war ein zweiter, vom RC88-/SSE-Thema unabhängiger Timing-Konflikt: EOS Admin bewertet Liveness nach ungefähr 20 Sekunden, während `info.connection` bisher nur alle 30 Sekunden bestätigt wurde und ein vollständiger EMS-/Diagnosezyklus legitimerweise länger als 20 Sekunden laufen konnte.
+- `info.connection` wird jetzt alle vier Sekunden aus dem tatsächlichen HTTP-Serverzustand bestätigt. Solange Web/API wirklich lauschen, bleibt der Adapter frisch; bei gestopptem Prozess oder nicht lauschendem Server endet beziehungsweise negiert der Heartbeat und der echte Offlinefall bleibt zuverlässig erkennbar.
+- Der EMS-Kern veröffentlicht einen unabhängigen Vier-Sekunden-Scheduler-Heartbeat. Dieser läuft getrennt vom vollständigen Regelzyklus und zeigt, ob der Schedulerprozess lebt, auch wenn ein Modul noch innerhalb seines zulässigen Watchdogfensters arbeitet.
+- Der EOS-Admin-Diagnosepublisher besitzt einen eigenen Vier-Sekunden-Liveness-Timer, der nicht vom Lock des vollständigen Diagnosezyklus blockiert wird. `updatedAt`, Publisher-Heartbeat und die kompatible `summaryJson`-Liveness werden rechtzeitig erneuert, ohne im Normalbetrieb die vollständige Snapshot-Last zu verdoppeln.
+- Adapter-Erreichbarkeit, Scheduler-Liveness, Regelzyklus und Diagnoseaktualisierung sind nun getrennte Zustände. Nur `info.connection=false` beziehungsweise vollständig ausbleibende Liveness führt zu „offline“. Ein 25 Sekunden laufender Regelzyklus bei frischem Scheduler bleibt online; ein Zyklus über dem 30-Sekunden-Watchdog wird als `tick-stalled` und „Adapter online – EMS-Regelzyklus überschreitet Zeitlimit“ gewarnt.
+- Aktivitätszeitstempel werden nach dem neuesten gültigen Wert ausgewählt, statt den ersten befüllten State zu verwenden. Ein älterer Tick-Start kann dadurch neuere Scheduler-, Tick-Ende-, Budget- oder Lademanagement-Aktivität nicht mehr überdecken.
+- Ein neuer Stable-1.0.2-Regressionsverbund reproduziert den Feldfall `vor 23 s / letzter Regeltick vor 25 s / Zyklus 2608 ms`, prüft den 35-Sekunden-Stall, veralteten Scheduler, echtes `info.connection=false`, unabhängige Timer und deren Shutdown.
+- Die Speicher-/SSE-Korrektur aus 1.0.1 bleibt vollständig erhalten. Keine Änderung an NVP-, Lade-, Speicher-, Netzlimit-/Nulleinspeise-, Export-Guard-, §14a-, Tarif-, EZA-/Parkregler- oder Hardware-Regelung.
+
 ## 1.0.1 - 2026-09-09
 
 - **Official Stable Patch:** NexoWatt EOS 1.0.1 korrigiert ausschließlich die Speicherdiagnose und den SSE-Livekanal, die auf laufenden Anlagen zu kurzzeitigen falschen „Offline / Veraltet“-Anzeigen führen konnten.

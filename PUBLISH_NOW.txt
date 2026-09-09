@@ -1,30 +1,35 @@
-NexoWatt UI 1.0.1 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.2 – OFFICIAL STABLE RELEASE
 
 Veröffentlichen ausschließlich aus diesem frisch entpackten vollständigen Repository-ZIP:
 
 npm publish
 
 Der Prepublish-Guard prüft automatisch:
-- ob Version 1.0.1 in der Ziel-Registry noch frei ist,
+- ob Version 1.0.2 in der Ziel-Registry noch frei ist,
 - ob alle npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
 - ob package.json, package-lock.json, io-package.json, Webmanifest und Release-Manifest dieselbe Version führen,
 - ob die Stable-Release-Kennzeichnungen konsistent sind,
 - ob Runtime-Dateien und TypeScript-Quellen synchron sind,
-- ob der konkrete 11,1-%-Heap-Feldfall keine falsche Warnung oder SSE-Trennung mehr auslöst,
-- ob normale SSE-Entlastung ohne globale Reconnect-Sperre arbeitet und die kritische Sperre höchstens zehn Sekunden beträgt.
+- ob der 25-Sekunden-Feldfall bei frischem Scheduler-Heartbeat online bleibt,
+- ob ein über 30 Sekunden laufender EMS-Zyklus als Warnung und nicht als Adapter-Offlinezustand erscheint,
+- ob info.connection=false weiterhin sofort als echter Offlinezustand gilt,
+- ob die Speicher-/SSE-Härtung aus 1.0.1 unverändert aktiv bleibt.
 
 Freigabestatus:
-- offizieller Stable-Patch für Speicherdiagnose, SSE-Livekanal und die dadurch gespeiste EOS-Übersicht,
-- schnelles Heap-Wachstum bei niedriger absoluter Auslastung bleibt Diagnosewert und ist allein kein Speicherdruck,
-- gesunde SSE-Verbindungen mit kleinen Puffern und frischen Initialsnapshots bleiben erhalten,
-- wirklich blockierte beziehungsweise stark gepufferte Clients werden weiterhin begrenzt entfernt,
-- die OOM-Notbremse und alle harten SSE-Grenzen bleiben aktiv,
+- offizieller Stable-Patch für die Erreichbarkeits- und Frischebewertung der EOS-Übersicht,
+- info.connection wird unabhängig alle vier Sekunden anhand des tatsächlich lauschenden HTTP-Servers bestätigt,
+- der EMS-Scheduler veröffentlicht ein eigenständiges Vier-Sekunden-Lebenszeichen,
+- der Diagnose-Publisher aktualisiert unabhängig vom vollständigen Diagnosezyklus seine Liveness-Daten,
+- legitime 20–30-Sekunden-Regelzyklen führen nicht mehr zu „Offline / veraltet“,
+- echte Adapter-/HTTP-Ausfälle sowie festhängende Regelzyklen bleiben eindeutig sichtbar,
 - keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a-, Netzlimit-, Export-Guard- oder Hardware-Regellogik.
 
 Wichtig für die Aktualisierung:
 - Alten Projektordner vollständig löschen oder umbenennen.
 - Dieses ZIP in einen neuen, leeren Ordner entpacken.
-- Keine Dateien aus 1.0.0 oder einem RC-Ordner hinein kopieren.
-- Nach der Installation den Adapter vollständig neu starten und die EOS-Übersicht mindestens 30 Minuten geöffnet beobachten.
-- Im normalen Betrieb dürfen bei niedriger Heap-Auslastung keine wiederkehrenden `[memory-guard]`-Warnungen und keine dadurch ausgelösten SSE-Trennungen erscheinen.
-- Eine echte Warnung ab 65 % Heap sowie selektive Entlastung ab 75 % bleiben beabsichtigte Schutzfunktionen.
+- Keine Dateien aus 1.0.1 oder einem RC-Ordner hinein kopieren.
+- Nach der Installation den Adapter vollständig neu starten.
+- Browser einmal mit Strg+F5 neu laden.
+- Die EOS-Übersicht mindestens 30 Minuten geöffnet beobachten.
+- Bei laufender Anlage darf die Anzeige nicht mehr zyklisch zwischen online und „Offline / veraltet“ wechseln.
+- Ein absichtlich gestoppter nexowatt-ui-Adapter muss nach Ablauf des Frischefensters zuverlässig offline erscheinen.

@@ -201,7 +201,7 @@ async function main() {
   const sources = [runtimeSource];
   if (fs.existsSync(canonicalPath)) sources.push(fs.readFileSync(canonicalPath, 'utf8'));
   for (const source of sources) {
-    assert(source.includes('lightweight publisher heartbeat'));
+    assert(source.includes('Independent liveness heartbeat') || source.includes('Independent compatibility heartbeat'));
     assert(source.includes('adapter online'));
     assert(source.includes('read-only overview forever'));
     assert(!source.includes('const emsOnline ='));

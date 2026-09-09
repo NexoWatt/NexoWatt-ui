@@ -42,13 +42,23 @@ if (newsVersions[0] !== version) fail(`Aktuelle Stable-Version ${version} ist ni
 if (newsVersions.length > 7) fail(`io-package.json enthält ${newsVersions.length} News-Einträge; maximal 7 sind zulässig.`);
 
 const files = Array.isArray(pkg.files) ? pkg.files : [];
-for (const required of [stableDocPath, 'scripts/verify-stable-release.cjs']) {
+for (const required of [
+  stableDocPath,
+  'scripts/verify-stable-release.cjs',
+  'scripts/verify-stable-1.0.2-health-heartbeat.cjs',
+]) {
   if (!files.includes(required)) fail(`Stable-Paketdatei fehlt in package.json files: ${required}`);
   if (!fs.existsSync(path.join(root, required))) fail(`Stable-Paketdatei fehlt im Repository: ${required}`);
   if (!releaseManifest.files.some((entry) => entry.path === required)) fail(`Stable-Paketdatei fehlt im Release-Manifest: ${required}`);
 }
 if (pkg.scripts?.['test:stable-release'] !== 'node scripts/verify-stable-release.cjs') {
   fail('test:stable-release ist nicht korrekt registriert.');
+}
+if (pkg.scripts?.['test:stable-1.0.2-health'] !== 'node scripts/verify-stable-1.0.2-health-heartbeat.cjs') {
+  fail('test:stable-1.0.2-health ist nicht korrekt registriert.');
+}
+if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-1.0.2-health')) {
+  fail('test:stable-1.0.2-health ist nicht Bestandteil von test:all.');
 }
 if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-release')) {
   fail('test:stable-release ist nicht Bestandteil von test:all.');
@@ -121,6 +131,38 @@ if (!sseSource.includes('[sse-guard]')) {
   fail('Versionsneutrale SSE-Guard-Logkennzeichnung fehlt.');
 }
 
+// Stable 1.0.2: adapter liveness, EMS scheduler, regulation tick and
+// diagnostic publisher must be independent. This prevents the former 20/30-s
+// oscillation without hiding a genuine adapter or HTTP-server outage.
+const overviewSource = read('src-ts/runtime-executables/ems/services/admin-overview-publisher.ts');
+const engineSource = read('src-ts/runtime-executables/ems/engine.ts');
+const healthRegression = read('scripts/verify-stable-1.0.2-health-heartbeat.cjs');
+if (!overviewSource.includes('DEFAULT_HEARTBEAT_INTERVAL_MS = 4_000')) {
+  fail('Unabhängiger Vier-Sekunden-Heartbeat des Diagnose-Publishers fehlt.');
+}
+for (const token of ['Independent compatibility heartbeat for EOS Admin', 'newestTimestamp', 'emsSchedulerHeartbeatAt', 'emsTickStalled', 'summaryRefreshThresholdMs']) {
+  if (!overviewSource.includes(token)) fail(`1.0.2-Übersichtsvertrag fehlt: ${token}`);
+}
+if (!engineSource.includes('this._schedulerHeartbeatIntervalMs = 4000')
+  || !engineSource.includes("_publishSchedulerHeartbeat('timer')")
+  || !engineSource.includes('ems.core.schedulerHeartbeatAt')) {
+  fail('Unabhängiger Vier-Sekunden-Heartbeat des EMS-Schedulers fehlt.');
+}
+const connectionHeartbeatStart = mainSource.indexOf('_nwStartConnectionHeartbeat()');
+const connectionHeartbeatEnd = mainSource.indexOf('_nwStopConnectionHeartbeat()');
+const connectionHeartbeatBlock = connectionHeartbeatStart >= 0 && connectionHeartbeatEnd > connectionHeartbeatStart
+  ? mainSource.slice(connectionHeartbeatStart, connectionHeartbeatEnd)
+  : '';
+if (!connectionHeartbeatBlock.includes('}, 4000);')) {
+  fail('info.connection wird nicht im Vier-Sekunden-Takt bestätigt.');
+}
+if (connectionHeartbeatBlock.includes('}, 30000);')) {
+  fail('Alte 30-Sekunden-info.connection-Taktung ist noch aktiv.');
+}
+for (const token of ['25_000', '35_000', "offlineValues['info.connection'] = false", 'heartbeatIntervalMs: 4_000']) {
+  if (!healthRegression.includes(token)) fail(`1.0.2-Feldregression unvollständig: ${token}`);
+}
+
 const rc66Verifier = read('scripts/verify-rc66-station-display-stable.js');
 if (!rc66Verifier.includes("isVersionAtLeast(pkg.version, '0.8.191')")) {
   fail('RC66-Prüfer besitzt keinen SemVer-festen Mindestversionsvergleich.');
@@ -130,4 +172,4 @@ if (/versionParts\[0\]\s*!==\s*0/.test(rc66Verifier)) {
 }
 
 console.log(`[stable-release] OK: ${pkg.name}@${version} ist konsistent als Official Stable versiegelt.`);
-console.log('[stable-release] OK: 1.0.1-Memory-/SSE-Patch, RC93-Regelungsbaseline und Release-Kennzeichnungen sind synchron.');
+console.log('[stable-release] OK: 1.0.2-Liveness-/Tick-Patch, 1.0.1-Memory-/SSE-Härtung und RC93-Regelungsbaseline sind synchron.');

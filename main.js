@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:8c40b483bb1e0112dfd2678210829177ff7b391fc86e3f9fb64b34c225c37d08
+ * Quell-Hash: sha256:5312b4a46ed165db44cff80876611e300c118455ac78dcd0f9ce4f62d7b2c9b6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -712,10 +712,13 @@ class NexoWattVis extends utils.Adapter {
     if (this._nwShuttingDown || this._nwConnectionHeartbeatTimer) return;
     this._nwConnectionHeartbeatTimer = this._nwSetInterval(() => {
       const online = this._nwIsHttpServerListening();
-      // Re-assert the state regularly. ioBroker/Admin updates or failed optional startup
-      // blocks must not leave info.connection false while the HTTP/SSE service is alive.
+      // Re-assert the state every four seconds. EOS Admin uses a roughly
+      // 20-second stale window, so the former 30-second cadence inevitably
+      // oscillated between online and stale on otherwise healthy systems.
+      // A stopped process or HTTP server still stops/negates this heartbeat and
+      // is therefore reported as genuinely offline.
       this._nwSetInfoConnection(online, online ? 'heartbeat' : 'heartbeat-offline').catch(() => {});
-    }, 30000);
+    }, 4000);
   }
   /** Code-Teil: _nwStopConnectionHeartbeat – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwStopConnectionHeartbeat() {

@@ -19,7 +19,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: bbee87c9d4112c9fb256f951b22f7ec9598dffa07b6d304fd43ebab483952b2f
+ * Original-Hash: cde497d708626750fd015f16c724f8977a4a5604c8f78e305153afc645914f4b
  * RC75-Prüfhinweis: Open-Meteo übernimmt den zentralen EOS-Admin-/Systemstandort,
  * veröffentlicht nur nutzbare Prognosekurven als aktiv und stellt PV-Flächen unabhängig
  * von verzögerter Settings-Hydrierung über eine einfache Endkundentabelle bereit.
@@ -1131,10 +1131,13 @@ class NexoWattVis extends utils.Adapter {
     if (this._nwShuttingDown || this._nwConnectionHeartbeatTimer) return;
     this._nwConnectionHeartbeatTimer = this._nwSetInterval(() => {
       const online = this._nwIsHttpServerListening();
-      // Re-assert the state regularly. ioBroker/Admin updates or failed optional startup
-      // blocks must not leave info.connection false while the HTTP/SSE service is alive.
+      // Re-assert the state every four seconds. EOS Admin uses a roughly
+      // 20-second stale window, so the former 30-second cadence inevitably
+      // oscillated between online and stale on otherwise healthy systems.
+      // A stopped process or HTTP server still stops/negates this heartbeat and
+      // is therefore reported as genuinely offline.
       this._nwSetInfoConnection(online, online ? 'heartbeat' : 'heartbeat-offline').catch(() => {});
-    }, 30000);
+    }, 4000);
   }
   /** Code-Teil: _nwStopConnectionHeartbeat – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwStopConnectionHeartbeat() {

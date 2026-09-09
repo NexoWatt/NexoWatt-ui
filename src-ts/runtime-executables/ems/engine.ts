@@ -99,6 +99,13 @@ class EmsEngine {
     this.mm = null;
     this._timer = null;
     this._intervalMs = 1000;
+    // Independent scheduler liveness. It is deliberately separate from the
+    // complete EMS tick, because a legitimate long-running module must not make
+    // EOS Admin classify the whole adapter as offline.
+    this._schedulerHeartbeatTimer = null;
+    this._schedulerHeartbeatRunning = false;
+    this._schedulerHeartbeatIntervalMs = 4000;
+    this._schedulerHeartbeatSequence = 0;
 
     // Reaktionspfad für Bedienänderungen: Ein Moduswechsel im Kundenfrontend
     // soll nicht bis zum nächsten regulären Scheduler-Tick warten. Der kurze
@@ -312,6 +319,45 @@ class EmsEngine {
         name: 'Tick running',
         type: 'boolean',
         role: 'indicator',
+        read: true,
+        write: false,
+        def: false,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.schedulerHeartbeatAt', {
+      type: 'state',
+      common: {
+        name: 'Independent EMS scheduler heartbeat (ts)',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.schedulerHeartbeatSequence', {
+      type: 'state',
+      common: {
+        name: 'Independent EMS scheduler heartbeat sequence',
+        type: 'number',
+        role: 'value',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.schedulerAlive', {
+      type: 'state',
+      common: {
+        name: 'EMS scheduler process alive',
+        type: 'boolean',
+        role: 'indicator.connected',
         read: true,
         write: false,
         def: false,
@@ -1031,6 +1077,59 @@ class EmsEngine {
   }
 
   /**
+   * Publishes scheduler liveness independently from a full EMS control cycle.
+   * The local process object is updated even if a previous ioBroker state write
+   * is delayed, so the co-located Admin overview can still distinguish a live
+   * scheduler from a stalled regulation tick.
+   */
+  async _publishSchedulerHeartbeat(reason = 'timer') {
+    if (!this.adapter || this.adapter._nwShuttingDown) return;
+    const now = Date.now();
+    const configuredStaleMs = clampNumber(
+      this.adapter?.config?.diagnostics?.emsTickStaleAfterMs,
+      15000,
+      300000,
+      this._tickStaleAfterMs,
+    );
+    const activeTickAgeMs = this._tickRunning && this._lastTickStartMs > 0
+      ? Math.max(0, now - this._lastTickStartMs)
+      : 0;
+    const tickStalled = this._tickRunning && activeTickAgeMs > configuredStaleMs;
+    this._schedulerHeartbeatSequence += 1;
+    this.adapter._nwEmsSchedulerHealth = {
+      heartbeatAt: now,
+      sequence: this._schedulerHeartbeatSequence,
+      reason: String(reason || 'timer'),
+      tickRunning: this._tickRunning === true,
+      activeTickAgeMs,
+      tickStalled,
+      tickStaleAfterMs: configuredStaleMs,
+      lastTickStartMs: this._lastTickStartMs,
+      lastTickEndMs: this._lastTickEndMs,
+    };
+
+    if (this._schedulerHeartbeatRunning) return;
+    this._schedulerHeartbeatRunning = true;
+    try {
+      await Promise.allSettled([
+        this.adapter.setStateAsync('ems.core.schedulerHeartbeatAt', { val: now, ack: true }),
+        this.adapter.setStateAsync('ems.core.schedulerHeartbeatSequence', { val: Math.round(this._schedulerHeartbeatSequence), ack: true }),
+        this.adapter.setStateAsync('ems.core.schedulerAlive', { val: true, ack: true }),
+      ]);
+    } finally {
+      this._schedulerHeartbeatRunning = false;
+    }
+  }
+
+  _startSchedulerHeartbeat() {
+    if (!this.adapter || this.adapter._nwShuttingDown || this._schedulerHeartbeatTimer) return;
+    this._publishSchedulerHeartbeat('startup').catch(() => {});
+    this._schedulerHeartbeatTimer = this._setInterval(() => {
+      this._publishSchedulerHeartbeat('timer').catch(() => {});
+    }, this._schedulerHeartbeatIntervalMs);
+  }
+
+  /**
    * Code-Teil: Methode `init`
    * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
    * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -1046,6 +1145,7 @@ class EmsEngine {
     const adapter = this.adapter;
 
     await this._ensureInternalStates();
+    this._startSchedulerHeartbeat();
 
     // Scheduler interval from config (Admin UI / jsonConfig)
     const cfgInterval = adapter.config && adapter.config.schedulerIntervalMs;
@@ -1262,6 +1362,7 @@ class EmsEngine {
     this._activeTickId = tickId;
     const tickStart = Date.now();
     this._lastTickStartMs = tickStart;
+    this._publishSchedulerHeartbeat('tick-start').catch(() => {});
     try {
       try {
         await this.adapter.setStateAsync('ems.core.tickRunning', { val: true, ack: true });
@@ -1385,6 +1486,7 @@ class EmsEngine {
       }
       const dur = Date.now() - tickStart;
       this._lastTickEndMs = Date.now();
+      this._publishSchedulerHeartbeat('tick-end').catch(() => {});
       try {
         if (ownsTickLock) await this.adapter.setStateAsync('ems.core.tickRunning', { val: false, ack: true });
         await this.adapter.setStateAsync('ems.core.lastTickEnd', { val: this._lastTickEndMs, ack: true });
@@ -1416,6 +1518,19 @@ class EmsEngine {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   stop() {
+    if (this._schedulerHeartbeatTimer) {
+      this._clearInterval(this._schedulerHeartbeatTimer);
+      this._schedulerHeartbeatTimer = null;
+    }
+    this._schedulerHeartbeatRunning = false;
+    try {
+      this.adapter._nwEmsSchedulerHealth = {
+        ...(this.adapter._nwEmsSchedulerHealth || {}),
+        heartbeatAt: Date.now(),
+        alive: false,
+        reason: 'stopped',
+      };
+    } catch (_error) {}
     if (this._timer) {
       this._clearInterval(this._timer);
       this._timer = null;
