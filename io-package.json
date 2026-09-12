@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "news": {
+      "1.0.5": {
+        "de": "Speicher schützen bleibt bei veralteter oder fehlender Wallbox-Telemetrie wirksam. Entladung pausiert bei unbekannter Fahrzeuglast; echter PV-Überschuss darf weiterhin laden. Frische Messwerte stellen die normale Regelung automatisch wieder her. Auto-PV-Priorität, Phasenlogik und Mitnutzung bleiben erhalten.",
+        "en": "Keep EV storage protection when wallbox telemetry is missing or stale. Pause discharge for unknown protected EV load while allowing real net-surplus charging. Restore normal control on fresh telemetry; retain Auto PV priority, phases and storage assistance.",
+        "nl": "Accubescherming blijft actief bij ontbrekende of verouderde laadpaalgegevens. Ontladen pauzeert bij onbekend voertuigverbruik; werkelijk PV-overschot kan blijven laden. Normale regeling hervat met geldige gegevens."
+      },
       "1.0.4": {
         "en": "Auto PV priority respects approved charging demand, actual phases and technical start power. Unusable PV remains available to storage. Per-point phase switch thresholds, manufacturer values and settling are preserved.",
         "de": "PV-Priorisierung berücksichtigt Auto-Ladebedarf, tatsächliche Phasen und Startleistung. Nicht nutzbarer PV-Anteil bleibt beim Speicher. Individuelle Phasenumschaltwerte, Wartezeiten und Einschwingzeit werden durchgängig berücksichtigt.",
@@ -32,11 +37,6 @@
         "de": "RC92 behebt ausschließlich die mobile Bedienung der Historienseite. Vertikales Scrollen bleibt auf Hauptchart, KPI-Karten und Preis-Chart nativ verfügbar; ein kurzer Tap zeigt auf Smartphones nun dieselben Leistungs- beziehungsweise Energiewerte wie am Desktop. Woche, Monat und Jahr zeigen pro ausgewähltem Balken kWh-Werte, die Tagesansicht kW-Werte. Tooltips bleiben nach dem Scrollen vollständig im sichtbaren Viewport, horizontales Tages-Zoomen bleibt erhalten und Canvas-Neuzeichnungen werden gebündelt. EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardware-Regelung bleiben unverändert.",
         "en": "RC92 fixes only the mobile interaction of the History page. Vertical scrolling remains native on the main chart, KPI cards and price chart; a short tap on smartphones now shows the same power or energy values as on desktop. Week, month and year show kWh values for the selected bar, while the day view shows kW values. Tooltips remain fully visible after scrolling, horizontal day zoom is preserved and canvas redraws are coalesced. EMS, grid, charging, storage, tariff, Section 14a and hardware control remain unchanged.",
         "nl": "RC92 corrigeert uitsluitend de mobiele bediening van de historiepagina. Verticaal scrollen blijft native op de hoofdgrafiek, KPI-kaarten en prijsgrafiek; een korte tik op smartphones toont nu dezelfde vermogens- of energiewaarden als op desktop. Week, maand en jaar tonen kWh-waarden voor de gekozen balk, de dagweergave toont kW-waarden. Tooltips blijven na scrollen volledig zichtbaar, horizontale dagzoom blijft behouden en canvas-hertekeningen worden gebundeld. EMS-, net-, laad-, opslag-, tarief-, §14a- en hardwarebesturing blijven ongewijzigd."
-      },
-      "0.8.216": {
-        "de": "RC91 gleicht die App-Kataloge von Browser, Adapterstart, Installer, Save und Backup vollständig ab. Energy Ledger und Mesh/Microgrid behalten ihre Installiert-/Aktiv-Zustände jetzt auch beim Speichern anderer AppCenter-Reiter; das verborgene DC-Stationsdisplay bleibt erhalten, ohne doppelte App-Karte. Zusätzlich bleibt die textstabil erzeugte main.js strikt JavaScript-kompatibel. Die produktive NVP-, Lade-, Speicher-, Tarif-, §14a- und Safety-Regelung wurde nicht verändert.",
-        "en": "RC91 fully aligns the app catalogues used by the browser, adapter startup, installer, save and backup paths. Energy Ledger and Mesh/Microgrid now preserve their installed/enabled state when unrelated App Center tabs are saved; the hidden DC station display is retained without creating a duplicate app card. The text-stable generated main.js is also kept strictly JavaScript-compatible. Productive grid, charging, storage, tariff, Section 14a and safety control logic is unchanged.",
-        "nl": "RC91 brengt de appcatalogi van browser, adapterstart, installer, opslaan en back-up volledig met elkaar in overeenstemming. Energy Ledger en Mesh/Microgrid behouden nu hun geïnstalleerde/actieve status wanneer andere AppCenter-tabbladen worden opgeslagen; het verborgen DC-stationsdisplay blijft behouden zonder dubbele appkaart. Ook blijft de tekststabiel gegenereerde main.js strikt JavaScript-compatibel. De productieve net-, laad-, opslag-, tarief-, §14a- en veiligheidsregeling is niet gewijzigd."
       }
     },
     "title": "NexoWatt EOS",

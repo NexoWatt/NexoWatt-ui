@@ -1,3 +1,14 @@
+## 1.0.5 - 2026-09-12
+**Official Stable Patch – preserve EV storage protection across telemetry gaps**
+
+- Separate customer protection intent from actual vehicle watts. Unknown or stale telemetry no longer silently releases storage discharge into a protected vehicle.
+- When the protected EV load is unknown, pause storage discharge conservatively while permitting charging from physical total surplus. Resume the existing house-only balance automatically after fresh telemetry.
+- Publish an atomic, bounded policy snapshot; retain protection intent (not old watts) through incomplete ticks, expired snapshots and adapter restarts. Fresh deliberate changes to assist or pure PV remain authoritative.
+- Keep fresh standby/idle load, Auto/Boost/Min+PV choices, pure PV mode, PV priority, phase minimums/switching, tariff decisions and hardware writer implementations unchanged.
+- In the E3/DC RSCP telemetry-failure stop, select the existing IDLE mode for that command only instead of releasing to native NORMAL; keep the configured default unchanged.
+- Add unit and real charging/storage tick regressions, including the 2-kW house plus 4.5-kW vehicle failure case and recovery. No new production dependencies or polling timer.
+- Retain the 1.0.1 memory/SSE, 1.0.2 heartbeat, 1.0.3 Home AppCenter and 1.0.4 Auto-PV/phase corrections. Hardware commissioning is not replaced by software tests.
+
 ## 1.0.4 - 2026-09-11
 **Official Stable – Auto PV priority and phase-aware start reservations**
 

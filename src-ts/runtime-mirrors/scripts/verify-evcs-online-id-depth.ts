@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4e715c8db4f0b52ce73e8f1302425efae01bc61caced16cacaed8ef4c4741d0a
+ * Original-Hash: b6e29dc77a011983e1f8cae203df604619921c679255cb599a4f386043d34f33
  */
 
 /**
@@ -92,7 +92,10 @@ for (const f of [engine, engineTs]) {
 }
 for (const f of [cm, cmTs]) {
   must(f, 'function normalizeEvcsOnlineFlag(value, fallback = null)', `${f} has online normalizer`);
-  must(f, 'const onlineId = String(wb.onlineId || \'\').trim();', `${f} reads onlineId`);
+  must(f, 'const configuredOnlineId = String(wb.onlineId || \'\').trim();', `${f} reads explicit configured onlineId`);
+  must(f, "const onlineId = telemetryProfile === 'ocpp-1.6-event-driven'", `${f} distinguishes OCPP transport from generic reachability`);
+  must(f, '? resolveOcppOnlineObjectId(configuredOnlineId, ocppContext)', `${f} resolves the OCPP transport source`);
+  must(f, ': configuredOnlineId;', `${f} preserves explicit onlineId for non-OCPP points`);
   must(f, 'key: `cm.wb.${safe}.onlineRaw`', `${f} registers onlineRaw datapoint`);
   must(f, 'const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;', `${f} reads onlineRaw`);
   must(f, "const explicitOnlineFlag = onlineId ? normalizeEvcsOnlineFlag(onlineRaw, null) : null;", `${f} normalizes explicit onlineId independently`);

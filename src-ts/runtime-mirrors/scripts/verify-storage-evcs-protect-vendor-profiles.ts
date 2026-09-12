@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3fe04df9d1cbff96d7bc0e5a16ea586b536d95974af0f98c1da6a44c9faec6e4
+ * Original-Hash: 4fc2961565aea02dfefddd98439bcbaf7e63ed5ea15123a8c3b28ab04a28d8cc
  */
 
 /**
@@ -133,7 +133,9 @@ assertContains(storage, "sungrowWriteMode = 'write-stop-evcs-protection'", 'Sung
 assertContains(storage, '|| evcsProtectedChargeStop', 'Zero-Write-Firewall erkennt Lade-Stop');
 assertContains(storage, '|| evcsProtectedDischargeStop', 'Zero-Write-Firewall erkennt Entlade-Stop');
 assertContains(storage, 'speicher.regelung.evcsSpeicherSchutzJson', 'kompakte JSON-Diagnose ohne neue Statuskarten');
-assertContains(storage, 'const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg)', 'E3/DC bleibt am gemeinsamen finalen Zielpfad');
+assertContains(storage, 'const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, e3dcCommandCfg)', 'E3/DC bleibt am gemeinsamen finalen Zielpfad');
+assertContains(storage, 'const e3dcCommandCfg = w === 0 && options.evcsProtectedLoadUnknown === true', 'IDLE-Override nur beim neuen Telemetrie-Schutzstopp');
+assertContains(storage, "? { ...cfg, e3dcZeroMode: 'idle' } : cfg;", 'normale E3/DC-Konfiguration bleibt ausserhalb des Schutzstopps unveraendert');
 
 // Exakter Kundenfall aus dem Screenshot:
 // NVP +3,2 kW, Speicher laedt -2,3 kW, geschuetzte EVCS +3,58 kW.

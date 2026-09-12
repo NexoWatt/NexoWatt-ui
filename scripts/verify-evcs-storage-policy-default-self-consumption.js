@@ -461,7 +461,9 @@ async function runStorageTick({
     stateProtectedLoadW: 4100,
     stateProtectedAgeMs: 6000,
   });
-  assert(expiredStateFallbackIgnored.targetW >= 4000, `EVCS-Schutz-State aelter als 5 s muss ignoriert werden, got ${expiredStateFallbackIgnored.targetW} W`);
+  // 1.0.5: old watts expire, but missing telemetry cannot cancel the protection intent.
+  assert.strictEqual(expiredStateFallbackIgnored.targetW, 0, 'Abgelaufene geschuetzte Last muss Entladung bis zur frischen Policy sperren');
+  assert.strictEqual(JSON.parse(expiredStateFallbackIgnored.protectionJson).protectedLoadUnknown, true);
   assert.strictEqual(expiredStateFallbackIgnored.protectedLoadW, 0, 'abgelaufener EVCS-Schutz-State darf keine Last mehr liefern');
 
   const stateFallbackProtect = await runStorageTick({ stateProtectedLoadW: 4100 });

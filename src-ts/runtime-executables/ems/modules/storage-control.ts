@@ -457,11 +457,51 @@ function applyStorageLicensePowerLimit(targetW, profile = {}) {
  * Dadurch kann der Speicher weiterhin den Hausverbrauch ausgleichen, versorgt aber
  * weder die geschuetzte E-Mobilitaet noch laedt er parallel aus dem Netz.
  */
+/**
+ * A policy's watts expire; a customer's protection request does not expire with
+ * them. Fresh, completed snapshots (including a deliberate mode change) replace
+ * the old intent. No old EV reading is ever held as a current physical load.
+ */
+function resolveEvcsStorageProtectionSnapshot(policy, options = {}) {
+    const count = value => Math.max(0, Number.isFinite(Number(value)) ? Math.floor(Number(value)) : 0);
+    const watts = value => Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0);
+    const record = policy && typeof policy === 'object' && !Array.isArray(policy) ? policy : null;
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    const maxAgeMs = Math.max(1000, Number(options.maxAgeMs) || 5000);
+    const ts = Number(record && record.ts);
+    const validNonNegative = value => value !== null && value !== undefined
+        && typeof value !== 'boolean' && String(value).trim() !== ''
+        && Number.isFinite(Number(value)) && Number(value) >= 0;
+    const payloadValid = !!record && validNonNegative(record.protectedLoadW)
+        && validNonNegative(record.protectedWallboxes)
+        && (record.protectedUnknownWallboxes === undefined || validNonNegative(record.protectedUnknownWallboxes));
+    const fresh = payloadValid && Number.isFinite(ts) && ts > 0 && ts <= now
+        && now - ts <= maxAgeMs && record.complete !== false;
+    const protectedWallboxes = count(record && record.protectedWallboxes);
+    const protectedLoadW = watts(record && record.protectedLoadW);
+    const unknown = count(record && record.protectedUnknownWallboxes);
+    const requested = Math.max(count(record && record.protectionRequestedWallboxes),
+        protectedWallboxes, unknown, protectedLoadW > 0 ? 1 : 0,
+        (!record || !payloadValid || (!fresh && !validNonNegative(record.protectionRequestedWallboxes)))
+            ? count(options.configuredCandidates) : 0);
+    return {
+        protectedLoadW: fresh ? protectedLoadW : 0,
+        protectedWallboxes: fresh ? protectedWallboxes : 0,
+        protectionRequestedWallboxes: requested,
+        protectedUnknownWallboxes: fresh ? unknown : requested,
+        protectedLoadUnknown: (fresh ? unknown : requested) > 0,
+        assistRequestedLoadW: fresh ? watts(record.assistRequestedLoadW) : 0,
+        fresh,
+        source: String(record && record.source || 'state-fallback') + (fresh || !requested ? '' : '-unconfirmed'),
+    };
+}
+
 function resolveEvcsProtectedStorageTarget(input = {}) {
     const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
     const requestedW = finite(input.requestedTargetW) ? Number(input.requestedTargetW) : 0;
     const lastTargetW = finite(input.lastTargetW) ? Number(input.lastTargetW) : 0;
     const protectedLoadW = Math.max(0, finite(input.protectedEvcsLoadW) ? Number(input.protectedEvcsLoadW) : 0);
+    const protectedLoadUnknown = input.protectedLoadUnknown === true;
     const nvpW = finite(input.nvpW) ? Number(input.nvpW) : null;
     const targetNvpW = finite(input.targetNvpW) ? Number(input.targetNvpW) : 0;
     const storageActualKnown = finite(input.storageActualW);
@@ -474,13 +514,14 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
     const actualChargeActive = storageActualKnown && storageActualW < -activeThresholdW;
     const actualDischargeActive = storageActualKnown && storageActualW > activeThresholdW;
 
-    if (protectedLoadW <= 0) {
+    if (protectedLoadW <= 0 && !protectedLoadUnknown) {
         return {
             active: false,
             requestedW,
             targetW: requestedW,
             lastTargetW,
             protectedLoadW: 0,
+            protectedLoadUnknown,
             nvpW,
             targetNvpW,
             storageActualW: storageActualKnown ? storageActualW : null,
@@ -502,13 +543,14 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
     }
 
     if (nvpW === null) {
-        const explicitStop = lastTargetW !== 0 || actualChargeActive || actualDischargeActive;
+        const explicitStop = protectedLoadUnknown || lastTargetW !== 0 || actualChargeActive || actualDischargeActive;
         return {
             active: true,
             requestedW,
             targetW: null,
             lastTargetW,
             protectedLoadW,
+            protectedLoadUnknown,
             nvpW: null,
             targetNvpW,
             storageActualW: storageActualKnown ? storageActualW : null,
@@ -545,9 +587,11 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
         ? storageActualW
         : (storageDischargeBasisKnown ? storageDischargeBasisW : 0);
     const totalDesiredW = chargeBasisStorageW + nvpW - targetNvpW;
-    const houseDesiredW = dischargeBasisStorageW + nvpW - targetNvpW - protectedLoadW;
+    const houseDesiredW = protectedLoadUnknown ? null : dischargeBasisStorageW + nvpW - targetNvpW - protectedLoadW;
     const chargeAllowanceW = Math.max(0, -totalDesiredW);
-    const dischargeAllowanceW = Math.max(0, houseDesiredW);
+    // With unknown EV load, NVP cannot distinguish house from protected vehicle.
+    // Pause discharge; real net surplus may still charge the storage.
+    const dischargeAllowanceW = protectedLoadUnknown ? 0 : Math.max(0, houseDesiredW);
     const actionThresholdW = activeThresholdW;
 
     let targetW = requestedW;
@@ -616,8 +660,18 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
         else action = 'idle-no-active-command';
     }
 
+    if (protectedLoadUnknown && targetW === 0) {
+        // A zero stop must pass the existing no-write/hold firewall, including
+        // vendor self-control with no remembered EOS command after a restart.
+        dischargeStop = true;
+        action = 'stop-discharge-evcs-load-unknown';
+    }
     const explicitStop = chargeStop || dischargeStop;
-    const reason = chargeStop
+    const reason = protectedLoadUnknown
+        ? (targetW < 0
+            ? 'EVCS-Speicherschutz: Fahrzeuglast unbekannt – nur echten Gesamtueberschuss laden'
+            : 'EVCS-Speicherschutz: Fahrzeuglast unbekannt – Entladung voruebergehend gesperrt')
+        : chargeStop
         ? 'EVCS-Speicherschutz: Laden stoppen – kein tatsaechlicher Gesamtueberschuss am NVP'
         : (dischargeStop
             ? 'EVCS-Speicherschutz: Entladen stoppen – nur geschuetzte E-Mobilitaet verursacht den Bedarf'
@@ -633,6 +687,7 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
         targetW,
         lastTargetW,
         protectedLoadW,
+        protectedLoadUnknown,
         nvpW,
         targetNvpW,
         storageActualW: storageActualKnown ? storageActualW : null,
@@ -2535,19 +2590,39 @@ class SpeicherRegelungModule extends BaseModule {
         const protectedEvcsMaxAgeMs = Math.max(1000, Math.min(15000, num(cfg.evcsStoragePolicyMaxAgeMs, 5000)));
         const sharedCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
         const runtimeEvcsStoragePolicy = (sharedCaps && sharedCaps.evcsStoragePolicy && typeof sharedCaps.evcsStoragePolicy === 'object') ? sharedCaps.evcsStoragePolicy : null;
-        const runtimePolicyTs = Number(runtimeEvcsStoragePolicy && runtimeEvcsStoragePolicy.ts);
-        const runtimePolicyFresh = !!(runtimeEvcsStoragePolicy && runtimePolicyTs > 0 && (now - runtimePolicyTs) <= protectedEvcsMaxAgeMs);
-        // Same-cycle Snapshot verhindert, dass ein alter asynchroner Schutz-State noch einen Tick blockiert.
-        const policyValue = async (key, stateId) => runtimePolicyFresh
-            ? runtimeEvcsStoragePolicy[key]
-            : this._readOwnNumberFresh(stateId, protectedEvcsMaxAgeMs);
-        const protectedRaw = await policyValue('protectedLoadW', 'chargingManagement.control.storageProtectedLoadW');
-        const protectedBoxesRaw = await policyValue('protectedWallboxes', 'chargingManagement.control.storageProtectedWallboxes');
-        const assistRaw = await policyValue('assistRequestedLoadW', 'chargingManagement.control.storageAssistRequestedLoadW');
-        const evcsStorageProtectedLoadW = Math.max(0, Number(protectedRaw) || 0);
-        const evcsStorageProtectedWallboxes = Math.max(0, Math.round(Number(protectedBoxesRaw) || 0));
-        const evcsStorageAssistRequestedLoadW = Math.max(0, Number(assistRaw) || 0);
-        const evcsStoragePolicySource = runtimePolicyFresh ? String(runtimeEvcsStoragePolicy.source || 'ems-runtime') : 'state-fallback';
+        let protectionSnapshot = runtimeEvcsStoragePolicy;
+        if (!protectionSnapshot) {
+            try {
+                const json = await this._readOwnString('chargingManagement.control.storagePolicyJson');
+                const parsed = json ? JSON.parse(json) : null;
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) protectionSnapshot = parsed;
+            } catch { /* malformed persisted diagnostics are not fresh policy */ }
+            if (!protectionSnapshot) {
+                // Compatibility for 1.0.4 installations: timestamp belongs to the
+                // load sample, not to a later read/heartbeat of this state.
+                const oldLoad = await this.adapter.getStateAsync('chargingManagement.control.storageProtectedLoadW').catch(() => null);
+                if (oldLoad) protectionSnapshot = {
+                    protectedLoadW: oldLoad.val,
+                    protectedWallboxes: await this._readOwnNumber('chargingManagement.control.storageProtectedWallboxes'),
+                    assistRequestedLoadW: await this._readOwnNumberFresh('chargingManagement.control.storageAssistRequestedLoadW', protectedEvcsMaxAgeMs),
+                    ts: oldLoad.ts, source: 'state-fallback',
+                };
+            }
+        }
+        const configuredWallboxes = this.adapter.config.chargingManagement && this.adapter.config.chargingManagement.wallboxes;
+        const policySnapshot = resolveEvcsStorageProtectionSnapshot(protectionSnapshot, {
+            // State reads may await I/O while a newer policy completes. Compare
+            // against read-time, not an older storage-tick start timestamp.
+            now: Date.now(), maxAgeMs: protectedEvcsMaxAgeMs,
+            configuredCandidates: Array.isArray(configuredWallboxes)
+                ? configuredWallboxes.filter(w => w && w.storageAssistCustomerAllowed === true).length : 0,
+        });
+        const evcsStorageProtectedLoadW = policySnapshot.protectedLoadW;
+        const evcsStorageProtectedWallboxes = policySnapshot.protectedWallboxes;
+        const evcsStorageProtectedLoadUnknown = policySnapshot.protectedLoadUnknown;
+        const evcsStorageProtectedUnknownWallboxes = policySnapshot.protectedUnknownWallboxes;
+        const evcsStorageAssistRequestedLoadW = policySnapshot.assistRequestedLoadW;
+        const evcsStoragePolicySource = policySnapshot.source;
         // Seit Baustein 7 wird die EVCS-Leistung nicht mehr als symmetrischer
         // NVP-Zieloffset verwendet. Ein solcher Offset erlaubte bei Teildeckung der
         // Wallbox faelschlich Speicherladung aus dem Netz. Die Schutzwirkung wird
@@ -2560,6 +2635,8 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.evcsSpeicherMitnutzungLastW', Math.round(evcsStorageAssistRequestedLoadW));
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', Math.round(evcsStorageProtectedNvpTargetShiftW));
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzQuelle', evcsStoragePolicySource);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzLastUnbekannt', evcsStorageProtectedLoadUnknown);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzUnbekannteWallboxen', evcsStorageProtectedUnknownWallboxes);
 
         const stripProtectedEvcsLoadW = (w) => Math.max(0, Math.max(0, Number(w) || 0) - evcsStorageProtectedLoadW);
 
@@ -5050,7 +5127,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // - Laden nur aus dem tatsaechlichen Gesamtueberschuss nach Haus UND EVCS.
         // Die Schranke liegt nach allen Herstellerprofilen, damit Sungrow, FENECON,
         // E3/DC, Signed-/Split-DP und Farm exakt dieselbe physikalische Regel erhalten.
-        if (evcsStorageProtectedLoadW > 0) {
+        if (evcsStorageProtectedLoadW > 0 || evcsStorageProtectedLoadUnknown) {
             const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW))
                 ? Number(this._lastTargetW)
                 : 0;
@@ -5144,6 +5221,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 requestedTargetW: requestedBeforeProtectionW,
                 lastTargetW: lastActiveTargetW,
                 protectedEvcsLoadW: evcsStorageProtectedLoadW,
+                protectedLoadUnknown: evcsStorageProtectedLoadUnknown,
                 nvpW: protectionNvpW,
                 targetNvpW: protectionTargetNvpW,
                 storageActualW: protectionStorageActualW,
@@ -5158,6 +5236,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             evcsProtectedChargeStop = evcsProtectionDiag.chargeStop === true;
             evcsProtectedDischargeStop = evcsProtectionDiag.dischargeStop === true;
             evcsProtectionChargeFromSurplus = evcsProtectionDiag.chargeFromSurplus === true;
+            if (evcsStorageProtectedLoadUnknown) {
+                dischargeDemandHardCapW = 0;
+                dischargeDemandHardCapReason = 'EVCS-Speicherschutz: Fahrzeuglast unbekannt';
+            }
 
             if (targetW < 0) {
                 // Unter Speicherschutz ist jede verbleibende Beladung physikalisch
@@ -5208,11 +5290,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             }
         }
 
-        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzAktiv', evcsStorageProtectedLoadW > 0);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzAktiv', evcsStorageProtectedLoadW > 0 || evcsStorageProtectedLoadUnknown);
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzAktion', evcsProtectionDiag ? String(evcsProtectionDiag.action || '') : 'inactive');
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzJson', JSON.stringify(evcsProtectionDiag || {
             active: false,
             protectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
+            protectedLoadUnknown: evcsStorageProtectedLoadUnknown,
             targetW: Number(targetW) || 0,
         }));
 
@@ -5543,7 +5626,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     : (evcsProtectedChargeStop
                     ? 'Laden stoppen: EVCS-Speicherschutz – kein tatsaechlicher Gesamtueberschuss am NVP'
                     : (evcsProtectedDischargeStop
-                        ? 'Entladen stoppen: EVCS-Speicherschutz – nur geschuetzte E-Mobilitaet verursacht den Bedarf'
+                        ? (evcsStorageProtectedLoadUnknown
+                            ? 'Entladen stoppen: EVCS-Speicherschutz – Fahrzeuglast unbekannt'
+                            : 'Entladen stoppen: EVCS-Speicherschutz – nur geschuetzte E-Mobilitaet verursacht den Bedarf')
                         : (dischargeSocStop
                         ? `Entladen stoppen: SoC <= ${Math.max(hardDischargeMinSoc, selfMinSoc)}%`
                         : (chargeSocStop
@@ -6166,6 +6251,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
                     storageProtectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
                     storageProtectedWallboxes: Math.round(evcsStorageProtectedWallboxes || 0),
+                    storageProtectedLoadUnknown: evcsStorageProtectedLoadUnknown,
+                    storageProtectedUnknownWallboxes: evcsStorageProtectedUnknownWallboxes,
                     storageAssistRequestedLoadW: Math.round(evcsStorageAssistRequestedLoadW || 0),
                     nvpTargetOffsetW: 0,
                     protection: evcsProtectionDiag,
@@ -6425,7 +6512,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 : (storageZeroWriteStatus || (sungrowNoWrite ? 'sungrow-hybrid:no-write' : 'storage:no-write'));
             await this._setHoldNoWriteTargetDiag(targetW, reason, source, noWriteStatus);
         } else {
-            await this._applyTargetW(targetW, reason, source, { evcsAssistReqW });
+            await this._applyTargetW(targetW, reason, source, { evcsAssistReqW, evcsProtectedLoadUnknown: evcsStorageProtectedLoadUnknown });
             if (feneconHybridActive) this._feneconHybridWasExternal = true;
         }
 
@@ -9739,7 +9826,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     };
                 }
             } else if (controlMode === 'targetPower' && commandFamily === 'e3dc-rscp') {
-                const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg);
+                // A telemetry-protection stop is a battery pause, not release to
+                // native self-consumption. Use the existing IDLE mode for this
+                // one command only; the configured default/normal paths stay intact.
+                const e3dcCommandCfg = w === 0 && options.evcsProtectedLoadUnknown === true
+                    ? { ...cfg, e3dcZeroMode: 'idle' } : cfg;
+                const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, e3dcCommandCfg);
                 primarySucceeded = !!(e3dcResult && e3dcResult.ok === true);
                 primaryWroteAny = true;
                 writeResult = primarySucceeded;
@@ -10403,6 +10495,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.evcsSpeicherMitnutzungLastW', 'EVCS-Leistung mit Speicher-Mitnutzung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'Legacy NVP-Zieloffset durch EVCS-Speicher-Schutz (W, ab 0.8.133 immer 0)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzAktiv', 'Asymmetrischer EVCS-Speicherschutz aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsSpeicherSchutzLastUnbekannt', 'Speicherschutz: Fahrzeuglast unbekannt, Entladung gesperrt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsSpeicherSchutzUnbekannteWallboxen', 'Geschützte Ladepunkte mit unbekannter Fahrzeuglast', 'number', 'value', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzAktion', 'Asymmetrischer EVCS-Speicherschutz Aktion', 'string', 'text', '');
         await mk('speicher.regelung.evcsSpeicherSchutzJson', 'Asymmetrischer EVCS-Speicherschutz Diagnose', 'string', 'json', '');
         await mk('speicher.regelung.evcsSpeicherSchutzQuelle', 'Quelle der EVCS-Speicher-Policy', 'string', 'text', '');
@@ -10605,6 +10699,7 @@ function clamp(n, min, max) {
 module.exports = {
     SpeicherRegelungModule,
     resolveEvcsProtectedStorageTarget,
+    resolveEvcsStorageProtectionSnapshot,
     resolveStorageAntiExportTarget,
     resolveStorageLicenseEdition,
     deriveStorageRatedPowerW,

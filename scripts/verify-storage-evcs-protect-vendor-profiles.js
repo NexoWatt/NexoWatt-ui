@@ -70,7 +70,9 @@ assertContains(storage, "sungrowWriteMode = 'write-stop-evcs-protection'", 'Sung
 assertContains(storage, '|| evcsProtectedChargeStop', 'Zero-Write-Firewall erkennt Lade-Stop');
 assertContains(storage, '|| evcsProtectedDischargeStop', 'Zero-Write-Firewall erkennt Entlade-Stop');
 assertContains(storage, 'speicher.regelung.evcsSpeicherSchutzJson', 'kompakte JSON-Diagnose ohne neue Statuskarten');
-assertContains(storage, 'const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg)', 'E3/DC bleibt am gemeinsamen finalen Zielpfad');
+assertContains(storage, 'const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, e3dcCommandCfg)', 'E3/DC bleibt am gemeinsamen finalen Zielpfad');
+assertContains(storage, 'const e3dcCommandCfg = w === 0 && options.evcsProtectedLoadUnknown === true', 'IDLE-Override nur beim neuen Telemetrie-Schutzstopp');
+assertContains(storage, "? { ...cfg, e3dcZeroMode: 'idle' } : cfg;", 'normale E3/DC-Konfiguration bleibt ausserhalb des Schutzstopps unveraendert');
 
 // Exakter Kundenfall aus dem Screenshot:
 // NVP +3,2 kW, Speicher laedt -2,3 kW, geschuetzte EVCS +3,58 kW.

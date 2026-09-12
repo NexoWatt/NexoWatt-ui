@@ -1,16 +1,19 @@
-NexoWatt UI 1.0.4 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.5 – OFFICIAL STABLE RELEASE
 
 Aus dem frisch entpackten Repository veröffentlichen:
 npm publish --tag latest
 
-Version, Artefaktversiegelung, Stable-Vertrag und Runtime-Start werden vor Publish geprüft.
-Vollständige Freigabe vor Veröffentlichung: npm run release:check
-Version nicht erneut verwenden, falls bereits veröffentlicht.
+Vor Veröffentlichung: npm run release:check
+Versionsverfügbarkeit und Artefaktversiegelung werden vom vorhandenen prepublishOnly-Guard geprüft.
+Bereits veröffentlichte Versionsnummern nicht erneut verwenden.
 
-Änderung: PV-Priorisierung für Auto, phasenabhängige Startfähigkeit und Speicherrest.
-Repository-Basis: 1.0.3. Details und Prüfumfang: docs/STABLE_1_0_4_RELEASE_DE.md.
+Basis: vollständiges Repository 1.0.4. Details: docs/STABLE_1_0_5_RELEASE_DE.md.
+Änderung: Speicherschutz bleibt bei veralteter Wallbox-Telemetrie erhalten.
+Bei unbekannter geschützter Fahrzeuglast wird die Speicherentladung vorübergehend
+insgesamt gesperrt, da der NVP allein Haus und Fahrzeug nicht sicher trennen kann.
+Laden aus echtem Gesamtüberschuss bleibt möglich. Frische Werte stellen den
+bisherigen Normalbetrieb wieder her; eine gewählte Mitnutzung bleibt unverändert.
 
-Nach Update Adapter neu starten, Browser neu laden. Auf der Anlage kontrolliert
-1p/3p, Phasenumschaltung, PV unter/über Startgrenze und Speicherübergabe prüfen.
-Die automatische Regression ersetzt keine reale Hardware-Inbetriebnahme.
-Kein automatisches npm-Publish erfolgt durch die Bereitstellung dieses ZIPs.
+Nach Update Adapter neu starten und Browser neu laden. Kontrolliert prüfen:
+Schützen/Mitnutzen, Telemetrieausfall und Wiederkehr, PV-/Speicherübergabe.
+Keine Hardware-Dauertests oder automatische npm-Veröffentlichung durch diese ZIP.

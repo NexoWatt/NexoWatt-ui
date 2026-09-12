@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d46ee33de77fac0c79c3f20598ed045556fc791786a247cb91038bc74c981910
+ * Original-Hash: 59a34d280d5cb000a4bfbb35a202d42581eb9e14f87e46b414b92af586090efb
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:545a9dc4df73467512fa8407e9446f7e5d20ba1aa2881e72b5783b9e02cd6429
+ * Quell-Hash: sha256:d7cc5fbbbf978980b9bd0807719a20d5a635df2a2a0f83ecdfe7f8303deabf4a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2675,15 +2675,24 @@ function resolveEvcsStoragePolicyActualLoad({
     activityThresholdW = 100,
     storageProtectionRequested = false,
     storageAssistRequested = false,
+    physicalIdleConfirmed = false,
 } = {}) {
-    const actualW = Math.max(0, Math.abs(Number(actualPowerW) || 0));
+    const actualValid = actualPowerW !== null && actualPowerW !== undefined
+        && typeof actualPowerW !== 'boolean' && String(actualPowerW).trim() !== ''
+        && Number.isFinite(Number(actualPowerW));
+    const actualW = actualValid ? Math.max(0, Math.abs(Number(actualPowerW))) : 0;
     const thresholdW = Math.max(1, Number(activityThresholdW) || 100);
     const state = String(vehicleStateNormalized || 'unknown');
     const demandConfirmed = vehicleDemandConfirmed === true || state === 'charging';
     const operational = online === true && enabled === true;
-    const measurementUsable = operational && meterFresh === true;
+    const measurementUsable = operational && meterFresh === true && actualValid;
     const assistRequested = storageAssistRequested === true;
     const protectionRequested = storageProtectionRequested === true && !assistRequested;
+    // A missing measurement is not permission to discharge into the vehicle.
+    // Never substitute an old reading or an unacknowledged charging command.
+    // Only an independently confirmed physical idle reading may clear uncertainty
+    // while the charging control itself is disabled/offline.
+    const protectedLoadUnknown = protectionRequested && !measurementUsable && physicalIdleConfirmed !== true;
     const actualVehicleLoadW = measurementUsable && demandConfirmed && actualW >= thresholdW
         ? actualW
         : 0;
@@ -2692,6 +2701,7 @@ function resolveEvcsStoragePolicyActualLoad({
     if (protectionRequested || assistRequested) {
         if (!operational) reason = 'wallbox-not-operational';
         else if (!meterFresh) reason = 'meter-not-fresh';
+        else if (!actualValid) reason = 'meter-invalid';
         else if (!demandConfirmed) reason = 'no-confirmed-vehicle-demand';
         else if (actualW < thresholdW) reason = 'standby-below-activity-threshold';
         else reason = assistRequested ? 'assist-actual-vehicle-load' : 'protect-actual-vehicle-load';
@@ -2706,6 +2716,8 @@ function resolveEvcsStoragePolicyActualLoad({
         demandConfirmed,
         vehicleStateNormalized: state,
         actualVehicleLoadW,
+        protectionRequested,
+        protectedLoadUnknown,
         protectedLoadW: protectionRequested ? actualVehicleLoadW : 0,
         assistRequestedLoadW: assistRequested ? actualVehicleLoadW : 0,
         protectedWallbox: protectionRequested && actualVehicleLoadW > 0,
@@ -5340,6 +5352,9 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.storageAssistPowerAgeMs', 'Stationary storage discharge value age (ms)', 'number', 'value.interval');
         await mk('chargingManagement.control.storageAssistPowerFresh', 'Stationary storage discharge value fresh', 'boolean', 'indicator');
         await mk('chargingManagement.control.storageProtectedLoadW', 'EVCS load protected from storage (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageProtectionRequestedWallboxes', 'Ladepunkte mit gewähltem Speicherschutz', 'number', 'value');
+        await mk('chargingManagement.control.storageProtectedUnknownWallboxes', 'Geschützte Ladepunkte mit unbekannter Fahrzeuglast', 'number', 'value');
+        await mk('chargingManagement.control.storagePolicyJson', 'Atomarer EVCS-Speicher-Policy-Snapshot', 'string', 'json');
         await mk('chargingManagement.control.storageProtectedWallboxes', 'EVCS wallboxes protected from storage', 'number', 'value');
         await mk('chargingManagement.control.storageProtectedLoadTs', 'EVCS storage-protection timestamp', 'number', 'value.time');
         await mk('chargingManagement.control.storageAssistRequestedLoadW', 'EVCS load allowed to use storage (W)', 'number', 'value.power');
@@ -5651,6 +5666,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('storageProtectionRequested', 'Speicher-Schutz für Ladepunkt explizit aktiv', 'boolean', 'indicator');
         await mk('storagePolicyActualLoadW', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy (W)', 'number', 'value.power');
         await mk('storagePolicyActualLoadActive', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy aktiv', 'boolean', 'indicator');
+        await mk('storagePolicyLoadUnknown', 'Speicherschutz: Fahrzeuglast unbekannt', 'boolean', 'indicator');
         await mk('storagePolicyActualLoadReason', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy Grund', 'string', 'text');
         await mk('effectiveStorageAssist', 'Speicher-Mitnutzung effektiv', 'boolean', 'indicator');
         await mk('storageAssistBlockedReason', 'Speicher-Mitnutzung Grund', 'string', 'text');
@@ -6173,7 +6189,7 @@ class ChargingManagementModule extends BaseModule {
             try {
                 const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : {};
                 const prev = (caps.evcsStoragePolicy && typeof caps.evcsStoragePolicy === 'object') ? caps.evcsStoragePolicy : {};
-                this.adapter._emsCaps = { ...caps, evcsStoragePolicy: { ...prev, ...(patch || {}), ts: now } };
+                this.adapter._emsCaps = { ...caps, evcsStoragePolicy: { ...prev, ...(patch || {}), ts: Number.isFinite(patch && patch.ts) ? patch.ts : now } };
             } catch { /* diagnostics only */ }
         };
 
@@ -6190,9 +6206,16 @@ class ChargingManagementModule extends BaseModule {
             storageSource: '',
         });
 
-        // Neutraler Tick-Start verhindert, dass ein früher Return alte Schutzlasten stehen lässt.
-        publishEvStoragePolicyCaps({ protectedLoadW: 0, protectedWallboxes: 0, assistRequestedLoadW: 0, source: 'charging-tick-reset' });
+        // Do not publish a fresh 'no protection' verdict before reading the customer
+        // choices. A failed/incomplete tick must discard old watts but retain the
+        // protection intent conservatively until a complete snapshot replaces it.
+        const pendingProtectedWallboxes = wallboxes.filter(w => w && w.storageAssistCustomerAllowed === true).length;
+        publishEvStoragePolicyCaps({ protectedLoadW: 0, protectedWallboxes: 0,
+            protectionRequestedWallboxes: pendingProtectedWallboxes,
+            protectedUnknownWallboxes: pendingProtectedWallboxes, complete: false,
+            assistRequestedLoadW: 0, source: 'charging-tick-reset' });
         let storageProtectedLoadW = 0, storageProtectedWallboxes = 0, storageAssistRequestedLoadW = 0;
+        let storageProtectionRequestedWallboxes = 0, storageProtectedUnknownWallboxes = 0;
         try {
             await Promise.all([
                 this._queueState('chargingManagement.control.storageProtectedLoadW', 0, true),
@@ -7504,7 +7527,8 @@ class ChargingManagementModule extends BaseModule {
             vehicleDemandReason = String(vehicleDemand.reason || '');
             const vehicleStateNormalized = String(vehicleDemand.state || 'unknown');
 
-            // Speicher-Schutz/Assist zaehlt nur frische, bestaetigte Fahrzeuglast.
+            // Only measured vehicle watts are counted. Missing protected watts
+            // are published separately as uncertainty, not as a fictitious 0-W load.
             // Wallbox-Eigenverbrauch unterhalb der Aktivitaetsschwelle (z. B. ABL
             // eMH1 mit rund 69 W im B2-Wartezustand) bleibt normale Gebaeudelast.
             const storagePolicyActualLoad = resolveEvcsStoragePolicyActualLoad({
@@ -7517,13 +7541,18 @@ class ChargingManagementModule extends BaseModule {
                 activityThresholdW,
                 storageProtectionRequested,
                 storageAssistRequested,
+                physicalIdleConfirmed: !meterStale && pWRawNum !== null
+                    && Math.abs(pWRawNum) < Math.max(1, activityThresholdW),
             });
+            if (storagePolicyActualLoad.protectionRequested) storageProtectionRequestedWallboxes += 1;
+            if (storagePolicyActualLoad.protectedLoadUnknown) storageProtectedUnknownWallboxes += 1;
             storageProtectedLoadW += storagePolicyActualLoad.protectedLoadW;
             storageAssistRequestedLoadW += storagePolicyActualLoad.assistRequestedLoadW;
             if (storagePolicyActualLoad.protectedWallbox) storageProtectedWallboxes += 1;
             try {
                 await this._queueState(`${ch}.storagePolicyActualLoadW`, Math.round(storagePolicyActualLoad.actualVehicleLoadW), true);
                 await this._queueState(`${ch}.storagePolicyActualLoadActive`, storagePolicyActualLoad.active === true, true);
+                await this._queueState(`${ch}.storagePolicyLoadUnknown`, storagePolicyActualLoad.protectedLoadUnknown === true, true);
                 await this._queueState(`${ch}.storagePolicyActualLoadReason`, String(storagePolicyActualLoad.reason || ''), true);
             } catch { /* diagnostics only */ }
 
@@ -7944,6 +7973,7 @@ class ChargingManagementModule extends BaseModule {
                 storageProtectionRequested,
                 storagePolicyActualLoadW: storagePolicyActualLoad.actualVehicleLoadW,
                 storagePolicyActualLoadReason: storagePolicyActualLoad.reason,
+                storagePolicyLoadUnknown: storagePolicyActualLoad.protectedLoadUnknown,
                 effectiveStorageAssist: false,
                 storageAssistBlockedReason: storageAssistCustomerAllowed ? (userStorageAssistEnabled ? 'pending' : 'user-disabled') : 'installer-locked',
                 batteryContributionW: 0,
@@ -9815,7 +9845,22 @@ if (components.length) {
         }
 
         // Finaler Same-cycle Stand; persistente States darunter bleiben Diagnose/Fallback.
-        publishEvStoragePolicyCaps({ protectedLoadW: Math.max(0, Math.round(Number(storageProtectedLoadW || 0))), protectedWallboxes: Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))), assistRequestedLoadW: Math.max(0, Math.round(Number(storageAssistRequestedLoadW || 0))), source: 'charging-runtime' });
+        const completedStoragePolicy = {
+            protectedLoadW: Math.max(0, Math.round(Number(storageProtectedLoadW || 0))),
+            protectedWallboxes: Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))),
+            protectionRequestedWallboxes: storageProtectionRequestedWallboxes,
+            protectedUnknownWallboxes: storageProtectedUnknownWallboxes,
+            assistRequestedLoadW: Math.max(0, Math.round(Number(storageAssistRequestedLoadW || 0))),
+            complete: true, source: 'charging-runtime', sampledAt: now, ts: Date.now(),
+        };
+        publishEvStoragePolicyCaps(completedStoragePolicy);
+        // One bounded snapshot, no history or new timer. Its embedded timestamp
+        // cannot turn old watts into fresh measurements after adapter restart.
+        try {
+            await this._queueState('chargingManagement.control.storagePolicyJson', JSON.stringify(completedStoragePolicy), true);
+            await this._queueState('chargingManagement.control.storageProtectionRequestedWallboxes', storageProtectionRequestedWallboxes, true);
+            await this._queueState('chargingManagement.control.storageProtectedUnknownWallboxes', storageProtectedUnknownWallboxes, true);
+        } catch { /* runtime snapshot remains authoritative if diagnostic persistence fails */ }
 
         // Publish diagnostics for UI. `storageAssistW` bleibt der Request an die
         // Speicherregelung; nur `storageAssistAcceptedW` darf das Ladebudget erhoehen.
