@@ -1,3 +1,15 @@
+## 1.0.4 - 2026-09-11
+**Official Stable – Auto PV priority and phase-aware start reservations**
+
+- Attribute only the physical PV share of approved Auto charging targets to the customer PV priority; retain explicit grid/tariff/goal permissions and all existing hard limits.
+- Include fresh Auto consumption in signed-NVP PV reconstruction; do not double-count commanded power or synthesize PV from grid import.
+- Release unused PV to storage when PV-driven Auto cannot meet its actual phase/current/power minimum, is switching phases, or is settling. Never reserve a partial impossible start.
+- Preserve all per-wallbox phase thresholds, vendor write values, hysteresis/cooldown state and settling time through the runtime-to-TypeScript bridge.
+- Keep a zero target during phase settling. A separate switching cooldown does not block charging after settling.
+- Require the configured three-phase current minimum before upshifting; use the total Auto budget rather than already-consumed residual capacity.
+- Add unit/pipeline and real-tick/executor regression coverage. Physical device commissioning remains required; no live wallbox test is claimed.
+- Retain 1.0.1 memory/SSE, 1.0.2 heartbeat and 1.0.3 Home AppCenter fixes. No new production dependencies.
+
 ## 1.0.3 - 2026-09-09
 
 - **Official Stable Patch:** Behebt die sofortige erneute Sperre des geschützten AppCenters nach erfolgreicher Admin-Anmeldung mit aktiver EOS-Home-Lizenz.

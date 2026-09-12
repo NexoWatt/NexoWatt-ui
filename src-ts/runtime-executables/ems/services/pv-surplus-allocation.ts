@@ -75,4 +75,73 @@ export function buildPvSurplusAllocation(
   };
 }
 
-module.exports = { normalizePvSurplusPriority, buildPvSurplusAllocation };
+
+export type AutoPvPriorityPoint = {
+  safe: string;
+  userMode: string;
+  effectiveMode: string;
+  enabled: boolean;
+  online: boolean;
+  demandConfirmed: boolean;
+  startProbeActive: boolean;
+  actualFresh: boolean;
+  actualW: number;
+  finalTargetW: number;
+  technicalMinimumW: number;
+  phaseTransition: boolean;
+};
+
+/**
+ * Attribution only: never creates a charging command or a grid permission.
+ * PV-driven Auto is already effectiveMode=pv and uses the existing phase-aware
+ * PV allocator. Grid-enabled Auto may use a partial PV share, but only after
+ * the final safety/phase/minimum guard has approved a runnable target.
+ * No provisional Auto start or rated charger power is reserved here.
+ */
+export function buildAutoPvPriorityReservation(input: {
+  points: readonly AutoPvPriorityPoint[];
+  priorityCapW: number;
+  physicalCapW: number;
+  otherPriorityReservedW: number;
+  otherPhysicalReservedW: number;
+}): { reservedW: number; remainingPriorityW: number; rows: { safe: string; reservedW: number; minimumW: number; reason: string }[] } {
+  const positiveW = (v: unknown): number => Math.max(0, Number.isFinite(Number(v)) ? Number(v) : 0);
+  let priorityRemainingW = Math.max(0, positiveW(input.priorityCapW) - positiveW(input.otherPriorityReservedW));
+  let physicalRemainingW = Math.max(0, positiveW(input.physicalCapW) - positiveW(input.otherPhysicalReservedW));
+  let reservedW = 0;
+  const rows: { safe: string; reservedW: number; minimumW: number; reason: string }[] = [];
+  for (const point of input.points) {
+    const mode = String(point.effectiveMode || '').toLowerCase();
+    const userMode = String(point.userMode || 'auto').toLowerCase();
+    const minimumW = positiveW(point.technicalMinimumW);
+    let claimW = 0;
+    let reason = 'not-auto-grid-mode';
+    if (userMode === 'auto' && (mode === 'auto' || mode === 'normal')) {
+      reason = 'no-runnable-demand';
+      if (point.enabled && point.online) {
+        // Real, fresh power continues to occupy PV during a controlled stop.
+        // A switch request cannot make an actually flowing load disappear.
+        const actualW = point.actualFresh ? positiveW(point.actualW) : 0;
+        const targetW = !point.phaseTransition && (point.demandConfirmed || point.startProbeActive)
+          ? positiveW(point.finalTargetW) : 0;
+        const runnableTargetW = targetW > 0 && targetW + 1e-6 >= minimumW ? targetW : 0;
+        const demandW = Math.max(actualW, runnableTargetW);
+        claimW = Math.min(demandW, priorityRemainingW, physicalRemainingW);
+        if (claimW > 0) reason = 'auto-pv-share-of-approved-load';
+        else if (point.phaseTransition) reason = 'phase-transition-no-start-reservation';
+        else if (targetW > 0 && runnableTargetW === 0) reason = 'below-technical-minimum';
+        else if (demandW > 0) reason = 'no-pv-priority-remainder';
+      } else reason = 'not-available';
+    }
+    // Round down so neither the physical nor the customer cap can be exceeded.
+    claimW = Math.floor(Math.max(0, claimW));
+    priorityRemainingW = Math.max(0, priorityRemainingW - claimW);
+    physicalRemainingW = Math.max(0, physicalRemainingW - claimW);
+    reservedW += claimW;
+    rows.push({ safe: point.safe, reservedW: claimW, minimumW, reason });
+  }
+  return { reservedW, remainingPriorityW: priorityRemainingW, rows };
+}
+
+module.exports = { normalizePvSurplusPriority, buildPvSurplusAllocation, buildAutoPvPriorityReservation };
+

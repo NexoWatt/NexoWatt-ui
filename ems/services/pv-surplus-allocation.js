@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/pv-surplus-allocation.ts
- * Quell-Hash: sha256:fa5f396b8774ec7e1fb6c3b55a6510dea7100966b34cd81816eee6b44b3b5dd7
+ * Quell-Hash: sha256:c40ddc55073801b8239d0ea483bcc905ff6ea37e947009d2bf67ccf155b23b88
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -19,6 +19,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizePvSurplusPriority = normalizePvSurplusPriority;
 exports.buildPvSurplusAllocation = buildPvSurplusAllocation;
+exports.buildAutoPvPriorityReservation = buildAutoPvPriorityReservation;
 function clamp(value, min, max, fallback) {
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
@@ -72,4 +73,55 @@ function buildPvSurplusAllocation(totalW, modeRaw, evcsSharePctRaw, options = {}
         reason,
     };
 }
-module.exports = { normalizePvSurplusPriority, buildPvSurplusAllocation };
+/**
+ * Attribution only: never creates a charging command or a grid permission.
+ * PV-driven Auto is already effectiveMode=pv and uses the existing phase-aware
+ * PV allocator. Grid-enabled Auto may use a partial PV share, but only after
+ * the final safety/phase/minimum guard has approved a runnable target.
+ * No provisional Auto start or rated charger power is reserved here.
+ */
+function buildAutoPvPriorityReservation(input) {
+    const positiveW = (v) => Math.max(0, Number.isFinite(Number(v)) ? Number(v) : 0);
+    let priorityRemainingW = Math.max(0, positiveW(input.priorityCapW) - positiveW(input.otherPriorityReservedW));
+    let physicalRemainingW = Math.max(0, positiveW(input.physicalCapW) - positiveW(input.otherPhysicalReservedW));
+    let reservedW = 0;
+    const rows = [];
+    for (const point of input.points) {
+        const mode = String(point.effectiveMode || '').toLowerCase();
+        const userMode = String(point.userMode || 'auto').toLowerCase();
+        const minimumW = positiveW(point.technicalMinimumW);
+        let claimW = 0;
+        let reason = 'not-auto-grid-mode';
+        if (userMode === 'auto' && (mode === 'auto' || mode === 'normal')) {
+            reason = 'no-runnable-demand';
+            if (point.enabled && point.online) {
+                // Real, fresh power continues to occupy PV during a controlled stop.
+                // A switch request cannot make an actually flowing load disappear.
+                const actualW = point.actualFresh ? positiveW(point.actualW) : 0;
+                const targetW = !point.phaseTransition && (point.demandConfirmed || point.startProbeActive)
+                    ? positiveW(point.finalTargetW) : 0;
+                const runnableTargetW = targetW > 0 && targetW + 1e-6 >= minimumW ? targetW : 0;
+                const demandW = Math.max(actualW, runnableTargetW);
+                claimW = Math.min(demandW, priorityRemainingW, physicalRemainingW);
+                if (claimW > 0)
+                    reason = 'auto-pv-share-of-approved-load';
+                else if (point.phaseTransition)
+                    reason = 'phase-transition-no-start-reservation';
+                else if (targetW > 0 && runnableTargetW === 0)
+                    reason = 'below-technical-minimum';
+                else if (demandW > 0)
+                    reason = 'no-pv-priority-remainder';
+            }
+            else
+                reason = 'not-available';
+        }
+        // Round down so neither the physical nor the customer cap can be exceeded.
+        claimW = Math.floor(Math.max(0, claimW));
+        priorityRemainingW = Math.max(0, priorityRemainingW - claimW);
+        physicalRemainingW = Math.max(0, physicalRemainingW - claimW);
+        reservedW += claimW;
+        rows.push({ safe: point.safe, reservedW: claimW, minimumW, reason });
+    }
+    return { reservedW, remainingPriorityW: priorityRemainingW, rows };
+}
+module.exports = { normalizePvSurplusPriority, buildPvSurplusAllocation, buildAutoPvPriorityReservation };

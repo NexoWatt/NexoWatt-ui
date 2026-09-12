@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 58fda2a4ba7ed3f71d48cdef7a4706e3b623754bcf8242b03086620ef762f95e
+ * Original-Hash: 5e6a58da81c1a7f63993a3fd74015c4ce0199012cb9aa58d9c601545f41762be
  */
 
 /**
@@ -974,7 +974,9 @@ async function testTimeoutAndAllocationContract() {
   assert.equal(inactive.wallboxes[0].targetPowerW, 0);
 }
 
-(async () => {
+module.exports = { makeHarness };
+
+if (require.main === module) (async () => {
   await testMappingContract();
   await testAlfenAndGenericStart();
   await testOcppAndControlTypes();

@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -395,8 +395,8 @@
     },
     {
       "path": "ems/modules/charging-management.js",
-      "size": 726030,
-      "sha256": "cb13945b19c8e620f7c55877400b3281af8b3b9a1246853590b2aebffb5d57ce"
+      "size": 735379,
+      "sha256": "d46ee33de77fac0c79c3f20598ed045556fc791786a247cb91038bc74c981910"
     },
     {
       "path": "ems/modules/core-limits.js",
@@ -725,8 +725,8 @@
     },
     {
       "path": "ems/services/pv-surplus-allocation.js",
-      "size": 3343,
-      "sha256": "30dc6bfbb22823632fcbfd6ec50a0607cac85ca83af66fede4b95f70aebd5b6a"
+      "size": 6360,
+      "sha256": "ab8b5e7475c6a7b89391c0f60918a8f0ac2634ee3bc96ff911fadea47e243096"
     },
     {
       "path": "ems/services/safety-envelope.js",
@@ -770,8 +770,8 @@
     },
     {
       "path": "io-package.json",
-      "size": 24608,
-      "sha256": "5cb9d71a7848185765bf62838d4349acf5b18d4ea1cd4e71c8499cfed484cfa8"
+      "size": 23558,
+      "sha256": "2befa83ba9d008729bf32ab1c7e3502f3df22f63bfc94076f99a7a0d1caf2995"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -935,8 +935,8 @@
     },
     {
       "path": "lib/ts-mirrors/ems/charging-management/charging-phase-selection.js",
-      "size": 16594,
-      "sha256": "d945e8eb60d86b93231f414877e00995dcfcc4f0e45779d73196e2fb1a98edbf"
+      "size": 17368,
+      "sha256": "487e61e289e27327c37b1255b3502c07c3ec04e417893e525c4d5ed4c225a75c"
     },
     {
       "path": "lib/ts-mirrors/ems/charging-management/charging-write-plan.js",
@@ -1061,7 +1061,7 @@
     {
       "path": "README.md",
       "size": 2485,
-      "sha256": "bf20216b26424d863e2b0fe2720620e58c07c124b696daacf7504cc1beb51330"
+      "sha256": "c81ef93cbca14fe01457acc518e7b508623b24b8a7b49643627af3e7eb50258e"
     },
     {
       "path": "scripts/verify-rc81-nvp-assignment-single-source.cjs",
@@ -1115,13 +1115,13 @@
     },
     {
       "path": "scripts/verify-stable-1.0.3-home-appcenter-access.cjs",
-      "size": 17227,
-      "sha256": "6c6e0d8ea005af8e89fbcc730a52816c69a5975698c78649b06d5622756fbd87"
+      "size": 17759,
+      "sha256": "33d03a73ac30777be22fdbc4cbec6cd6a46c99f47802beb058b2f9179ef8489c"
     },
     {
       "path": "scripts/verify-stable-release.cjs",
-      "size": 12774,
-      "sha256": "e75e6ffefa7e048ae7ce5ceb63c4100a3ad8ec2a44a9a8446d20302dcf25672b"
+      "size": 13047,
+      "sha256": "54797752ef68bebd5a10815956d7916ec5840a7aca3584176b34d7b8d7c91719"
     },
     {
       "path": "www/admin-guard.js",
@@ -1401,7 +1401,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1088,
-      "sha256": "777725d6306b1f8eb53766ae56b2ac1a5adbcc5bfef44aa4088c6a43a20c402d"
+      "sha256": "30a0464d304d859a7f4781cbb791f41f08df0bb2247cd7c3d2c57c532bc134ec"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1485,8 +1485,8 @@
     },
     {
       "path": "www/settings.html",
-      "size": 60674,
-      "sha256": "98ae0178468a875c652ef73644c72cace17220a28ded29c60878d1de9ac5e10a"
+      "size": 60922,
+      "sha256": "0852a208cc04fe69b40ad104d1a34bd3e7ee71585400c284eeac4a8a38d43513"
     },
     {
       "path": "www/simulation.html",
@@ -1576,7 +1576,7 @@
     {
       "path": "www/sw.js",
       "size": 5007,
-      "sha256": "0d8285898a3d28a193d3e1b3a7bc9bcf5e59377f557bfa0fba9aa5c80c844877"
+      "sha256": "ec74a8c24715e4f149be99d3c92fafdc9d703116d1b5c513c50eb385eb7e407c"
     },
     {
       "path": "www/tariff-report.html",
@@ -1602,6 +1602,21 @@
       "path": "www/year-report.js",
       "size": 44701,
       "sha256": "3fe55d569dc423055075ddb3d71ee8179d45f40761d03a96d0f8669343afaf96"
+    },
+    {
+      "path": "docs/STABLE_1_0_4_RELEASE_DE.md",
+      "size": 5417,
+      "sha256": "b270ccff0e92b3f23a5fe963af561c0a8bec6562fd67c2d699b8053e89a1b1af"
+    },
+    {
+      "path": "scripts/verify-stable-1.0.4-auto-pv-phases.cjs",
+      "size": 16114,
+      "sha256": "d4e1067b4c5c0bdecd6492fed483b8e8b529582acf3e02951398ae6f9892197d"
+    },
+    {
+      "path": "scripts/verify-rc60-universal-auto-wallbox.js",
+      "size": 34780,
+      "sha256": "5e6a58da81c1a7f63993a3fd74015c4ce0199012cb9aa58d9c601545f41762be"
     }
   ]
 }

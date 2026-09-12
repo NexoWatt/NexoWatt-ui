@@ -1,6 +1,6 @@
 @echo off
-echo NexoWatt EOS 1.0.3 Stable wird geprueft und auf npm veroeffentlicht ...
-npm publish
+echo NexoWatt EOS 1.0.4 Stable wird geprueft und auf npm veroeffentlicht ...
+npm publish --tag latest
 if errorlevel 1 (
   echo.
   echo FEHLER: Publish wurde abgebrochen. Bitte die Ausgabe oben pruefen.
@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo NexoWatt EOS 1.0.3 Stable wurde erfolgreich veroeffentlicht.
+echo NexoWatt EOS 1.0.4 Stable wurde erfolgreich veroeffentlicht.
 pause

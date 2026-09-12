@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "news": {
+      "1.0.4": {
+        "en": "Auto PV priority respects approved charging demand, actual phases and technical start power. Unusable PV remains available to storage. Per-point phase switch thresholds, manufacturer values and settling are preserved.",
+        "de": "PV-Priorisierung berücksichtigt Auto-Ladebedarf, tatsächliche Phasen und Startleistung. Nicht nutzbarer PV-Anteil bleibt beim Speicher. Individuelle Phasenumschaltwerte, Wartezeiten und Einschwingzeit werden durchgängig berücksichtigt.",
+        "nl": "PV-prioriteit houdt rekening met Auto-laadbehoefte, werkelijke fasen en startvermogen. Onbenutte PV blijft beschikbaar voor de batterij. Fase-instellingen en wachttijden blijven behouden."
+      },
       "1.0.3": {
         "de": "Stable 1.0.3 behebt die sofortige erneute AppCenter-Sperre bei einer gültigen Home-Lizenz. Fachliche 403-Antworten nicht lizenzierter Pro-Module werden nicht mehr als verlorene Anmeldung interpretiert. Alte Pro-Konfigurationsflags werden für Home vor der UI-Ausgabe maskiert und Pro-only Komponenten nicht initialisiert. Ein echter Sessionverlust oder fehlende Seitenberechtigung sperrt den AppCenter weiterhin sicher. EMS-, Netzlimit-, Lade-, Speicher-, §14a-, Tarif-, Export-Guard- und Hardware-Regelung bleiben unverändert.",
         "en": "Stable 1.0.3 fixes the AppCenter being immediately locked again with a valid Home license. Business-level 403 responses from unlicensed Pro modules are no longer interpreted as a lost login session. Stale Pro configuration flags are masked before Home UI delivery and Pro-only components are not initialized. A genuine session loss or missing page capability still locks the AppCenter fail-closed. EMS, grid limit, charging, storage, §14a, tariff, export guard and hardware control remain unchanged.",
@@ -32,11 +37,6 @@
         "de": "RC91 gleicht die App-Kataloge von Browser, Adapterstart, Installer, Save und Backup vollständig ab. Energy Ledger und Mesh/Microgrid behalten ihre Installiert-/Aktiv-Zustände jetzt auch beim Speichern anderer AppCenter-Reiter; das verborgene DC-Stationsdisplay bleibt erhalten, ohne doppelte App-Karte. Zusätzlich bleibt die textstabil erzeugte main.js strikt JavaScript-kompatibel. Die produktive NVP-, Lade-, Speicher-, Tarif-, §14a- und Safety-Regelung wurde nicht verändert.",
         "en": "RC91 fully aligns the app catalogues used by the browser, adapter startup, installer, save and backup paths. Energy Ledger and Mesh/Microgrid now preserve their installed/enabled state when unrelated App Center tabs are saved; the hidden DC station display is retained without creating a duplicate app card. The text-stable generated main.js is also kept strictly JavaScript-compatible. Productive grid, charging, storage, tariff, Section 14a and safety control logic is unchanged.",
         "nl": "RC91 brengt de appcatalogi van browser, adapterstart, installer, opslaan en back-up volledig met elkaar in overeenstemming. Energy Ledger en Mesh/Microgrid behouden nu hun geïnstalleerde/actieve status wanneer andere AppCenter-tabbladen worden opgeslagen; het verborgen DC-stationsdisplay blijft behouden zonder dubbele appkaart. Ook blijft de tekststabiel gegenereerde main.js strikt JavaScript-compatibel. De productieve net-, laad-, opslag-, tarief-, §14a- en veiligheidsregeling is niet gewijzigd."
-      },
-      "0.8.210": {
-        "de": "RC83 erlaubt Speicher-Netzladen ausschließlich bei aktivem, frischem und günstigem dynamischen Tarif. Bei aktivem variablem Netzentgelt ist zusätzlich das konfigurierte NT-/Quartalsfenster Pflicht. Neutral, teuer, unbekannt, Tarif aus oder veraltete Preis-/Freigabedaten führen sofort zur Eigenverbrauchsoptimierung; auch gehaltene alte Tarif-/Reserve-Sollwerte werden unmittelbar vor dem Hardware-Write auf 0 W gestoppt. Das fehlende Objekt gridConstraints.exportLimit.sinkFieldProtocolJson wird vor dem ersten Write angelegt und beendet die wiederkehrende ioBroker-Warnflut.",
-        "en": "RC83 permits storage charging from the grid only with an active, fresh and cheap dynamic tariff. If variable grid fees are enabled, the configured off-peak/quarter window is an additional requirement. Neutral, expensive, unknown, disabled or stale tariff data immediately falls back to self-consumption; held legacy tariff/reserve commands are stopped at 0 W before the hardware write. The missing gridConstraints.exportLimit.sinkFieldProtocolJson object is now created before its first write, eliminating the recurring ioBroker warning flood.",
-        "nl": "RC83 staat netladen van de batterij alleen toe bij een actief, actueel en goedkoop dynamisch tarief. Bij geactiveerde variabele netkosten is bovendien het geconfigureerde dal-/kwartaalvenster verplicht. Neutraal, duur, onbekend, uitgeschakeld of verouderd tarief schakelt direct terug naar eigenverbruik; vastgehouden oude tarief-/reserveopdrachten worden vóór de hardware-write op 0 W gestopt. Het ontbrekende object gridConstraints.exportLimit.sinkFieldProtocolJson wordt vóór de eerste write aangemaakt, waardoor de terugkerende ioBroker-waarschuwingen stoppen."
       }
     },
     "title": "NexoWatt EOS",

@@ -823,7 +823,9 @@ async function testTimeoutAndAllocationContract() {
   assert.equal(inactive.wallboxes[0].targetPowerW, 0);
 }
 
-(async () => {
+module.exports = { makeHarness };
+
+if (require.main === module) (async () => {
   await testMappingContract();
   await testAlfenAndGenericStart();
   await testOcppAndControlTypes();

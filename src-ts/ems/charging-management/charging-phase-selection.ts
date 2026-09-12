@@ -41,6 +41,7 @@ export interface ChargingPhaseWallboxInput {
   stopBeforePhaseSwitch?: unknown;
   actualPowerW?: unknown;
   minA?: unknown;
+  stepA?: unknown;
   maxA?: unknown;
   voltageV?: unknown;
   switchUpThresholdW?: unknown;
@@ -237,7 +238,7 @@ function effectiveStableBudgetW(input: ChargingPhaseSelectionInput, effectiveMod
     ? [input.stablePvPureAvailableW, input.pvPureAvailableW, input.stablePvAvailableW, input.pvAvailableW]
     : (mode === 'minpv'
       ? [input.stablePvPhysicalAvailableW, input.pvPhysicalAvailableW, input.stablePvAvailableW, input.pvAvailableW]
-      : [input.remainingW, input.budgetW, input.stablePvPhysicalAvailableW, input.pvPhysicalAvailableW, input.stablePvAvailableW, input.pvAvailableW]);
+      : [input.budgetW, input.remainingW, input.stablePvPhysicalAvailableW, input.pvPhysicalAvailableW, input.stablePvAvailableW, input.pvAvailableW]);
   for (const candidate of candidates) {
     const n = finiteOrNull(candidate);
     if (n !== null) return Math.max(0, Math.round(n));
@@ -295,10 +296,14 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
     const actualPowerW = nonNegative(wb.actualPowerW, 0);
     const voltageV = nonNegative(wb.voltageV, 230) || 230;
     const minA = finiteOrNull(wb.minA);
-    const effectiveMinA = minA !== null && minA > 0 ? minA : 6;
+    const rawMinA = minA !== null && minA > 0 ? minA : 6;
+    const configuredStepA = finiteOrNull(wb.stepA);
+    const stepA = configuredStepA !== null && configuredStepA > 0 ? configuredStepA : 0.1;
+    // A configured 6.1 A minimum with whole-amp commands requires 7 A, not 6.1 A.
+    const effectiveMinA = Math.ceil((rawMinA - 1e-9) / stepA) * stepA;
     const minPower1pW = Math.round(voltageV * effectiveMinA);
     const minPower3pW = Math.round(3 * voltageV * effectiveMinA);
-    const upW = nonNegative(wb.switchUpThresholdW, globalUpW) || globalUpW;
+    const upW = Math.max(minPower3pW, nonNegative(wb.switchUpThresholdW, globalUpW) || globalUpW);
     const downCandidate = nonNegative(wb.switchDownThresholdW, globalDownW) || globalDownW;
     const downW = Math.min(downCandidate, Math.max(0, upW - 200));
     const upMs = nonNegative(wb.switchUpStableMs, globalUpMs) || globalUpMs;
@@ -392,6 +397,15 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
       switchCommandAllowed = !needsStop;
       if (needsStop) reason = `stop-before-phase-switch:${direction}`;
       else reason = `phase-switch-command-ready:${direction}`;
+    }
+
+    // A successful phase command starts an explicit settling interval. Even if
+    // feedback already reports the target phases, charging must remain stopped
+    // until this interval ends. Cooldown alone only blocks another switch.
+    if (chargerType === 'ac' && settleUntilMs > now) {
+      switchCommandAllowed = false;
+      safetyStopRequired = true;
+      reason = 'phase-switch-settling';
     }
 
     const allocationPhaseCount = switchRequired ? current : target;

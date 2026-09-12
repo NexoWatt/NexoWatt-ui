@@ -45,7 +45,7 @@
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
 // 1.0.0 Stable: force all existing PWA clients onto the official stable shell.
-const CACHE_NAME = 'nexowatt-cache-v503';
+const CACHE_NAME = 'nexowatt-cache-v504';
 
 const OFFLINE_URLS = [
   './',

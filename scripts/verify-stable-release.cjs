@@ -47,6 +47,8 @@ for (const required of [
   'scripts/verify-stable-release.cjs',
   'scripts/verify-stable-1.0.2-health-heartbeat.cjs',
   'scripts/verify-stable-1.0.3-home-appcenter-access.cjs',
+  'scripts/verify-stable-1.0.4-auto-pv-phases.cjs',
+  'scripts/verify-rc60-universal-auto-wallbox.js',
 ]) {
   if (!files.includes(required)) fail(`Stable-Paketdatei fehlt in package.json files: ${required}`);
   if (!fs.existsSync(path.join(root, required))) fail(`Stable-Paketdatei fehlt im Repository: ${required}`);
@@ -109,7 +111,7 @@ for (const relativePath of ['src-ts/runtime-executables/www/ems-apps.ts', 'src-t
 }
 for (const relativePath of ['src-ts/runtime-executables/www/sw.ts', 'src-ts/runtime-mirrors/www/sw.ts', 'www/sw.js']) {
   const text = read(relativePath);
-  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v503';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
+  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v504';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
 }
 
 
@@ -221,3 +223,7 @@ if (/versionParts\[0\]\s*!==\s*0/.test(rc66Verifier)) {
 
 console.log(`[stable-release] OK: ${pkg.name}@${version} ist konsistent als Official Stable versiegelt.`);
 console.log('[stable-release] OK: 1.0.3-Home-AppCenter-Auth, 1.0.2-Liveness, 1.0.1-Memory/SSE und RC93-Regelungsbaseline sind synchron.');
+
+if (!String(pkg.scripts?.['test:all'] || '').includes('npm run test:stable-1.0.4-auto-pv')) {
+  fail('Auto-PV-/Phasenregression ist nicht Bestandteil von test:all.');
+}

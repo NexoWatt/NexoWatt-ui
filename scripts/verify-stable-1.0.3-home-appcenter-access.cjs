@@ -237,7 +237,14 @@ function staticContracts() {
   const netOperator = read('src-ts/runtime-executables/www/netoperator-appcenter.ts');
   const main = read('src-ts/runtime-executables/main.ts');
 
-  assert.equal(pkg.version, '1.0.3', 'Home-AppCenter regression contract must run for Stable 1.0.3');
+  // This regression is a retained baseline, not a restriction to one release.
+  const version = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[0-9A-Za-z.-]+)?$/.exec(pkg.version);
+  assert(version, 'Home-AppCenter regression requires a valid stable SemVer');
+  const [major, minor, patch] = version.slice(1, 4).map(Number);
+  assert(major > 1 || (major === 1 && (minor > 0 || (minor === 0 && patch >= 3))),
+    'Home-AppCenter baseline must be retained on Stable 1.0.3 and later');
+  assert.equal(JSON.parse(read('io-package.json')).common.version, pkg.version,
+    'Adapter manifests must agree for the retained Home regression');
   assert.match(auth, /const mustPromptForAuthentication = authStatusUnavailable \|\| sessionMissing \|\| pageCapabilityMissing/);
   assert.match(auth, /Ein fachlicher API-Fehler bleibt/);
   assert.match(appCenter, /_isAppLicensed\('netOperator'\) && \(\(\) =>/);

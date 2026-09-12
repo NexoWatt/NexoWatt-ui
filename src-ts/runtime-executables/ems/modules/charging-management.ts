@@ -11,6 +11,7 @@ const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
+const { buildAutoPvPriorityReservation } = require('../services/pv-surplus-allocation');
 const { ChargingManagementAuditStore, finiteChargingAuditNumber, deriveChargingAuditLimiter, deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature, buildChargingAuditEvents } = require('../services/charging-management-audit');
 const { Rc85EvcsDecisionGuard, rc85GridEnvelope, rc85OfflineReserveW, rc85IsHardReason, rc85RunIsolatedResult, rc86GridBinding } = require('../rc85-runtime-hardening');
 const {
@@ -955,9 +956,10 @@ function computePendingPvStartIntentW({
         // entsteht bewusst gar kein Pending-Intent. Der ungenutzte PV-Anteil bleibt
         // dadurch im selben EMS-Zyklus fuer Speicher und nachgelagerte Verbraucher
         // verfuegbar, statt als nicht fahrbare Teilreservierung liegen zu bleiben.
-        const startMinimumW = technicalW > 0
-            ? Math.min(maxW, technicalW)
-            : Math.min(maxW, Math.max(thresholdW, minW));
+        const startMinimumW = technicalW > 0 ? technicalW : Math.max(thresholdW, minW);
+        if (maxW + 1e-6 < startMinimumW) {
+            return { intentW: 0, totalDemandW: 0, reason: 'below-technical-minimum' };
+        }
         if (!isAlreadyActive) {
             const startAvailableW = Math.max(0, Math.min(potentialTotalW, pvAvailW));
             if (startMinimumW > 0 && startAvailableW + 1e-6 < startMinimumW) {
@@ -3249,6 +3251,21 @@ class ChargingManagementModule extends BaseModule {
             phaseSwitchCommandAllowed: w && w.phaseSwitchCommandAllowed,
             phaseSwitchKey: w && w.phaseSwitchKey,
             phaseSwitchValue: w && w.phaseSwitchValue,
+            // Preserve the actual per-point phase contract, not only global defaults.
+            supportsPhaseSwitch: !!(w && w.phaseSwitchKey),
+            phaseSwitchValue1p: w && w.phaseSwitchValue1p,
+            phaseSwitchValue3p: w && w.phaseSwitchValue3p,
+            switchUpThresholdW: w && w.phaseSwitchUpThresholdW,
+            switchDownThresholdW: w && w.phaseSwitchDownThresholdW,
+            switchUpStableMs: w && w.phaseSwitchUpStableMs,
+            switchDownStableMs: w && w.phaseSwitchDownStableMs,
+            switchCooldownMs: w && w.phaseSwitchCooldownMs,
+            switchSettleMs: w && w.phaseSwitchSettleMs,
+            switchSafePowerW: w && w.phaseSwitchSafePowerW,
+            highSinceMs: w && w.highSinceMs,
+            lowSinceMs: w && w.lowSinceMs,
+            cooldownUntilMs: w && w.cooldownUntilMs,
+            settleUntilMs: w && w.settleUntilMs,
             phaseSwitchReason: w && w.phaseSwitchReason,
             phaseSwitchSafetyStopRequired: w && w.phaseSwitchSafetyStopRequired,
             phaseSwitchCooldownRemainingMs: w && w.phaseSwitchCooldownRemainingMs,
@@ -3396,6 +3413,7 @@ class ChargingManagementModule extends BaseModule {
             let reserveW = 0;
             let pvReserveW = 0;
             let pvIntentW = 0;
+            let purePvIntentW = 0;
             let activeDemandWallboxes = 0;
 
             for (const plan of plans) {
@@ -3457,6 +3475,7 @@ class ChargingManagementModule extends BaseModule {
                 reserveW += reserveThisW;
                 pvReserveW += Math.min(reserveThisW, finalPvUsedW);
                 pvIntentW += computePvManagedDemandIntentW(effectiveMode, reserveThisW, minPowerW);
+                if (effectiveMode === 'pv') purePvIntentW += reserveThisW;
                 activeDemandWallboxes += 1;
             }
 
@@ -3466,11 +3485,43 @@ class ChargingManagementModule extends BaseModule {
                 reserveW: Math.max(0, Math.round(reserveW)),
                 pvReserveW: Math.max(0, Math.round(pvReserveW)),
                 pvIntentW: Math.max(0, Math.round(pvIntentW)),
+                purePvIntentW: Math.max(0, Math.round(purePvIntentW)),
                 activeDemandWallboxes,
             };
         } catch (_eFinalAllocationMetrics) {
             return null;
         }
+    }
+
+    /** Attribute only the PV share of final, phase-checked Auto targets. */
+    _buildAutoPvPriorityMetrics(allocationState, wbList, options) {
+        const decision = allocationState && (allocationState.normalSourceDecision?.apply
+            ? allocationState.normalSourceDecision : allocationState.productiveDecision);
+        const plans = decision && Array.isArray(decision.apply?.wallboxes) ? decision.apply.wallboxes : [];
+        const bySafe = new Map((wbList || []).filter(w => w && w.safe).map(w => [String(w.safe), w]));
+        const points = plans.map(plan => {
+            const w = bySafe.get(String(plan.safe)) || {};
+            const factor = Math.max(1, Number(plan.phases) || 1) * Math.max(1, Number(plan.voltageV) || 230);
+            const basisCurrent = ['current', 'currentA'].includes(String(plan.controlBasis));
+            const step = basisCurrent ? (Number(plan.stepA) || 0.1) : (Number(plan.stepW) || 1);
+            const minRaw = basisCurrent ? Math.max(Number(plan.minA) || 0, (Number(plan.minPowerW) || 0) / factor)
+                : Math.max(0, Number(plan.minPowerW) || 0);
+            const technicalMinimumW = Math.ceil((minRaw - 1e-9) / step) * step * (basisCurrent ? factor : 1);
+            return {
+                safe: String(plan.safe), userMode: String(w.userMode || plan.userMode || 'auto'),
+                effectiveMode: String(plan.effectiveMode || w.effectiveMode || ''),
+                enabled: w.enabled !== false && plan.enabled !== false,
+                online: w.online === true && plan.online === true,
+                demandConfirmed: w.vehicleDemandConfirmed === true || plan.demandConfirmed === true,
+                startProbeActive: w.vehicleStartProbeActive === true || plan.vehicleStartProbeActive === true,
+                actualFresh: w.meterStale !== true && plan.staleAny !== true,
+                actualW: Math.max(0, Number(w.actualPowerW) || 0),
+                finalTargetW: Math.max(0, Number(plan.targetPowerW) || 0),
+                technicalMinimumW,
+                phaseTransition: plan.phaseSwitchRequired === true || plan.phaseSwitchSafetyStopRequired === true,
+            };
+        });
+        return buildAutoPvPriorityReservation({ ...options, points });
     }
 
     /** Code-Teil: _publishChargingPhaseSelectionRuntimeStates – Übernimmt Hysterese-/Cooldown-Zustände aus der TS-Phasenwahl und veröffentlicht lesbare Diagnose pro Ladepunkt. */
@@ -5045,7 +5096,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvCapEffectiveW', 'Pure-PV customer-priority cap after hysteresis (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvPureCapW', 'Pure-PV customer-priority cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvPhysicalCapW', 'Physical PV cap for PV and Min+PV extra power (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.pvPriorityPurePvOnly', 'Customer PV priority applies to pure PV mode only', 'boolean', 'indicator');
+        await mk('chargingManagement.control.pvPriorityPurePvOnly', 'Legacy indicator: PV priority restricted to pure PV', 'boolean', 'indicator');
+        await mk('chargingManagement.control.pvPriorityIncludesAuto', 'Customer PV priority includes Auto PV share', 'boolean', 'indicator');
+        await mk('chargingManagement.control.pvAutoPriorityReservedW', 'PV share reserved by final Auto charging targets (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvEvcsAutoPriorityMeasuredW', 'Fresh Auto power used in physical PV reconstruction (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvAutoPriorityJson', 'Auto PV share and phase-aware start diagnostics', 'string', 'json');
         await mk('chargingManagement.control.pvAvailable', 'PV available (hysteresis)', 'boolean', 'indicator');
         await mk('chargingManagement.control.pvAllocationMode', 'PV surplus allocation mode', 'string', 'text');
         await mk('chargingManagement.control.pvAllocationEvcsSharePct', 'PV surplus EVCS share (%)', 'number', 'value.percent');
@@ -8395,6 +8450,7 @@ class ChargingManagementModule extends BaseModule {
             let pvEvcsCmdW = 0;
             let pvEvcsUsedW = 0;
             let pvEvcsPhysicalPvManagedW = 0;
+            let pvEvcsAutoPriorityMeasuredW = 0;
 
             try {
                 for (const w of wbList) {
@@ -8407,12 +8463,16 @@ class ChargingManagementModule extends BaseModule {
                     pvEvcsActualW += a;
 
                     // Fuer die zentrale physikalische PV-Rekonstruktion zaehlt nur
-                    // gemessene Leistung von PV-/Min+PV-Ladepunkten. Normal/Boost
-                    // ist bereits eine priorisierte Last und darf kein neues
-                    // Speicher-PV-Budget erzeugen. Kommandowerte werden hier bewusst
+                    // gemessene Leistung von PV-/Min+PV- sowie Auto-Ladepunkten.
+                    // Auto wird danach mit seinem tatsaechlichen PV-Anteil reserviert;
+                    // Boost bleibt ausserhalb der Kundenaufteilung. Kommandowerte werden hier bewusst
                     // nicht verwendet; der NVP bildet den realen Leistungsfluss ab.
                     const effectiveMode = String(w.effectiveMode || '').trim().toLowerCase();
-                    if (effectiveMode === 'pv') {
+                    if ((effectiveMode === 'normal' || effectiveMode === 'auto')
+                        && normalizeWallboxModeOverride(w.userMode) === 'auto' && w.meterStale !== true) {
+                        pvEvcsPhysicalPvManagedW += a;
+                        pvEvcsAutoPriorityMeasuredW += a;
+                    } else if (effectiveMode === 'pv') {
                         pvEvcsPhysicalPvManagedW += a;
                     } else if (effectiveMode === 'minpv') {
                         // Min+PV-Grundlast kommt aus dem normalen Gesamt-/Netzbudget.
@@ -8462,6 +8522,7 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState('chargingManagement.control.pvEvcsCmdW', Math.round(pvEvcsCmdW || 0), true);
                 await this._queueState('chargingManagement.control.pvEvcsUsedW', Math.round(pvEvcsUsedW || 0), true);
                 await this._queueState('chargingManagement.control.pvEvcsPhysicalPvManagedW', Math.round(pvEvcsPhysicalPvManagedW || 0), true);
+                await this._queueState('chargingManagement.control.pvEvcsAutoPriorityMeasuredW', Math.round(pvEvcsAutoPriorityMeasuredW || 0), true);
             } catch {
                 // ignore
             }
@@ -8773,7 +8834,8 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
             await this._queueState('chargingManagement.control.pvPureCapW', pvPureCapWState || 0, true);
             await this._queueState('chargingManagement.control.pvPhysicalCapW', pvPhysicalCapWState || 0, true);
-            await this._queueState('chargingManagement.control.pvPriorityPurePvOnly', true, true);
+            await this._queueState('chargingManagement.control.pvPriorityPurePvOnly', false, true);
+            await this._queueState('chargingManagement.control.pvPriorityIncludesAuto', true, true);
             await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvRawW', pvSurplusNoEvRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvAvg5mW', pvSurplusNoEvAvg5mWState || 0, true);
@@ -8896,7 +8958,8 @@ if (components.length) {
                 pvCapEffectiveW: (typeof pvCapEffectiveWState === 'number' && Number.isFinite(pvCapEffectiveWState)) ? pvCapEffectiveWState : null,
                 pvPureCapW: (typeof pvPureCapWState === 'number' && Number.isFinite(pvPureCapWState)) ? pvPureCapWState : null,
                 pvPhysicalCapW: (typeof pvPhysicalCapWState === 'number' && Number.isFinite(pvPhysicalCapWState)) ? pvPhysicalCapWState : null,
-                pvPriorityPurePvOnly: true,
+                pvPriorityPurePvOnly: false,
+                pvPriorityIncludesAuto: true,
                 pvAvailable: !!pvAvailableState,
                 gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
                 gridImportNoEvW: (typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW)) ? gridImportNoEvW : null,
@@ -11776,9 +11839,21 @@ if (components.length) {
                     : 0;
                 const commandNowW = Math.max(0, Number(row.targetW) || 0);
                 const demandNowW = Math.max(0, Number(row.demandReserveW) || 0, actualNowW, commandNowW);
-                const technicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
+                let technicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
                     ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
                     : Math.max(0, num(w.minPW, 0));
+                // Reserve only a start that can actually be represented by this
+                // charger's command step. Rounding down would hold PV for a
+                // command which the final technical-minimum guard must stop.
+                if (w.controlBasis === 'currentA' && w.chargerType === 'AC') {
+                    const factor = Math.max(1, num(w.phases, 3)) * Math.max(1, num(w.voltageV, 230));
+                    const stepA = num(w.stepA, 0) > 0 ? num(w.stepA, 0) : 0.1;
+                    const startA = Math.max(num(w.minA, 0), technicalMinW / factor);
+                    technicalMinW = Math.ceil((startA - 1e-9) / stepA) * stepA * factor;
+                } else if (technicalMinW > 0) {
+                    const stepW = num(w.stepW, 0) > 0 ? num(w.stepW, 0) : 1;
+                    technicalMinW = Math.ceil((technicalMinW - 1e-9) / stepW) * stepW;
+                }
                 const minPvBaseW = effMode === 'minpv'
                     ? Math.max(
                         0,
@@ -11868,8 +11943,8 @@ if (components.length) {
         let evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
         let evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
         let evcsControlPvIntentW = Math.max(0, Math.round(evcsActiveDemandPvIntentW));
-        const evcsControlPendingPvIntentW = Math.max(0, Math.round(evcsPendingDemandPvIntentW));
-        const evcsControlPendingDemandW = Math.max(0, Math.round(evcsPendingDemandTotalW));
+        let evcsControlPendingPvIntentW = Math.max(0, Math.round(evcsPendingDemandPvIntentW));
+        let evcsControlPendingDemandW = Math.max(0, Math.round(evcsPendingDemandTotalW));
         let evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
         let evcsControlRemainingW = Number.isFinite(budgetW)
             ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
@@ -12009,7 +12084,46 @@ if (components.length) {
             evcsControlReserveW = finalAllocationMetrics.reserveW;
             evcsControlPvReserveW = finalAllocationMetrics.pvReserveW;
             evcsControlPvIntentW = finalAllocationMetrics.pvIntentW;
+            // A tentative start was calculated before the final phase plan. It may
+            // not reserve PV while the same plan orders stop/switch/settle.
+            const phaseBySafe = new Map((tsAllocationState?.phasePlan?.wallboxes || []).map(p => [String(p.safe), p]));
+            const finalDecision = tsAllocationState?.normalSourceDecision?.apply
+                ? tsAllocationState.normalSourceDecision : tsAllocationState?.productiveDecision;
+            const finalBySafe = new Map((finalDecision?.apply?.wallboxes || []).map(p => [String(p.safe), p]));
+            for (const row of debugAlloc) {
+                if (!row || !(Number(row.pendingPvIntentTotalDemandW) > 0)) continue;
+                const phase = phaseBySafe.get(String(row.safe));
+                const final = finalBySafe.get(String(row.safe));
+                const phaseBlocked = !!(phase && (phase.switchRequired || phase.safetyStopRequired || Number(phase.settleUntilMs) > now));
+                // A ramp intent based on a raw command ceases to be real demand
+                // when the final phase/technical/cap guard has rejected that start.
+                // Preserve genuine start-minimum intents calculated from idle.
+                const rawStartRejected = !!(final && Number(row.targetW) >= activityThresholdW
+                    && !(Number(final.targetPowerW) > 0)
+                    && !(row.meterStale !== true && Number(row.actualPowerW) >= activityThresholdW));
+                if (!phaseBlocked && !rawStartRejected) continue;
+                evcsControlPendingPvIntentW = Math.max(0, evcsControlPendingPvIntentW - (Number(row.pendingPvIntentW) || 0));
+                evcsControlPendingDemandW = Math.max(0, evcsControlPendingDemandW - (Number(row.pendingPvIntentTotalDemandW) || 0));
+                if (String(row.effectiveMode || '') === 'pv') {
+                    evcsPendingDemandPurePvIntentW = Math.max(0, evcsPendingDemandPurePvIntentW - (Number(row.pendingPvIntentW) || 0));
+                }
+                row.pendingPvIntentW = 0;
+                row.pendingPvIntentTotalDemandW = 0;
+                row.pendingPvIntentReason = phaseBlocked ? 'phase-transition-no-start-reservation' : 'final-plan-no-runnable-demand';
+                const point = wbList.find(w => String(w.safe) === String(row.safe));
+                if (point?.ch) await this._queueState(`${point.ch}.pvStartReservationW`, 0, true);
+            }
+            const autoPvMetrics = this._buildAutoPvPriorityMetrics(tsAllocationState, wbList, {
+                priorityCapW: Math.max(0, Number(pvStartReadyBudgetW) || 0),
+                physicalCapW: Math.max(0, Number(pvPhysicalCapW) || 0),
+                otherPriorityReservedW: finalAllocationMetrics.purePvIntentW + Math.max(0, evcsPendingDemandPurePvIntentW),
+                otherPhysicalReservedW: Math.max(evcsControlPvIntentW, evcsControlPvReserveW) + evcsControlPendingPvIntentW,
+            });
+            evcsControlPvReserveW += autoPvMetrics.reservedW;
+            evcsControlPvIntentW += autoPvMetrics.reservedW;
             evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
+            await this._queueState('chargingManagement.control.pvAutoPriorityReservedW', autoPvMetrics.reservedW, true);
+            await this._queueState('chargingManagement.control.pvAutoPriorityJson', JSON.stringify(autoPvMetrics), true);
             evcsControlRemainingW = Number.isFinite(budgetW)
                 ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
                 : 0;
@@ -12026,6 +12140,8 @@ if (components.length) {
                     budgetDebug.evcsFinalTargetPowerW = totalTargetPowerW;
                     budgetDebug.evcsFinalTargetCurrentA = totalTargetCurrentA;
                     budgetDebug.evcsFinalAllocationSource = 'ts-final-allocation-plan';
+                    budgetDebug.evcsPendingDemandPvIntentW = evcsControlPendingPvIntentW;
+                    budgetDebug.evcsPendingDemandReserveW = evcsControlPendingDemandW;
                 }
                 const budgetEntry = debugAlloc.find(a => a && a.type === 'budget');
                 if (budgetEntry && budgetEntry.details && typeof budgetEntry.details === 'object') {
@@ -12038,6 +12154,8 @@ if (components.length) {
                     budgetEntry.details.evcsFinalTargetPowerW = totalTargetPowerW;
                     budgetEntry.details.evcsFinalTargetCurrentA = totalTargetCurrentA;
                     budgetEntry.details.evcsFinalAllocationSource = 'ts-final-allocation-plan';
+                    budgetEntry.details.evcsPendingDemandPvIntentW = evcsControlPendingPvIntentW;
+                    budgetEntry.details.evcsPendingDemandReserveW = evcsControlPendingDemandW;
                 }
             } catch (_eFinalAllocationDiagnostics) {
                 // diagnostics only

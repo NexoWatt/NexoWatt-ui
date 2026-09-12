@@ -1,33 +1,16 @@
-NexoWatt UI 1.0.3 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.4 – OFFICIAL STABLE RELEASE
 
-Veröffentlichen ausschließlich aus diesem frisch entpackten vollständigen Repository-ZIP:
-
+Aus dem frisch entpackten Repository veröffentlichen:
 npm publish --tag latest
 
-Der Prepublish-Guard prüft automatisch:
-- ob Version 1.0.3 in der Ziel-Registry noch frei ist,
-- ob alle npm-Paketdateien exakt dem versiegelten Release-Artefakt entsprechen,
-- ob package.json, package-lock.json, io-package.json, Webmanifest und Release-Manifest dieselbe Version führen,
-- ob Runtime-Dateien und TypeScript-Quellen synchron sind,
-- ob eine gültige Home-Admin-Sitzung den AppCenter nach fachlichen Lizenz-403-Antworten offen hält,
-- ob alte Pro-Konfigurationsflags unter Home keine Pro-only API-Aufrufe auslösen,
-- ob ein echter Sessionverlust oder eine fehlende Seitenberechtigung den AppCenter weiterhin sicher sperrt,
-- ob die 1.0.2-Liveness-/Heartbeat-Korrektur und die 1.0.1-Speicher-/SSE-Härtung unverändert aktiv bleiben.
+Version, Artefaktversiegelung, Stable-Vertrag und Runtime-Start werden vor Publish geprüft.
+Vollständige Freigabe vor Veröffentlichung: npm run release:check
+Version nicht erneut verwenden, falls bereits veröffentlicht.
 
-Freigabestatus:
-- offizieller Stable-Patch für Home-Lizenz und AppCenter-Authentifizierung,
-- fachliche API-Antworten wie eos_required, license_required oder readOnly werden nicht als verlorene Anmeldung behandelt,
-- Auth-Status und Seiten-Capability bleiben die verbindliche Quelle für die Login-Sperre,
-- Pro-only Apps werden unter Home vor der UI-Ausgabe deaktiviert und nicht initialisiert,
-- gespeicherte Pro-Konfiguration bleibt intern erhalten; sie kann die Home-Oberfläche nicht mehr verriegeln,
-- keine Änderung der EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a-, Netzlimit-, Export-Guard- oder Hardware-Regellogik.
+Änderung: PV-Priorisierung für Auto, phasenabhängige Startfähigkeit und Speicherrest.
+Repository-Basis: 1.0.3. Details und Prüfumfang: docs/STABLE_1_0_4_RELEASE_DE.md.
 
-Wichtig für die Aktualisierung:
-- Alten Projektordner vollständig löschen oder umbenennen.
-- Dieses ZIP in einen neuen, leeren Ordner entpacken.
-- Keine Dateien aus 1.0.2 oder einem RC-Ordner hinein kopieren.
-- Nach der Installation den Adapter vollständig neu starten.
-- Browser einmal mit Strg+F5 neu laden.
-- Home-Lizenz aktivieren, als Admin anmelden und den AppCenter mehrfach öffnen.
-- Der AppCenter muss nach erfolgreicher Anmeldung dauerhaft offen bleiben.
-- Nach echtem Logout oder abgelaufener Session muss die geschützte Seite wieder zuverlässig sperren.
+Nach Update Adapter neu starten, Browser neu laden. Auf der Anlage kontrolliert
+1p/3p, Phasenumschaltung, PV unter/über Startgrenze und Speicherübergabe prüfen.
+Die automatische Regression ersetzt keine reale Hardware-Inbetriebnahme.
+Kein automatisches npm-Publish erfolgt durch die Bereitstellung dieses ZIPs.
