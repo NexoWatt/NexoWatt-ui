@@ -331,7 +331,7 @@ class DatapointRegistry {
                     unitIn = inUnit ? String(inUnit) : '';
                 }
                 const aId = obj?.common?.alias?.id;
-                aliasId = aId ? String(aId) : '';
+                aliasId = typeof aId === 'string' ? aId : (aId && typeof aId === 'object' ? String(aId.read || aId.write || '') : '');
             } catch (_e) {
                 // ignore
             }
@@ -347,6 +347,9 @@ class DatapointRegistry {
                 this._aliasIdByObjectId.set(objectId, aliasId || '');
             }
         }
+
+        // Writes address the alias object; ioBroker applies its own write conversion.
+        const objectWriteUnit = unitIn;
 
         // If this mapping uses an ioBroker alias, prefer the unit of the alias target.
         // Reason: values/freshness come from srcObjectId (= aliasId) but the alias object itself
@@ -375,6 +378,9 @@ class DatapointRegistry {
         }
 
         normalized.unitIn = unitIn || '';
+        normalized.unitOut = objectWriteUnit || unitIn || '';
+        const writeFactor = _computeUnitScale(normalized.unitOut, normalized.unit);
+        normalized.writeUnitScale = Math.abs(normalized.scale - writeFactor) < 1e-9 || Math.abs(normalized.scale - 1 / writeFactor) < 1e-9 ? 1 : writeFactor;
         normalized.aliasId = aliasId || '';
         normalized.srcObjectId = normalized.aliasId || normalized.objectId;
 
@@ -467,6 +473,8 @@ class DatapointRegistry {
             && String(prev.direction || '') === String(normalized.direction || '')
             && String(prev.unit || '') === String(normalized.unit || '')
             && String(prev.unitIn || '') === String(normalized.unitIn || '')
+            && String(prev.unitOut || '') === String(normalized.unitOut || '')
+            && Number(prev.writeUnitScale || 1) === Number(normalized.writeUnitScale || 1)
             && Number(prev.unitScale || 1) === Number(normalized.unitScale || 1)
             && Number(prev.scale || 1) === Number(normalized.scale || 1)
             && Number(prev.offset || 0) === Number(normalized.offset || 0)
@@ -1008,7 +1016,8 @@ class DatapointRegistry {
         let raw = (v - e.offset) / (e.scale || 1);
         if (e.invert) raw = -raw;
 
-        if (Number.isFinite(e.unitScale) && e.unitScale !== 1) raw = raw / e.unitScale;
+        const outputScale = Number.isFinite(e.writeUnitScale) ? e.writeUnitScale : e.unitScale;
+        if (Number.isFinite(outputScale) && outputScale !== 1) raw = raw / outputScale;
 
         // deadband in physical space against last written value
         const last = this.lastWriteByObjectId.get(e.objectId);

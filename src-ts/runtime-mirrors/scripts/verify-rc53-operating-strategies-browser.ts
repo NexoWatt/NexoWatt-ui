@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2713e382c92d8232a3d8a449c7f81dd72f9e6375186c7bd4824e0a060066566a
+ * Original-Hash: d063cbfe9ce24322a351a35658ae231272c964d7b13b107c5a8025e2df348998
  */
 
 /**
@@ -223,7 +223,7 @@ function inlineAppCenterHtml() {
   let html = fs.readFileSync(path.join(WWW, 'ems-apps.html'), 'utf8');
   const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
   const appJs = fs.readFileSync(path.join(WWW, 'operating-strategies-appcenter.js'), 'utf8');
-  const emsJs = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
+  const emsJs = fs.readFileSync(path.join(__dirname, '..', 'lib', 'evcs-electrical-limits.js'), 'utf8') + '\n' + fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
   const config = appConfig();
   const mock = `<script>
 window.NW_AUTH={requireCapability:async()=>true};

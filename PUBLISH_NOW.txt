@@ -1,4 +1,4 @@
-NexoWatt UI 1.0.5 – OFFICIAL STABLE RELEASE
+NexoWatt UI 1.0.6 – OFFICIAL STABLE RELEASE
 
 Aus dem frisch entpackten Repository veröffentlichen:
 npm publish --tag latest

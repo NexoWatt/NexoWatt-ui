@@ -719,6 +719,7 @@ class EmsEngine {
       const minA = (Number.isFinite(Number(wb.minCurrentA)) ? Number(wb.minCurrentA) : 0);
       const maxA = (Number.isFinite(Number(wb.maxCurrentA)) ? Number(wb.maxCurrentA) : 0);
       const maxPowerW = (Number.isFinite(Number(wb.maxPowerW)) ? Number(wb.maxPowerW) : 0);
+      const minPowerW = (Number.isFinite(Number(wb.minPowerW)) ? Number(wb.minPowerW) : 0);
 
       const stepA = (Number.isFinite(Number(wb.stepA)) ? Number(wb.stepA) : 0);
       const stepW = (Number.isFinite(Number(wb.stepW)) ? Number(wb.stepW) : 0);
@@ -772,6 +773,8 @@ class EmsEngine {
         phases,
         voltageV,
 
+        dcCurrentReference: String(wb.dcCurrentReference || '').trim(),
+        dcVoltageId: String(wb.dcVoltageId || '').trim(),
         // Stationsmeta
         ...(stationKey ? { stationKey } : {}),
         ...(connectorNo > 0 ? { connectorNo } : {}),
@@ -783,6 +786,7 @@ class EmsEngine {
         ...(minA > 0 ? { minA } : {}),
         ...(maxA > 0 ? { maxA } : {}),
         ...(maxPowerW > 0 ? { maxPowerW } : {}),
+        ...(minPowerW > 0 ? { minPowerW } : {}),
         ...(stepA > 0 ? { stepA } : {}),
         ...(stepW > 0 ? { stepW } : {}),
 

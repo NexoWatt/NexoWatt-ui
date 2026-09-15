@@ -1,3 +1,14 @@
+## 1.0.6 - 2026-09-15
+
+### Official Stable – AC/DC electrical limits
+
+- Require explicit valid per-connector current or power minimum/maximum bounds; incomplete configurations remain at a safe zero with a diagnostic reason.
+- Carry DC minimum power through AppCenter, persistence, engine and the productive TS write plan. Min+PV retains the configured grid base.
+- Separate DC-output current (fresh measured output voltage) from AC-input current; remove the implicit 230 V DC-current fallback.
+- Use configured network phases in the final DC phase guard and preserve current/step/power bounds at the writer.
+- Convert alias setpoints using the alias write unit, avoiding a second W/kW conversion.
+- Add focused AC/DC runtime, current-domain, phase-guard and alias regression checks. Hardware commissioning remains project-specific and must precede activation.
+
 ## 1.0.5 - 2026-09-12
 **Official Stable Patch – preserve EV storage protection across telemetry gaps**
 

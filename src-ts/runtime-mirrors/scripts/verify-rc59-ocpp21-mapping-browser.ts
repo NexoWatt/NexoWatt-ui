@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7ccfacbe1acb970cf942827e7f9d09a7d19c14aae1dedcea2e213c078b12cae9
+ * Original-Hash: a51d1bf345be15b978337d527c155a35eb75e70e0f5709674d10b4dfdc8a72a4
  */
 
 /**
@@ -180,7 +180,7 @@ function discoveryConnector(station) {
 function inlineHtml() {
   let html = fs.readFileSync(path.join(WWW, 'ems-apps.html'), 'utf8');
   const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
-  const js = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'lib', 'evcs-electrical-limits.js'), 'utf8') + '\n' + fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
   const config = {
     license: { valid: true, ok: true, active: true, edition: 'eos', editionLabel: 'Pro', maxWallboxes: 50 },
     emsApps: { apps: { charging: { installed: true, enabled: true } } },

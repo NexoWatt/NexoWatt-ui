@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "news": {
+      "1.0.6": {
+        "en": "Explicit per-connector current/power limits, DC Min+PV minimum, separate DC/grid current conversion, network phases and alias output scaling.",
+        "de": "Verbindliche Strom-/Leistungsgrenzen je Ladepunkt, DC-Min+PV-Mindestleistung, getrennte DC-/Netzstromumrechnung, Netzphasen und Alias-Sollwertskalierung."
+      },
       "1.0.5": {
         "de": "Speicher schützen bleibt bei veralteter oder fehlender Wallbox-Telemetrie wirksam. Entladung pausiert bei unbekannter Fahrzeuglast; echter PV-Überschuss darf weiterhin laden. Frische Messwerte stellen die normale Regelung automatisch wieder her. Auto-PV-Priorität, Phasenlogik und Mitnutzung bleiben erhalten.",
         "en": "Keep EV storage protection when wallbox telemetry is missing or stale. Pause discharge for unknown protected EV load while allowing real net-surplus charging. Restore normal control on fresh telemetry; retain Auto PV priority, phases and storage assistance.",
@@ -32,11 +36,6 @@
         "de": "NexoWatt EOS 1.0.0 ist die erste offizielle Stable-Version für den produktiven Einsatz. Die Netzlimit-App unterstützt feste Einspeisegrenzen bis 0 W auch ohne Parkregler. Ein vollständig aktivierter, in Betrieb genommener und vom Installateur freigegebener zertifizierter EZA-/Parkregler wird als bevorzugte Führungsquelle verwendet; ohne ihn regelt EOS selbst. Der Export Guard bleibt der einzige Asset-Writer, externe Vorgaben können die lokale Sicherheitsobergrenze niemals anheben, und TTL, Qualität, Rückfall sowie hashverkettetes Audit bleiben aktiv. Der Funktionsstand entspricht der abschließend geprüften RC93-Baseline; bei der Stable-Promotion wurde keine EMS-Regellogik verändert.",
         "en": "NexoWatt EOS 1.0.0 is the first official stable release for production use. Grid Limits supports fixed export limits down to 0 W even without a park controller. A fully activated, commissioned and installer-approved certified plant/park controller is used as the preferred authority; without it EOS controls locally. The Export Guard remains the sole asset writer, external limits can never raise the local safety ceiling, and TTL, quality, fallback and hash-chained audit protection remain active. The functional baseline is identical to the final validated RC93 state; no EMS control logic was changed during the stable promotion.",
         "nl": "NexoWatt EOS 1.0.0 is de eerste officiële stabiele versie voor productief gebruik. Netlimieten ondersteunt vaste teruglevergrenzen tot 0 W, ook zonder parkregelaar. Een volledig geactiveerde, in bedrijf gestelde en door de installateur vrijgegeven gecertificeerde installatie-/parkregelaar geldt als voorkeursbron; zonder deze regelaar stuurt EOS lokaal. De Export Guard blijft de enige asset-writer, externe limieten kunnen de lokale veiligheidsbovengrens nooit verhogen en TTL, kwaliteit, fallback en hash-gekoppelde audit blijven actief. De functionele basis is gelijk aan de volledig gevalideerde RC93-stand; tijdens de stable-promotie is geen EMS-regellogica gewijzigd."
-      },
-      "0.8.217": {
-        "de": "RC92 behebt ausschließlich die mobile Bedienung der Historienseite. Vertikales Scrollen bleibt auf Hauptchart, KPI-Karten und Preis-Chart nativ verfügbar; ein kurzer Tap zeigt auf Smartphones nun dieselben Leistungs- beziehungsweise Energiewerte wie am Desktop. Woche, Monat und Jahr zeigen pro ausgewähltem Balken kWh-Werte, die Tagesansicht kW-Werte. Tooltips bleiben nach dem Scrollen vollständig im sichtbaren Viewport, horizontales Tages-Zoomen bleibt erhalten und Canvas-Neuzeichnungen werden gebündelt. EMS-, NVP-, Lade-, Speicher-, Tarif-, §14a- und Hardware-Regelung bleiben unverändert.",
-        "en": "RC92 fixes only the mobile interaction of the History page. Vertical scrolling remains native on the main chart, KPI cards and price chart; a short tap on smartphones now shows the same power or energy values as on desktop. Week, month and year show kWh values for the selected bar, while the day view shows kW values. Tooltips remain fully visible after scrolling, horizontal day zoom is preserved and canvas redraws are coalesced. EMS, grid, charging, storage, tariff, Section 14a and hardware control remain unchanged.",
-        "nl": "RC92 corrigeert uitsluitend de mobiele bediening van de historiepagina. Verticaal scrollen blijft native op de hoofdgrafiek, KPI-kaarten en prijsgrafiek; een korte tik op smartphones toont nu dezelfde vermogens- of energiewaarden als op desktop. Week, maand en jaar tonen kWh-waarden voor de gekozen balk, de dagweergave toont kW-waarden. Tooltips blijven na scrollen volledig zichtbaar, horizontale dagzoom blijft behouden en canvas-hertekeningen worden gebundeld. EMS-, net-, laad-, opslag-, tarief-, §14a- en hardwarebesturing blijven ongewijzigd."
       }
     },
     "title": "NexoWatt EOS",

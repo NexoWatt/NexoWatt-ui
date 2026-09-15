@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9b63233f0e8d5f47a7ae5430ad9af698415cc5a02808d91bfbf4f42818b81dc8
+ * Original-Hash: 76561439d131d309a7d21c5aed4429ef35a9e6a195077745288573de295fc716
  * RC60-Prüfhinweis: Der universelle Auto-Orchestrator für NexoWatt Devices,
  * OCPP21 und freie EVCS-Zuordnungen wird in den kanonischen Runtime-Executables
  * sowie den RC60-Regressions- und Feldtests geprüft.
@@ -10997,7 +10997,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       }
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an phasesSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       phasesSel.addEventListener('change', () => _updateEvcsField(i, 'phases', _clampInt(phasesSel.value, 1, 3, 3)));
-      adv.appendChild(mkRow('Installierte AC-Phasen', phasesSel));
+      adv.appendChild(mkRow('Netzanschluss: Phasen', phasesSel));
+
+      const dcElectricalWrap = document.createElement('div');
+      dcElectricalWrap.style.display = tVal === 'dc' ? 'grid' : 'none';
+      dcElectricalWrap.style.gap = '10px';
+      const dcCurrentSelect = document.createElement('select');
+      dcCurrentSelect.className = 'nw-config-input';
+      dcCurrentSelect.innerHTML = '<option value="">Bei Stromsteuerung auswählen</option><option value="ac-input">AC-Netzstrom am Eingang</option><option value="dc-output">DC-Ladestrom am Ausgang</option>';
+      dcCurrentSelect.value = String(rowCfg.dcCurrentReference || '');
+      dcCurrentSelect.addEventListener('change', () => _updateEvcsField(i, 'dcCurrentReference', dcCurrentSelect.value));
+      dcElectricalWrap.appendChild(mkRow('DC-Station: Strom-Datenpunkt beschreibt', dcCurrentSelect));
+      dcElectricalWrap.appendChild(mkRow('DC-Ausgangsspannung (V), nur bei DC-Ladestrom', mkIo(`evcs_${i}_dcVoltageId`, rowCfg.dcVoltageId, v => _updateEvcsField(i, 'dcVoltageId', v))));
+      adv.appendChild(dcElectricalWrap);
+      typeSel.addEventListener('change', () => { dcElectricalWrap.style.display = typeSel.value === 'dc' ? 'grid' : 'none'; });
+
 
       // AC 1p/3p PV-Automatik
       const phaseModeSel = document.createElement('select');
@@ -11071,7 +11085,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       minAInput.type = 'number';
       minAInput.min = '0';
       minAInput.step = '0.1';
-      minAInput.placeholder = '0 = Standard';
+      minAInput.placeholder = 'Technischer Mindeststrom in A';
       minAInput.value = (rowCfg && Number(rowCfg.minCurrentA) > 0 && Number.isFinite(Number(rowCfg.minCurrentA))) ? String(Number(rowCfg.minCurrentA)) : '';
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an minAInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       minAInput.addEventListener('change', () => {
@@ -11085,7 +11099,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       maxAInput.type = 'number';
       maxAInput.min = '0';
       maxAInput.step = '0.1';
-      maxAInput.placeholder = '0 = Standard';
+      maxAInput.placeholder = 'Maximal zulässiger Strom in A';
       maxAInput.value = (rowCfg && Number(rowCfg.maxCurrentA) > 0 && Number.isFinite(Number(rowCfg.maxCurrentA))) ? String(Number(rowCfg.maxCurrentA)) : '';
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxAInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxAInput.addEventListener('change', () => {
@@ -11094,12 +11108,22 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       });
       adv.appendChild(mkRow('Max Strom (A)', maxAInput));
 
+      const minWInput = document.createElement('input');
+      minWInput.className = 'nw-config-input';
+      minWInput.type = 'number';
+      minWInput.min = '1';
+      minWInput.step = '1';
+      minWInput.placeholder = 'Technische Mindestleistung in W';
+      minWInput.value = Number(rowCfg.minPowerW) > 0 ? String(rowCfg.minPowerW) : '';
+      minWInput.addEventListener('change', () => _updateEvcsField(i, 'minPowerW', Number(minWInput.value) || 0));
+      adv.appendChild(mkRow('Min Leistung (W)', minWInput));
+
       const maxWInput = document.createElement('input');
       maxWInput.className = 'nw-config-input';
       maxWInput.type = 'number';
       maxWInput.min = '0';
       maxWInput.step = '1';
-      maxWInput.placeholder = '0 = Standard';
+      maxWInput.placeholder = 'Maximal zulässige Leistung in W';
       maxWInput.value = (rowCfg && Number(rowCfg.maxPowerW) > 0 && Number.isFinite(Number(rowCfg.maxPowerW))) ? String(Math.round(Number(rowCfg.maxPowerW))) : '';
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxWInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxWInput.addEventListener('change', () => {
@@ -11159,8 +11183,23 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       });
       adv.appendChild(mkRow('Boost Timeout (min)', boostTInput));
 
+      const electricalHint = document.createElement('div');
+      electricalHint.className = 'nw-muted';
+      electricalHint.setAttribute('role', 'status');
+      const refreshElectricalHint = () => {
+        const liveRow = (_ensureSettingsConfig().evcsList || [])[i - 1] || rowCfg;
+        const check = window.NexoWattEvcsElectricalLimits.validateEvcsElectricalConfig(liveRow);
+        electricalHint.textContent = check.valid
+          ? 'Grenzwerte für die gewählte Steuerung vollständig. Stations- und Netzgrenzen bleiben zusätzlich wirksam.'
+          : 'Regelung gesperrt: ' + check.errors.join(' ');
+        electricalHint.style.color = check.valid ? '' : '#c2410c';
+        if (!check.valid) details.open = true;
+      };
       details.appendChild(adv);
+      body.appendChild(electricalHint);
       body.appendChild(details);
+      body.addEventListener('change', refreshElectricalHint);
+      refreshElectricalHint();
 
       card.appendChild(header);
       card.appendChild(body);
@@ -14125,6 +14164,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     flushDpInputsToConfig();
     const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
     validateFeneconStorageConfiguration(patch);
+    const evcsRows = patch.settingsConfig && patch.settingsConfig.evcsList;
+    for (const [index, row] of (Array.isArray(evcsRows) ? evcsRows : []).entries()) {
+      if (!row || row.enabled === false || !(row.setCurrentAId || row.setPowerWId)) continue;
+      const check = window.NexoWattEvcsElectricalLimits.validateEvcsElectricalConfig(row);
+      if (!check.valid) throw new Error(`Ladepunkt ${index + 1}: ${check.errors.join(' ')}`);
+    }
     const safetyReport = applyReleaseRegressionSafetyGate(patch);
     if (safetyReport && safetyReport.changed) {
       setStatus('Release-Schutz hat bestehende Konfigurationen vor leerem Speichern geschützt. Bitte prüfen und erneut speichern.', 'warn');

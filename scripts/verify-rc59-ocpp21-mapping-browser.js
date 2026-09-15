@@ -106,7 +106,7 @@ function discoveryConnector(station) {
 function inlineHtml() {
   let html = fs.readFileSync(path.join(WWW, 'ems-apps.html'), 'utf8');
   const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
-  const js = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'lib', 'evcs-electrical-limits.js'), 'utf8') + '\n' + fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
   const config = {
     license: { valid: true, ok: true, active: true, edition: 'eos', editionLabel: 'Pro', maxWallboxes: 50 },
     emsApps: { apps: { charging: { installed: true, enabled: true } } },

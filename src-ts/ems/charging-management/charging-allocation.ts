@@ -36,6 +36,7 @@ export interface ChargingAllocationWallboxInput {
   userMode?: unknown;
   chargerType?: unknown;
   controlBasis?: unknown;
+  dcCurrentReference?: unknown;
   phases?: unknown;
   phaseMode?: unknown;
   configuredPhaseCount?: unknown;
@@ -157,6 +158,7 @@ export interface ChargingAllocationWallboxPlan {
   effectiveMode: string;
   userMode: string;
   chargerType: string;
+  dcCurrentReference?: string;
   controlBasis: string;
   phases: number;
   phaseMode: string;
@@ -1291,11 +1293,13 @@ function normalizeWallboxPlan(
   const chargerType = str(wallbox.chargerType ?? (allocation ? allocation.chargerType : null), 'ac').toLowerCase();
   const controlBasisRaw = str(wallbox.controlBasis ?? (allocation ? allocation.controlBasis : null), 'power').toLowerCase();
   const controlBasis = ['current', 'currenta', 'current_a', 'a', 'amp', 'amps'].includes(controlBasisRaw) ? 'current' : 'power';
-  const configuredPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.configuredPhaseCount : undefined, nonNegative(wallbox.configuredPhaseCount ?? wallbox.phases, chargerType === 'dc' ? 1 : 3)) || 1));
+  const configuredPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision && chargerType !== 'dc' ? phaseDecision.configuredPhaseCount : undefined, nonNegative(wallbox.configuredPhaseCount ?? wallbox.phases, chargerType === 'dc' ? 1 : 3)) || 1));
   const currentPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.currentPhaseCount : undefined, nonNegative(wallbox.currentPhaseCount ?? wallbox.phases, configuredPhaseCount)) || configuredPhaseCount));
   const targetPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.targetPhaseCount : undefined, nonNegative(wallbox.targetPhaseCount ?? wallbox.phases, configuredPhaseCount)) || configuredPhaseCount));
   const allocationPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.allocationPhaseCount : undefined, nonNegative(wallbox.allocationPhaseCount ?? wallbox.phases, currentPhaseCount)) || currentPhaseCount));
-  const phases = chargerType === 'dc' ? 1 : (allocationPhaseCount === 1 ? 1 : 3);
+  const phases = chargerType === 'dc'
+    ? (wallbox.dcCurrentReference === 'ac-input' ? configuredPhaseCount : 1)
+    : (allocationPhaseCount === 1 ? 1 : 3);
   const voltageV = Math.max(1, nonNegative(wallbox.voltageV, 230) || 230);
   const minA = nonNegativeFloat(wallbox.minA, 0);
   const maxA = nonNegativeFloat(wallbox.maxA, 0);
@@ -1344,6 +1348,7 @@ function normalizeWallboxPlan(
     effectiveMode,
     userMode,
     chargerType,
+    dcCurrentReference: str(wallbox.dcCurrentReference),
     controlBasis,
     phases,
     phaseMode: str((phaseDecision ? phaseDecision.mode : undefined) ?? wallbox.phaseMode, phases === 1 ? 'fixed-1p' : 'fixed-3p'),

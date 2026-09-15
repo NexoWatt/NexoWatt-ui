@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:d7cc5fbbbf978980b9bd0807719a20d5a635df2a2a0f83ecdfe7f8303deabf4a
+ * Quell-Hash: sha256:0ea61815d800fa3c8d8d57718fe54db357181789cae17306863f7e6f6179e96d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -26,6 +26,7 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
+const { resolveEvcsControlBasis, validateEvcsElectricalConfig, resolveDcElectricalLimits } = require('../../lib/evcs-electrical-limits');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 const { buildAutoPvPriorityReservation } = require('../services/pv-surplus-allocation');
 const { ChargingManagementAuditStore, finiteChargingAuditNumber, deriveChargingAuditLimiter, deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature, buildChargingAuditEvents } = require('../services/charging-management-audit');
@@ -3247,7 +3248,7 @@ class ChargingManagementModule extends BaseModule {
             safe: w && w.safe,
             key: w && w.key,
             name: w && w.name,
-            enabled: !!(w && w.enabled),
+            enabled: !!(w && w.enabled && w.electricalLimitsValid !== false),
             online: !!(w && w.online),
             cfgEnabled: !!(w && w.cfgEnabled),
             userStationEnabled: !!(w && w.userStationEnabled),
@@ -3267,6 +3268,7 @@ class ChargingManagementModule extends BaseModule {
             effectiveMode: w && w.effectiveMode,
             userMode: w && w.userMode,
             chargerType: w && w.chargerType,
+            dcCurrentReference: w && w.dcCurrentReference,
             controlBasis: w && w.controlBasis,
             phases: w && w.phases,
             phaseMode: w && w.phaseMode,
@@ -3997,12 +3999,23 @@ class ChargingManagementModule extends BaseModule {
                 : ((rawEntryBasis === 'power' || rawEntryBasis === 'powerw' || rawEntryBasis === 'w' || rawEntryBasis === 'watt' || rawEntryBasis === 'watts') ? 'powerW' : (w.controlBasis || 'auto'));
             const plannedSetpointKey = String(entry.setpointKey || '').trim();
             const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
-            const phaseCount = Math.max(1, Math.min(3, Math.round(Number(entry.targetPhaseCount || w.phases || 3) || 3)));
+            const isDc = String(w.chargerType || '').toUpperCase() === 'DC';
+            const phaseCount = Math.max(1, Math.min(3, Math.round(Number(isDc
+                ? (w.gridPhaseCount || w.configuredPhaseCount || 3)
+                : (entry.targetPhaseCount || w.phases || 3)) || 3)));
             const voltageV = Math.max(200, Math.min(260, Number(this.adapter?.config?.chargingManagement?.nominalVoltageV || 230) || 230));
-            let requestedFlexibleW = Math.max(
+            const dcOutputCurrent = isDc && plannedBasis === 'currentA' && w.dcCurrentReference === 'dc-output';
+            const dcVoltageAge = dcOutputCurrent && w.dcVoltageKey && this.dp ? this.dp.getAgeMs(w.dcVoltageKey) : Infinity;
+            const dcVoltageNow = dcOutputCurrent && w.dcVoltageKey && this.dp ? this.dp.getNumber(w.dcVoltageKey, null) : null;
+            const dcVoltageInvalid = dcOutputCurrent && !(Number.isFinite(dcVoltageNow) && dcVoltageNow >= 50 && dcVoltageNow <= 1500 && Number.isFinite(dcVoltageAge) && dcVoltageAge <= 10000);
+            const currentReferenceInvalid = isDc && plannedBasis === 'currentA' && !['ac-input', 'dc-output'].includes(w.dcCurrentReference);
+            const controlFactorWPerA = dcOutputCurrent ? (dcVoltageInvalid ? 0 : dcVoltageNow) : voltageV * phaseCount;
+            let requestedFlexibleW = isDc ? requestedTargetW : Math.max(
                 requestedTargetW,
-                requestedTargetA > 0 ? Math.round(requestedTargetA * voltageV * phaseCount) : 0,
+                requestedTargetA > 0 ? Math.round(requestedTargetA * controlFactorWPerA) : 0,
             );
+            if (dcVoltageInvalid || currentReferenceInvalid) { targetW = 0; targetA = 0; requestedFlexibleW = 0; }
+
             let rc85Decision = null;
             const diagnosticRow = debugBySafe.get(safe) || {};
             const decisionReason = String(entry.reason || diagnosticRow.reason || fallbackReason || 'normal');
@@ -4014,6 +4027,7 @@ class ChargingManagementModule extends BaseModule {
             if (!isPhaseSwitchEntry && this._rc85EvcsDecisionGuard && softAutoGuardEligible) {
                 const immediateStopRequired = !!(
                     positiveCommandBlocked
+                    || dcVoltageInvalid || currentReferenceInvalid
                     || w.online !== true
                     || w.faultActive === true
                     || w.unavailableActive === true
@@ -4028,7 +4042,7 @@ class ChargingManagementModule extends BaseModule {
                 const minActiveW = Math.max(
                     0,
                     Number(w.minPW) || 0,
-                    Number(w.minA) > 0 ? Number(w.minA) * voltageV * phaseCount : 0,
+                    plannedBasis === 'currentA' && Number(w.minA) > 0 ? Number(w.minA) * controlFactorWPerA : 0,
                 );
                 rc85Decision = this._rc85EvcsDecisionGuard.evaluate({
                     key: safe,
@@ -4049,9 +4063,9 @@ class ChargingManagementModule extends BaseModule {
                     const stepA = Number.isFinite(Number(w.stepA)) && Number(w.stepA) > 0 ? Number(w.stepA) : 0.1;
                     const minA = Number.isFinite(Number(w.minA)) && Number(w.minA) > 0 ? Number(w.minA) : 0;
                     const maxA = Number.isFinite(Number(w.maxA)) && Number(w.maxA) > 0 ? Number(w.maxA) : Number.POSITIVE_INFINITY;
-                    targetA = Math.max(0, Math.min(maxA, Math.floor(((requestedFlexibleW / Math.max(1, voltageV * phaseCount)) + 1e-9) / stepA) * stepA));
+                    targetA = Math.max(0, Math.min(maxA, Math.floor(((requestedFlexibleW / Math.max(1, controlFactorWPerA)) + 1e-9) / stepA) * stepA));
                     if (targetA > 0 && targetA + 1e-9 < minA) targetA = 0;
-                    targetW = targetA > 0 ? Math.floor(targetA * voltageV * phaseCount) : 0;
+                    targetW = targetA > 0 ? Math.floor(targetA * controlFactorWPerA) : 0;
                     requestedFlexibleW = targetW;
                 } else {
                     const stepW = Number.isFinite(Number(w.stepW)) && Number(w.stepW) > 0 ? Number(w.stepW) : 1;
@@ -4059,7 +4073,7 @@ class ChargingManagementModule extends BaseModule {
                     const maxPW = Number.isFinite(Number(w.maxPW)) && Number(w.maxPW) > 0 ? Number(w.maxPW) : Number.POSITIVE_INFINITY;
                     targetW = Math.max(0, Math.min(maxPW, Math.floor((requestedFlexibleW + 1e-9) / stepW) * stepW));
                     if (targetW > 0 && targetW + 1e-9 < minPW) targetW = 0;
-                    targetA = targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0;
+                    targetA = !isDc && targetW > 0 ? targetW / Math.max(1, controlFactorWPerA) : 0;
                     requestedFlexibleW = targetW;
                 }
             }
@@ -4147,17 +4161,17 @@ class ChargingManagementModule extends BaseModule {
                     const stepA = Number.isFinite(Number(w.stepA)) && Number(w.stepA) > 0 ? Number(w.stepA) : 0.1;
                     const maxA = Number.isFinite(Number(w.maxA)) && Number(w.maxA) > 0 ? Number(w.maxA) : Number.POSITIVE_INFINITY;
                     const minA = Number.isFinite(Number(w.minA)) && Number(w.minA) > 0 ? Number(w.minA) : 0;
-                    const allowedA = Math.min(maxA, targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0);
+                    const allowedA = Math.min(maxA, targetW > 0 ? targetW / Math.max(1, controlFactorWPerA) : 0);
                     targetA = Math.max(0, Math.floor((allowedA + 1e-9) / stepA) * stepA);
                     if (targetA > 0 && targetA + 1e-9 < minA) targetA = 0;
-                    targetW = targetA > 0 ? Math.min(targetW, Math.floor(targetA * voltageV * phaseCount)) : 0;
+                    targetW = targetA > 0 ? Math.min(targetW, Math.floor(targetA * controlFactorWPerA)) : 0;
                 } else {
                     const stepW = Number.isFinite(Number(w.stepW)) && Number(w.stepW) > 0 ? Number(w.stepW) : 1;
                     const maxPW = Number.isFinite(Number(w.maxPW)) && Number(w.maxPW) > 0 ? Number(w.maxPW) : Number.POSITIVE_INFINITY;
                     const minPW = Number.isFinite(Number(w.minPW)) && Number(w.minPW) > 0 ? Number(w.minPW) : 0;
                     targetW = Math.max(0, Math.min(maxPW, Math.floor((targetW + 1e-9) / stepW) * stepW));
                     if (targetW > 0 && targetW + 1e-9 < minPW) targetW = 0;
-                    targetA = targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0;
+                    targetA = !isDc && targetW > 0 ? targetW / Math.max(1, controlFactorWPerA) : 0;
                 }
 
                 if (safetyStopExisting) {
@@ -4212,7 +4226,7 @@ class ChargingManagementModule extends BaseModule {
             let hardwareCommandState = isPhaseSwitchEntry ? 'phase-switch' : (w.telemetryProfile === 'ocpp-1.6-event-driven' ? 'pending' : 'not-applicable');
             let hardwareCommandAgeMs = 0;
             let hardwareCommandFailure = false;
-            let applyStatus = positiveCommandBlocked
+            let applyStatus = dcVoltageInvalid || currentReferenceInvalid ? 'dc-current-reference-unavailable-safe-stop' : positiveCommandBlocked
                 ? (w.faultActive ? 'fault-safe-stop' : (w.unavailableActive ? 'unavailable-safe-stop' : 'blocked-safe-stop'))
                 : (safetyCommandBlocked
                     ? String(safetyDecision.reason || 'safety-safe-stop')
@@ -5552,6 +5566,8 @@ class ChargingManagementModule extends BaseModule {
         }
 
         await mk('minPowerW', 'Min power (W)', 'number', 'value.power');
+        await mk('electricalLimitsValid', 'Ladepunkt-Grenzwerte gültig', 'boolean', 'indicator');
+        await mk('electricalLimitsError', 'Ladepunkt-Grenzwerte: Diagnose', 'string', 'text');
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
         await mk('para14aCapW', '§14a cap (W)', 'number', 'value.power');
         await mk('para14aCapped', '§14a cap aktiv', 'boolean', 'indicator');
@@ -6590,7 +6606,8 @@ class ChargingManagementModule extends BaseModule {
             const currentPhaseCount = chargerType === 'AC'
                 ? (feedbackPhaseCount === 1 || feedbackPhaseCount === 3 ? feedbackPhaseCount : ((assumedPhaseCount === 1 || assumedPhaseCount === 3) ? assumedPhaseCount : phases))
                 : 1;
-            const effectiveRuntimePhaseCount = chargerType === 'AC' ? currentPhaseCount : 1;
+            const effectiveRuntimePhaseCount = chargerType === 'AC' ? currentPhaseCount
+                : (String(wb.dcCurrentReference || '') === 'dc-output' ? 1 : phases);
 
             // Diagnostics: freshness + mapping completeness
             const hasSetpoint = !!(setCurrentAId || setPowerWId);
@@ -6789,7 +6806,7 @@ class ChargingManagementModule extends BaseModule {
             const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, safetyStatusFresh);
             const faultActive = !!classifiedStatus.faultActive;
             const unavailableActive = !!classifiedStatus.unavailableActive;
-            const operationalBlocked = !!classifiedStatus.operationalBlocked;
+            let operationalBlocked = !!classifiedStatus.operationalBlocked;
             const rawStatusClass = classifyEvcsConnectorStatus(statusRawText, true);
             const faultReason = faultActive
                 ? statusRawText
@@ -6834,7 +6851,7 @@ class ChargingManagementModule extends BaseModule {
                 onlineSource = 'ocpp-adapter-not-alive';
             }
 
-            const controlAvailable = !!(enabled && online && !operationalBlocked);
+            let controlAvailable = !!(enabled && online && !operationalBlocked);
             const previousCommandW = this._lastCmdTargetW.get(safe);
             const effectivePower = resolveEvcsEffectivePower({
                 telemetryProfile,
@@ -7023,40 +7040,35 @@ class ChargingManagementModule extends BaseModule {
             const hasSetA = !!setCurrentAId;
             const hasSetW = !!setPowerWId;
 
-            let controlBasis = controlBasisCfg;
-            if (controlBasis === 'currentA') {
-                controlBasis = hasSetA ? 'currentA' : (hasSetW ? 'powerW' : 'auto');
-            } else if (controlBasis === 'powerW') {
-                controlBasis = hasSetW ? 'powerW' : (hasSetA ? 'currentA' : 'auto');
+            const electricalConfig = { ...wb, chargerType, controlBasis: controlBasisCfg, setCurrentAId, setPowerWId, minA: configuredMinA, maxA: configuredMaxA, stepW: num(wb.stepW, stepW), stepA: num(wb.stepA, stepA) };
+            const electricalCheck = validateEvcsElectricalConfig(electricalConfig);
+            const resolvedControlBasis = resolveEvcsControlBasis(electricalConfig);
+            // A missing preferred channel may use an available channel only for a safe zero.
+            const controlBasis = resolvedControlBasis === 'none' ? (hasSetW ? 'powerW' : (hasSetA ? 'currentA' : 'none')) : resolvedControlBasis;
+            const dcVoltageId = String(wb.dcVoltageId || '').trim();
+            const dcVoltageKey = dcVoltageId ? `cm.wb.${safe}.dcVoltageV` : '';
+            if (dcVoltageKey && this.dp) await this.dp.upsert({ key: dcVoltageKey, objectId: dcVoltageId, dataType: 'number', direction: 'in', unit: 'V' });
+            const dcVoltageAgeMs = dcVoltageKey && this.dp ? this.dp.getAgeMs(dcVoltageKey) : Infinity;
+            const dcVoltageV = dcVoltageKey && this.dp ? this.dp.getNumber(dcVoltageKey, null) : null;
+            const dcElectrical = chargerType === 'DC' ? resolveDcElectricalLimits(electricalConfig, {
+                voltageV: dcVoltageV, fresh: Number.isFinite(dcVoltageAgeMs) && dcVoltageAgeMs <= 10000,
+            }) : null;
+            const electricalLimitsValid = dcElectrical ? dcElectrical.valid : electricalCheck.valid;
+            const electricalLimitsError = (dcElectrical ? dcElectrical.errors : electricalCheck.errors).join(' ');
+            if (!electricalLimitsValid) {
+                controlAvailable = false;
+                operationalBlocked = true;
+                mappingIssues.push('electrical_limits_invalid');
             }
-
-            if (controlBasis === 'auto') {
-                if (chargerType === 'DC') {
-                    controlBasis = hasSetW ? 'powerW' : (hasSetA ? 'currentA' : 'none');
-                } else {
-                    controlBasis = hasSetA ? 'currentA' : (hasSetW ? 'powerW' : 'none');
-                }
-            }
-
-            // Compute min/max power caps for distribution (W)
-            const vFactor = voltageV * effectiveRuntimePhaseCount;
-
+            let vFactor = voltageV * effectiveRuntimePhaseCount;
             let minPW = 0;
             let maxPW = 0;
-
             if (chargerType === 'DC') {
-                // For DC we primarily operate in W.
-                minPW = (typeof minPowerWCfg === 'number' && Number.isFinite(minPowerWCfg)) ? minPowerWCfg : 0;
-
-                // Default DC max to 1000kW if not configured
-                const DEFAULT_DC_MAX_W = 1_000_000;
-                if (typeof maxPowerWCfg === 'number' && Number.isFinite(maxPowerWCfg) && maxPowerWCfg > 0) {
-                    maxPW = maxPowerWCfg;
-                } else {
-                    maxPW = DEFAULT_DC_MAX_W;
-                }
-
-                if (maxPW < minPW) minPW = maxPW;
+                minPW = dcElectrical.minPowerW;
+                maxPW = dcElectrical.maxPowerW;
+                minA = dcElectrical.minA;
+                maxA = dcElectrical.maxA;
+                if (controlBasis === 'currentA') vFactor = dcElectrical.factorWPerA;
             } else {
                 // AC: Strom- und Leistungsangaben sind gleichwertige lokale
                 // Grenzwerte. Ist nur einer gesetzt, wird der andere daraus
@@ -7083,6 +7095,9 @@ class ChargingManagementModule extends BaseModule {
                 minPW = Math.max(0, num(acLimits.minPowerW, minA * vFactor));
                 maxPW = Math.max(0, num(acLimits.maxPowerW, maxA * vFactor));
             }
+            if (!electricalLimitsValid) { minPW = 0; maxPW = 0; }
+            await this._queueState(`${ch}.electricalLimitsValid`, electricalLimitsValid, true);
+            await this._queueState(`${ch}.electricalLimitsError`, electricalLimitsError, true);
 
             const maxPWBefore14a = maxPW;
             let para14aCapW = 0;
@@ -7797,7 +7812,12 @@ class ChargingManagementModule extends BaseModule {
                 lowSinceMs: this._chargingPhaseLowSinceMs && this._chargingPhaseLowSinceMs.has(safe) ? this._chargingPhaseLowSinceMs.get(safe) : 0,
                 cooldownUntilMs: this._chargingPhaseCooldownUntilMs && this._chargingPhaseCooldownUntilMs.has(safe) ? this._chargingPhaseCooldownUntilMs.get(safe) : 0,
                 settleUntilMs: this._chargingPhaseSettleUntilMs && this._chargingPhaseSettleUntilMs.has(safe) ? this._chargingPhaseSettleUntilMs.get(safe) : 0,
-                voltageV,
+                voltageV: dcElectrical && controlBasis === 'currentA' ? dcElectrical.controlVoltageV : voltageV,
+                gridPhaseCount: phases,
+                dcCurrentReference: String(wb.dcCurrentReference || ''),
+                dcVoltageKey,
+                electricalLimitsValid,
+                electricalLimitsError,
                 minA,
                 maxA,
                 minPW,

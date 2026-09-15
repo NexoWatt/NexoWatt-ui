@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:0041ec5c13a845ae5e3a5ed645a5ab4f61cafdfe26c805084268d08e3fd5687d
+ * Quell-Hash: sha256:b4fc3e5432d2351ebaa21ce8e479fc8633a440570e2b64b58dce2ad1e048f953
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -33,6 +33,7 @@ const { SseRuntimeGuard } = require('./lib/sse-runtime-guard');
 const { buildStationDisplayPresentation } = require('./lib/station-display-presentation'), { isUnlicensedLicenseBootstrapRequest } = require('./lib/license-bootstrap-access');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
+const { validateEvcsElectricalConfig } = require('./lib/evcs-electrical-limits');
 const { startOpenMeteoPvForecastRuntime } = require('./ems/services/open-meteo-pv-forecast'), { AdminOverviewPublisher } = require('./ems/services/admin-overview-publisher');
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
@@ -8938,6 +8939,9 @@ class NexoWattVis extends utils.Adapter {
         : controlPreferenceRaw;
       const minCurrentA = (row && row.minCurrentA !== undefined && row.minCurrentA !== null && String(row.minCurrentA).trim() !== '' && Number.isFinite(Number(row.minCurrentA))) ? Number(row.minCurrentA) : 0;
       const maxCurrentA = (row && row.maxCurrentA !== undefined && row.maxCurrentA !== null && String(row.maxCurrentA).trim() !== '' && Number.isFinite(Number(row.maxCurrentA))) ? Number(row.maxCurrentA) : 0;
+      const minPowerW = Number.isFinite(Number(row && row.minPowerW)) ? Number(row.minPowerW) : 0;
+      const dcCurrentReference = String(row && row.dcCurrentReference || '').trim();
+      const dcVoltageId = String(row && row.dcVoltageId || '').trim();
       const maxPowerW = (row && row.maxPowerW !== undefined && row.maxPowerW !== null && String(row.maxPowerW).trim() !== '' && Number.isFinite(Number(row.maxPowerW))) ? Number(row.maxPowerW) : 0;
       const stepA = (row && row.stepA !== undefined && row.stepA !== null && String(row.stepA).trim() !== '' && Number.isFinite(Number(row.stepA))) ? Number(row.stepA) : 0;
       const stepW = (row && row.stepW !== undefined && row.stepW !== null && String(row.stepW).trim() !== '' && Number.isFinite(Number(row.stepW))) ? Number(row.stepW) : 0;
@@ -8981,7 +8985,7 @@ class NexoWattVis extends utils.Adapter {
       const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
         || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
       const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
-      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, chargingStateId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, telemetryProfile, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable, controlMappingAutoResolvedPowerRead, controlMappingAutoResolvedEnergyTotal, controlMappingAutoResolvedStatus, controlMappingAutoResolvedVehicleConnected, controlMappingAutoResolvedOnline, controlMappingAutoResolvedHeartbeat });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, chargingStateId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, telemetryProfile, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, minPowerW, maxPowerW, dcCurrentReference, dcVoltageId, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable, controlMappingAutoResolvedPowerRead, controlMappingAutoResolvedEnergyTotal, controlMappingAutoResolvedStatus, controlMappingAutoResolvedVehicleConnected, controlMappingAutoResolvedOnline, controlMappingAutoResolvedHeartbeat });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -12522,6 +12526,7 @@ async onReady() {
       res.redirect(302, '/license.html' + qs);
     });
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/static', express.static(path.join(__dirname, 'www')));
+    app.get('/static/evcs-electrical-limits.js', (_req, res) => res.sendFile(path.join(__dirname, 'lib', 'evcs-electrical-limits.js')));
     app.use('/static', express.static(path.join(__dirname, 'www')));
 
 // --- Static PWA assets ---
@@ -15772,6 +15777,19 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           mergedPatch = (norm && norm.patch) ? norm.patch : mergedPatch;
         } catch (_e) {}
 
+        // The same per-connector limits are mandatory in API and runtime.
+        const evcsConfigRows = mergedPatch.settingsConfig && mergedPatch.settingsConfig.evcsList;
+        if (Array.isArray(evcsConfigRows)) {
+          for (const [index, row] of evcsConfigRows.entries()) {
+            if (!row || row.enabled === false || !(row.setCurrentAId || row.setPowerWId)) continue;
+            const electrical = validateEvcsElectricalConfig(row);
+            if (!electrical.valid) return res.status(400).json({
+              ok: false, error: 'evcs_electrical_limits_invalid',
+              message: `Ladepunkt ${index + 1} (${row.name || 'ohne Namen'}): ${electrical.errors.join(' ')}`,
+            });
+          }
+        }
+
         // FENECON-Hybrid-Vertrag serverseitig erzwingen. Der native FEMS-NVP-
         // Regler ist nur für DC/Hybrid und als exklusiver Writer zulässig.
         const singleStorage = mergedPatch.storage && typeof mergedPatch.storage === 'object' ? mergedPatch.storage : {};
@@ -17284,6 +17302,8 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
               mappingOk: await getOwn(`${base}.mappingOk`),
               hasSetpoint: await getOwn(`${base}.hasSetpoint`),
               mappingIssues: await getOwn(`${base}.mappingIssues`),
+              electricalLimitsValid: await getOwn(`${base}.electricalLimitsValid`),
+              electricalLimitsError: await getOwn(`${base}.electricalLimitsError`),
               meterStale: await getOwn(`${base}.meterStale`),
               meterAgeMs: await getOwn(`${base}.meterAgeMs`),
               statusStale: await getOwn(`${base}.statusStale`),

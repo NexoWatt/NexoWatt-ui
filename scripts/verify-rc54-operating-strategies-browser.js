@@ -164,7 +164,7 @@ function inlineAppCenterHtml() {
   const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
   const builderJs = fs.readFileSync(path.join(WWW, 'operating-strategies-rule-builder.js'), 'utf8');
   const appJs = fs.readFileSync(path.join(WWW, 'operating-strategies-appcenter.js'), 'utf8');
-  const emsJs = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
+  const emsJs = fs.readFileSync(path.join(__dirname, '..', 'lib', 'evcs-electrical-limits.js'), 'utf8') + '\n' + fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
   const config = appConfig();
   const mock = `<script>
 window.NW_AUTH={requireCapability:async()=>true};

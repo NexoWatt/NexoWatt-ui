@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 18dcf3e5d3d7fd7cb4e659fd95e5981072c0969f7976e13da1c359622d2847cc
+ * Original-Hash: bf4f3c97cbb29d2b878fd3c19895c901b521d21b3fe7d348a2de10b73c2c25cd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:d8f7bab38ff19e7fa52d306e498c09f5fbe229bf47f12bb425c7e2ba8c5c8951
+ * Quell-Hash: sha256:ed86d70ff4a62c05e60d3a1813b199e721b9f3e6c7bcafc91e537825092bcc2b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -754,6 +754,7 @@ class EmsEngine {
             const minA = (Number.isFinite(Number(wb.minCurrentA)) ? Number(wb.minCurrentA) : 0);
             const maxA = (Number.isFinite(Number(wb.maxCurrentA)) ? Number(wb.maxCurrentA) : 0);
             const maxPowerW = (Number.isFinite(Number(wb.maxPowerW)) ? Number(wb.maxPowerW) : 0);
+            const minPowerW = (Number.isFinite(Number(wb.minPowerW)) ? Number(wb.minPowerW) : 0);
             const stepA = (Number.isFinite(Number(wb.stepA)) ? Number(wb.stepA) : 0);
             const stepW = (Number.isFinite(Number(wb.stepW)) ? Number(wb.stepW) : 0);
             // Default mode from Admin table (runtime state can override)
@@ -798,6 +799,8 @@ class EmsEngine {
                 controlBasis,
                 phases,
                 voltageV,
+                dcCurrentReference: String(wb.dcCurrentReference || '').trim(),
+                dcVoltageId: String(wb.dcVoltageId || '').trim(),
                 // Stationsmeta
                 ...(stationKey ? { stationKey } : {}),
                 ...(connectorNo > 0 ? { connectorNo } : {}),
@@ -807,6 +810,7 @@ class EmsEngine {
                 ...(minA > 0 ? { minA } : {}),
                 ...(maxA > 0 ? { maxA } : {}),
                 ...(maxPowerW > 0 ? { maxPowerW } : {}),
+                ...(minPowerW > 0 ? { minPowerW } : {}),
                 ...(stepA > 0 ? { stepA } : {}),
                 ...(stepW > 0 ? { stepW } : {}),
                 // datapoints

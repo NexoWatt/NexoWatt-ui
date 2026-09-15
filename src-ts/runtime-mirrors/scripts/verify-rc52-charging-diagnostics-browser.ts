@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 03ba70051c38035f93c924164aee22df81fae315f5d39c110a92cce4cd58bd1d
+ * Original-Hash: 9b0ae751d81f359348da8fea6b8ce476ddb0778a9149455dc06da0a1bbcc8c63
  */
 
 /**
@@ -228,7 +228,7 @@ function diagnosticsPayload() {
 function inlineAppCenterHtml() {
     let html = fs.readFileSync(path.join(WWW, 'ems-apps.html'), 'utf8');
     const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
-    const js = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
+    const js = fs.readFileSync(path.join(__dirname, '..', 'lib', 'evcs-electrical-limits.js'), 'utf8') + '\n' + fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
     const auditJs = fs.readFileSync(path.join(WWW, 'charging-diagnostics-appcenter.js'), 'utf8');
     const diagnostics = diagnosticsPayload();
     const config = {

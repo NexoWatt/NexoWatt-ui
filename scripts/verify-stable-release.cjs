@@ -49,6 +49,8 @@ for (const required of [
   'scripts/verify-stable-1.0.3-home-appcenter-access.cjs',
   'scripts/verify-stable-1.0.4-auto-pv-phases.cjs',
   'scripts/verify-stable-1.0.5-storage-protection-telemetry.cjs',
+  'scripts/verify-stable-1.0.6-dc-control.cjs',
+  'lib/evcs-electrical-limits.js',
   'scripts/verify-rc60-universal-auto-wallbox.js',
 ]) {
   if (!files.includes(required)) fail(`Stable-Paketdatei fehlt in package.json files: ${required}`);
@@ -112,7 +114,7 @@ for (const relativePath of ['src-ts/runtime-executables/www/ems-apps.ts', 'src-t
 }
 for (const relativePath of ['src-ts/runtime-executables/www/sw.ts', 'src-ts/runtime-mirrors/www/sw.ts', 'www/sw.js']) {
   const text = read(relativePath);
-  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v505';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
+  if (!text.includes("const CACHE_NAME = 'nexowatt-cache-v506';")) fail(`PWA-Cache-Bump fehlt in ${relativePath}.`);
 }
 
 
